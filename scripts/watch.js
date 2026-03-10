@@ -89,6 +89,9 @@ function deploy() {
 		execSync(`cat moci/js/modules/services.js | ${SSH} "cat > /www/moci/js/modules/services.js"`, {
 			stdio: 'pipe'
 		});
+		execSync(`cat moci/js/modules/netify.js | ${SSH} "cat > /www/moci/js/modules/netify.js"`, {
+			stdio: 'pipe'
+		});
 
 		console.log('Deployed successfully\n');
 	} catch (err) {

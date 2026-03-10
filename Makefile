@@ -40,12 +40,19 @@ define Package/moci/install
 	$(INSTALL_DATA) ./dist/moci/js/modules/system.js $(1)/www/moci/js/modules/
 	$(INSTALL_DATA) ./dist/moci/js/modules/vpn.js $(1)/www/moci/js/modules/
 	$(INSTALL_DATA) ./dist/moci/js/modules/services.js $(1)/www/moci/js/modules/
+	$(INSTALL_DATA) ./dist/moci/js/modules/netify.js $(1)/www/moci/js/modules/
 
 	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
 	$(INSTALL_DATA) ./rpcd-acl.json $(1)/usr/share/rpcd/acl.d/moci.json
 
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_CONF) ./files/moci.config $(1)/etc/config/moci
+
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) ./files/moci-netify-collector.sh $(1)/usr/bin/moci-netify-collector
+
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/netify-collector.init $(1)/etc/init.d/netify-collector
 endef
 
 define Package/moci/postinst

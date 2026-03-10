@@ -19,7 +19,8 @@ export class OpenWrtCore {
 		const routeModuleMap = {
 			dashboard: 'dashboard',
 			network: 'network',
-			system: 'system'
+			system: 'system',
+			netify: 'netify'
 		};
 		return routeModuleMap[basePath];
 	}
@@ -117,6 +118,7 @@ export class OpenWrtCore {
 		return {
 			dashboard: '1',
 			network: '1',
+			netify: '1',
 			wireless: '1',
 			firewall: '1',
 			dhcp: '1',
@@ -145,6 +147,7 @@ export class OpenWrtCore {
 			dashboard: './modules/dashboard.js',
 			network: './modules/network.js',
 			system: './modules/system.js',
+			netify: './modules/netify.js',
 			vpn: './modules/vpn.js',
 			services: './modules/services.js'
 		};
@@ -180,6 +183,7 @@ export class OpenWrtCore {
 			dashboard: ['dashboard'],
 			network: ['network', 'wireless', 'firewall', 'dhcp', 'dns', 'diagnostics'],
 			system: ['system', 'backup', 'packages', 'services', 'ssh_keys', 'storage', 'leds', 'firmware'],
+			netify: ['netify'],
 			vpn: ['wireguard'],
 			services: ['qos', 'ddns']
 		};

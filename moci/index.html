@@ -68,6 +68,7 @@
 					<nav class="nav">
 						<a href="#/dashboard" class="active">DASHBOARD</a>
 						<a href="#/network">NETWORK</a>
+						<a href="#/netify" data-feature="netify">NETIFY</a>
 						<a href="#/system">SYSTEM</a>
 					</nav>
 					<button id="logout-btn" class="logout-btn">LOGOUT</button>
@@ -1333,10 +1334,98 @@
 								</div>
 							</div>
 						</div>
-					</div>
+						</div>
 
-					<div id="system-page" class="page hidden">
-						<h2>SYSTEM</h2>
+						<div id="netify-page" class="page hidden" data-feature="netify">
+							<h2>NETIFY</h2>
+							<div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 24px">
+								<div class="stat-card">
+									<div class="stat-label">FLOWS</div>
+									<div class="stat-value" id="netify-flow-count">0</div>
+								</div>
+								<div class="stat-card">
+									<div class="stat-label">DEVICES</div>
+									<div class="stat-value" id="netify-device-count">0</div>
+								</div>
+								<div class="stat-card">
+									<div class="stat-label">APPLICATIONS</div>
+									<div class="stat-value" id="netify-app-count">0</div>
+								</div>
+								<div class="stat-card">
+									<div class="stat-label">TOTAL BYTES</div>
+									<div class="stat-value" id="netify-total-bytes">0 B</div>
+								</div>
+							</div>
+
+							<div class="stat-card">
+								<div class="section-title">COLLECTOR STATUS</div>
+								<div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px">
+									<div>
+										<div class="stat-label">SERVICE</div>
+										<div id="netify-service-status" style="margin-top: 8px">Loading...</div>
+									</div>
+									<div>
+										<div class="stat-label">DATABASE</div>
+										<div id="netify-db-status" style="margin-top: 8px">Loading...</div>
+									</div>
+									<div>
+										<div class="stat-label">DB PATH</div>
+										<div id="netify-db-path" style="margin-top: 8px; font-family: monospace; color: var(--steel-light)">
+											/tmp/moci-netify.sqlite
+										</div>
+									</div>
+								</div>
+								<div class="quick-actions">
+									<button class="action-btn" id="netify-start-btn">START COLLECTOR</button>
+									<button class="action-btn" id="netify-stop-btn">STOP COLLECTOR</button>
+									<button class="action-btn" id="netify-restart-btn">RESTART COLLECTOR</button>
+									<button class="action-btn" id="netify-init-db-btn">INIT DB</button>
+									<button class="action-btn" id="netify-refresh-btn">REFRESH</button>
+								</div>
+							</div>
+
+							<div class="stat-card" style="margin-top: 24px">
+								<div class="section-title">TOP APPLICATIONS</div>
+								<table class="data-table" id="netify-top-apps-table">
+									<thead>
+										<tr>
+											<th>APPLICATION</th>
+											<th>FLOWS</th>
+											<th>LAST SEEN</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td colspan="3" style="text-align: center; color: var(--steel-muted)">Loading...</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+
+							<div class="stat-card" style="margin-top: 24px">
+								<div class="section-title">RECENT FLOWS</div>
+								<table class="data-table" id="netify-flows-table">
+									<thead>
+										<tr>
+											<th>TIME</th>
+											<th>DEVICE</th>
+											<th>APPLICATION</th>
+											<th>PROTOCOL</th>
+											<th>DESTINATION IP</th>
+											<th>PORT</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td colspan="6" style="text-align: center; color: var(--steel-muted)">Loading...</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+
+						<div id="system-page" class="page hidden">
+							<h2>SYSTEM</h2>
 						<div class="tabs">
 							<button class="tab-btn active" data-tab="general">GENERAL</button>
 							<button class="tab-btn" data-tab="admin">ADMINISTRATION</button>
