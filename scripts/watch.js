@@ -95,6 +95,9 @@ function deploy() {
 		execSync(`cat moci/js/modules/dashboard.js | ${SSH} "cat > /www/moci/js/modules/dashboard.js"`, {
 			stdio: 'pipe'
 		});
+		execSync(`cat moci/js/modules/devices.js | ${SSH} "cat > /www/moci/js/modules/devices.js"`, {
+			stdio: 'pipe'
+		});
 		execSync(`cat moci/js/modules/network.js | ${SSH} "cat > /www/moci/js/modules/network.js"`, {
 			stdio: 'pipe'
 		});

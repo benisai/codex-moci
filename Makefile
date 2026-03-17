@@ -36,6 +36,7 @@ define Package/moci/install
 
 	$(INSTALL_DIR) $(1)/www/moci/js/modules
 	$(INSTALL_DATA) ./dist/moci/js/modules/dashboard.js $(1)/www/moci/js/modules/
+	$(INSTALL_DATA) ./dist/moci/js/modules/devices.js $(1)/www/moci/js/modules/
 	$(INSTALL_DATA) ./dist/moci/js/modules/network.js $(1)/www/moci/js/modules/
 	$(INSTALL_DATA) ./dist/moci/js/modules/monitoring.js $(1)/www/moci/js/modules/
 	$(INSTALL_DATA) ./dist/moci/js/modules/system.js $(1)/www/moci/js/modules/

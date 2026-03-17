@@ -122,6 +122,24 @@ Jan 25 12:37:22 OpenWrt daemon.notice netifd: Interface 'wan' is now up`
 						} else if (object === 'file' && method === 'exec') {
 							if (params.command === '/usr/libexec/syslog-wrapper' && Array.isArray(params.params)) {
 								result = [0, { stdout: mockData.syslog }];
+							} else if (
+								params.command === '/usr/libexec/nlbwmon-action' &&
+								Array.isArray(params.params) &&
+								params.params[0] === 'download'
+							) {
+								result = [
+									0,
+									{
+										stdout: JSON.stringify({
+											columns: ['family', 'mac', 'ip', 'layer7', 'rx_bytes', 'tx_bytes'],
+											data: [
+												['ipv4', '00:11:22:33:44:55', '192.168.1.100', 'https', 324000000, 90500000],
+												['ipv4', '00:11:22:33:44:66', '192.168.1.101', 'youtube', 760000000, 221000000],
+												['ipv4', '00:11:22:33:44:77', '192.168.1.102', 'dns', 92000000, 42000000]
+											]
+										})
+									}
+								];
 							}
 						} else if (object === 'uci' && method === 'get') {
 							if (params.config === 'moci' && params.section === 'features') {
@@ -130,6 +148,7 @@ Jan 25 12:37:22 OpenWrt daemon.notice netifd: Interface 'wan' is now up`
 									{
 										values: {
 											dashboard: '1',
+											devices: '1',
 											network: '1',
 											monitoring: '1',
 											netify: '1',

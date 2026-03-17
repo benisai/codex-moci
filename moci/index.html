@@ -67,6 +67,7 @@
 					</div>
 					<nav class="nav">
 						<a href="#/dashboard" class="active">DASHBOARD</a>
+						<a href="#/devices" data-feature="devices">DEVICES</a>
 						<a href="#/network">NETWORK</a>
 						<a href="#/monitoring" data-feature="monitoring">MONITORING</a>
 						<a href="#/netify" data-feature="netify">NETIFY</a>
@@ -85,55 +86,22 @@
 										<div class="hero-value" id="wan-status">CHECKING...</div>
 									</div>
 								</div>
-									<div class="hero-details">
-										<div class="hero-detail hidden" id="lan-detail">
-											<span class="hero-detail-label">LAN</span>
-											<span class="hero-detail-value" id="lan-ip">---.---.---.---</span>
-										</div>
+								<div class="hero-details">
+									<div class="hero-detail hidden" id="lan-detail">
+										<span class="hero-detail-label">LAN</span>
+										<span class="hero-detail-value" id="lan-ip">---.---.---.---</span>
+									</div>
 									<div class="hero-detail">
 										<span class="hero-detail-label">WAN</span>
 										<span class="hero-detail-value" id="wan-ip">---.---.---.---</span>
 									</div>
-								</div>
-							</div>
-
-							<div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 24px">
-								<div class="stat-card metric-card">
-									<div class="metric-icon">↓</div>
-									<div class="metric-content">
-										<div class="metric-value" id="bandwidth-down">0 Mbps</div>
-										<div class="metric-label">DOWNLOAD</div>
+									<div class="hero-detail">
+										<span class="hero-detail-label">DOWNLOAD</span>
+										<span class="hero-detail-value" id="bandwidth-down">0 Mbps</span>
 									</div>
-								</div>
-								<div class="stat-card metric-card">
-									<div class="metric-icon">↑</div>
-									<div class="metric-content">
-										<div class="metric-value" id="bandwidth-up">0 Mbps</div>
-										<div class="metric-label">UPLOAD</div>
-									</div>
-								</div>
-								<div class="stat-card metric-card">
-									<div class="metric-icon">◆</div>
-									<div class="metric-content">
-										<div class="metric-value" id="clients">0</div>
-										<div class="metric-label">DEVICES</div>
-									</div>
-								</div>
-							</div>
-
-							<div class="stat-card" style="margin-top: 24px">
-								<div class="section-title">NETWORK ACTIVITY (60s)</div>
-								<div class="bandwidth-graph-container">
-									<canvas id="bandwidth-graph" width="800" height="200"></canvas>
-								</div>
-								<div class="bandwidth-legend">
-									<div class="legend-item">
-										<span class="legend-color" style="background: rgba(226, 226, 229, 0.9)"></span>
-										<span>Download</span>
-									</div>
-									<div class="legend-item">
-										<span class="legend-color" style="background: rgba(226, 226, 229, 0.5)"></span>
-										<span>Upload</span>
+									<div class="hero-detail">
+										<span class="hero-detail-label">UPLOAD</span>
+										<span class="hero-detail-value" id="bandwidth-up">0 Mbps</span>
 									</div>
 								</div>
 							</div>
@@ -158,8 +126,32 @@
 									<div class="stat-value" id="uptime">Loading...</div>
 								</div>
 								<div class="stat-card">
-									<div class="stat-label">HOSTNAME</div>
-									<div class="stat-value" id="hostname">Loading...</div>
+									<div class="stat-label">DEVICES</div>
+									<div class="stat-value" id="clients">0</div>
+								</div>
+							</div>
+
+							<div class="stat-card" style="margin-top: 24px">
+								<div class="section-title">NETWORK ACTIVITY (60s)</div>
+								<div class="bandwidth-graph-container">
+									<canvas id="bandwidth-graph" width="800" height="200"></canvas>
+								</div>
+								<div class="bandwidth-legend">
+									<div class="legend-item">
+										<span class="legend-color" style="background: rgba(226, 226, 229, 0.9)"></span>
+										<span>Download</span>
+									</div>
+									<div class="legend-item">
+										<span class="legend-color" style="background: rgba(226, 226, 229, 0.5)"></span>
+										<span>Upload</span>
+									</div>
+								</div>
+							</div>
+
+							<div class="section-title">SYSTEM LOG</div>
+							<div class="stat-card">
+								<div class="log-viewer" id="system-log">
+									<div class="log-line">Loading system logs...</div>
 								</div>
 							</div>
 
@@ -169,12 +161,48 @@
 								<button class="action-btn" id="restart-network-btn">Restart Network</button>
 								<button class="action-btn" id="restart-firewall-btn">Restart Firewall</button>
 							</div>
+						</div>
 
-							<div class="section-title">SYSTEM LOG</div>
+						<div id="devices-page" class="page hidden" data-feature="devices">
+							<h2>DEVICES</h2>
 							<div class="stat-card">
-								<div class="log-viewer" id="system-log">
-									<div class="log-line">Loading system logs...</div>
+								<div
+									style="
+										display: flex;
+										align-items: center;
+										justify-content: space-between;
+										gap: 12px;
+										flex-wrap: wrap;
+									"
+								>
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">
+										DHCP LEASES
+									</div>
+									<button class="action-btn" id="devices-refresh-btn">REFRESH</button>
 								</div>
+								<div
+									id="devices-source-status"
+									style="margin-top: 12px; font-size: 11px; color: var(--steel-muted); font-family: var(--font-mono)"
+								></div>
+								<table class="data-table" id="devices-table">
+									<thead>
+										<tr>
+											<th>HOSTNAME</th>
+											<th>IP ADDRESS</th>
+											<th>MAC ADDRESS</th>
+											<th>UPLOAD</th>
+											<th>DOWNLOAD</th>
+											<th>ONLINE</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td colspan="6" style="text-align: center; color: var(--steel-muted)">
+												Loading...
+											</td>
+										</tr>
+									</tbody>
+								</table>
 							</div>
 						</div>
 

@@ -18,6 +18,7 @@ export class OpenWrtCore {
 	getModuleForRoute(basePath) {
 		const routeModuleMap = {
 			dashboard: 'dashboard',
+			devices: 'devices',
 			network: 'network',
 			monitoring: 'monitoring',
 			system: 'system',
@@ -120,6 +121,7 @@ export class OpenWrtCore {
 	getDefaultFeatures() {
 		return {
 			dashboard: '1',
+			devices: '1',
 			network: '1',
 			monitoring: '1',
 			netify: '1',
@@ -150,6 +152,7 @@ export class OpenWrtCore {
 	getModuleMap() {
 		return {
 			dashboard: './modules/dashboard.js',
+			devices: './modules/devices.js',
 			network: './modules/network.js',
 			monitoring: './modules/monitoring.js',
 			system: './modules/system.js',
@@ -187,6 +190,7 @@ export class OpenWrtCore {
 	shouldLoadModule(moduleName) {
 		const moduleFeatures = {
 			dashboard: ['dashboard'],
+			devices: ['devices'],
 			network: ['network', 'wireless', 'firewall', 'dhcp', 'dns', 'diagnostics'],
 			monitoring: ['monitoring'],
 			system: ['system', 'backup', 'packages', 'services', 'ssh_keys', 'storage', 'leds', 'firmware'],

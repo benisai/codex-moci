@@ -1093,6 +1093,8 @@ select.form-input {
 	margin-left: auto;
 	padding: 8px 10px;
 	gap: 18px;
+	flex-wrap: wrap;
+	justify-content: flex-end;
 	background: rgba(255, 255, 255, 0.02);
 }
 
