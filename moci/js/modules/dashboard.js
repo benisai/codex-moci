@@ -7,6 +7,11 @@ export default class DashboardModule {
 		this.lastCpuStats = null;
 		this.bandwidthCanvas = null;
 		this.bandwidthCtx = null;
+		this.monthlyCanvas = null;
+		this.monthlyCtx = null;
+		this.lastMonthlyRefresh = 0;
+		this.trafficPeriod = 'hourly';
+		this.trafficControlsBound = false;
 
 		this.core.registerRoute('/dashboard', () => this.load());
 	}
@@ -60,6 +65,9 @@ export default class DashboardModule {
 			await this.updateSystemLog();
 			await this.updateConnections();
 			this.initBandwidthGraph();
+			this.initTrafficControls();
+			this.initMonthlyGraph();
+			await this.updateTrafficChart(true);
 		} catch (err) {
 			console.error('Failed to load dashboard:', err);
 			this.core.showToast('Failed to load system information', 'error');
@@ -81,6 +89,7 @@ export default class DashboardModule {
 		await this.updateCpuUsage();
 		await this.updateNetworkStats();
 		await this.updateWANStatus();
+		await this.updateTrafficChart(false);
 	}
 
 	async fetchCpuStats() {
@@ -504,5 +513,237 @@ export default class DashboardModule {
 			else ctx.lineTo(x, y);
 		});
 		ctx.stroke();
+	}
+
+	initMonthlyGraph() {
+		if (this.monthlyCanvas && this.monthlyCtx) return;
+
+		const canvas = document.getElementById('monthly-traffic-graph');
+		if (!canvas) return;
+
+		this.monthlyCanvas = canvas;
+		this.monthlyCtx = canvas.getContext('2d');
+		canvas.width = canvas.offsetWidth || 800;
+		canvas.height = 220;
+	}
+
+	initTrafficControls() {
+		if (this.trafficControlsBound) return;
+		this.trafficControlsBound = true;
+		this.updateTrafficPeriodButtons();
+
+		document.getElementById('traffic-period-hourly')?.addEventListener('click', () => this.setTrafficPeriod('hourly'));
+		document.getElementById('traffic-period-daily')?.addEventListener('click', () => this.setTrafficPeriod('daily'));
+		document.getElementById('traffic-period-monthly')?.addEventListener('click', () => this.setTrafficPeriod('monthly'));
+	}
+
+	setTrafficPeriod(period) {
+		if (!['hourly', 'daily', 'monthly'].includes(period)) return;
+		if (this.trafficPeriod === period) return;
+		this.trafficPeriod = period;
+		this.lastMonthlyRefresh = 0;
+		this.updateTrafficPeriodButtons();
+		this.updateTrafficChart(true);
+	}
+
+	updateTrafficPeriodButtons() {
+		const map = {
+			hourly: 'traffic-period-hourly',
+			daily: 'traffic-period-daily',
+			monthly: 'traffic-period-monthly'
+		};
+		for (const [period, id] of Object.entries(map)) {
+			const btn = document.getElementById(id);
+			if (btn) btn.classList.toggle('is-active', this.trafficPeriod === period);
+		}
+	}
+
+	async updateTrafficChart(force = false) {
+		const now = Date.now();
+		if (!force && now - this.lastMonthlyRefresh < 60000) return;
+		this.lastMonthlyRefresh = now;
+
+		try {
+			this.initMonthlyGraph();
+			const usage = await this.fetchVnstatSeries(this.trafficPeriod);
+			this.renderMonthlyMeta(usage, this.trafficPeriod);
+			this.renderMonthlyGraph(usage.points);
+		} catch (err) {
+			this.renderMonthlyMeta(null, this.trafficPeriod);
+			this.renderMonthlyGraph([]);
+		}
+	}
+
+	async fetchVnstatSeries(period) {
+		const commands = [
+			{ command: '/usr/bin/vnstat', params: ['--json'] },
+			{ command: '/usr/sbin/vnstat', params: ['--json'] }
+		];
+
+		let lastErr = null;
+		for (const c of commands) {
+			try {
+				const [status, result] = await this.core.ubusCall('file', 'exec', c, { timeout: 12000 });
+				if (status !== 0 || !result?.stdout) continue;
+				const parsed = this.parseVnstatSeries(result.stdout, period);
+				if (parsed.points.length > 0) return parsed;
+			} catch (err) {
+				lastErr = err;
+			}
+		}
+
+		throw lastErr || new Error(`vnstat ${period} data unavailable`);
+	}
+
+	parseVnstatSeries(stdout, period) {
+		let payload;
+		try {
+			payload = JSON.parse(stdout);
+		} catch {
+			return { interfaceName: '', points: [] };
+		}
+
+		const interfaces = Array.isArray(payload?.interfaces) ? payload.interfaces : [];
+		const picked = interfaces.find(i => this.getVnstatPeriodRows(i?.traffic, period).length > 0) || interfaces[0];
+		const interfaceName = picked?.name || '';
+		const rows = this.getVnstatPeriodRows(picked?.traffic, period);
+
+		const points = rows
+			.map(item => this.mapVnstatRow(item, period))
+			.filter(Boolean)
+			.sort((a, b) => a.ts - b.ts)
+			.slice(-12);
+
+		return { interfaceName, points };
+	}
+
+	getVnstatPeriodRows(traffic, period) {
+		if (!traffic) return [];
+		const keyMap = {
+			hourly: ['hour', 'hours'],
+			daily: ['day', 'days'],
+			monthly: ['month', 'months']
+		};
+		for (const key of keyMap[period] || []) {
+			if (Array.isArray(traffic[key])) return traffic[key];
+		}
+		return [];
+	}
+
+	mapVnstatRow(item, period) {
+		const date = item?.date || {};
+		const year = Number(date.year) || 0;
+		const month = Number(date.month) || 0;
+		const day = Number(date.day) || 1;
+		const hour = Number(date.hour) || 0;
+		let ts = 0;
+
+		if (year && month) {
+			if (period === 'hourly') ts = new Date(year, month - 1, day, hour).getTime();
+			else if (period === 'daily') ts = new Date(year, month - 1, day).getTime();
+			else ts = new Date(year, month - 1, 1).getTime();
+		} else if (Number(item?.time)) {
+			ts = Number(item.time) * 1000;
+		}
+		if (!ts) return null;
+
+		const rx = this.normalizeTrafficBytes(item?.rx ?? item?.rx_bytes ?? 0);
+		const tx = this.normalizeTrafficBytes(item?.tx ?? item?.tx_bytes ?? 0);
+		return {
+			ts,
+			rx,
+			tx,
+			label: this.formatTrafficLabel(ts, period)
+		};
+	}
+
+	normalizeTrafficBytes(value) {
+		let n = 0;
+		if (typeof value === 'number') n = value;
+		else if (value && typeof value === 'object') n = Number(value.bytes) || 0;
+		else n = Number(value) || 0;
+		return n >= 0 ? n : 0;
+	}
+
+	renderMonthlyMeta(data, period) {
+		const metaEl = document.getElementById('monthly-traffic-meta');
+		if (!metaEl) return;
+
+		if (!data || !data.points || data.points.length === 0) {
+			metaEl.textContent = `vnstat ${period} data unavailable. Install/enable luci-app-vnstat.`;
+			return;
+		}
+
+		const ifaceLabel = data.interfaceName || 'default interface';
+		metaEl.textContent = `Interface: ${ifaceLabel} - Last ${data.points.length} ${period} samples`;
+	}
+
+	renderMonthlyGraph(points) {
+		if (!this.monthlyCtx || !this.monthlyCanvas) return;
+
+		const ctx = this.monthlyCtx;
+		const canvas = this.monthlyCanvas;
+		const width = canvas.width;
+		const height = canvas.height;
+		const paddingTop = 20;
+		const paddingBottom = 44;
+		const paddingX = 20;
+		const chartHeight = height - paddingTop - paddingBottom;
+		const chartWidth = width - paddingX * 2;
+
+		ctx.clearRect(0, 0, width, height);
+
+		if (!points || points.length === 0) {
+			ctx.fillStyle = 'rgba(138, 138, 141, 0.9)';
+			ctx.font = '12px SF Mono, Monaco, Cascadia Code, monospace';
+			ctx.fillText('No vnstat traffic data', paddingX, height / 2);
+			return;
+		}
+
+		const maxValue = Math.max(...points.map(m => Math.max(m.rx, m.tx)), 1);
+		const groups = points.length;
+		const groupWidth = chartWidth / groups;
+		const barWidth = Math.max(5, Math.min(18, groupWidth * 0.32));
+		const labelStep = groups > 8 ? 2 : 1;
+
+		ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+		ctx.lineWidth = 1;
+		for (let i = 0; i <= 4; i++) {
+			const y = paddingTop + (i * chartHeight) / 4;
+			ctx.beginPath();
+			ctx.moveTo(paddingX, y);
+			ctx.lineTo(width - paddingX, y);
+			ctx.stroke();
+		}
+
+		points.forEach((m, idx) => {
+			const xCenter = paddingX + idx * groupWidth + groupWidth / 2;
+			const rxHeight = (m.rx / maxValue) * chartHeight;
+			const txHeight = (m.tx / maxValue) * chartHeight;
+			const rxX = xCenter - barWidth - 2;
+			const txX = xCenter + 2;
+			const rxY = paddingTop + chartHeight - rxHeight;
+			const txY = paddingTop + chartHeight - txHeight;
+
+			ctx.fillStyle = 'rgba(226, 226, 229, 0.9)';
+			ctx.fillRect(rxX, rxY, barWidth, rxHeight);
+
+			ctx.fillStyle = 'rgba(226, 226, 229, 0.5)';
+			ctx.fillRect(txX, txY, barWidth, txHeight);
+
+			if (idx % labelStep === 0) {
+				ctx.fillStyle = 'rgba(138, 138, 141, 0.95)';
+				ctx.font = '10px SF Mono, Monaco, Cascadia Code, monospace';
+				ctx.textAlign = 'center';
+				ctx.fillText(m.label, xCenter, height - 14);
+			}
+		});
+	}
+
+	formatTrafficLabel(ts, period) {
+		const d = new Date(ts);
+		if (period === 'hourly') return d.toLocaleTimeString([], { hour: 'numeric' });
+		if (period === 'daily') return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+		return d.toLocaleDateString([], { month: 'short' });
 	}
 }

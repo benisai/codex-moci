@@ -1155,6 +1155,41 @@ select.form-input {
 	height: 100%;
 }
 
+.monthly-traffic-meta {
+	margin: 0 16px 12px 16px;
+	font-size: 11px;
+	color: var(--steel-muted);
+	font-family: var(--font-mono);
+}
+
+.traffic-period-switch {
+	display: flex;
+	gap: 8px;
+	padding: 0 16px 8px 16px;
+	flex-wrap: wrap;
+}
+
+.traffic-period-switch .action-btn-sm {
+	margin-right: 0;
+}
+
+.traffic-period-switch .action-btn-sm.is-active {
+	background: rgba(255, 255, 255, 0.14);
+	border-color: var(--starship-steel);
+	color: var(--starship-steel);
+}
+
+.monthly-traffic-graph-container {
+	height: 220px;
+	padding: 16px;
+	position: relative;
+}
+
+.monthly-traffic-graph-container canvas {
+	width: 100%;
+	height: 100%;
+}
+
 .bandwidth-legend {
 	display: flex;
 	gap: 24px;

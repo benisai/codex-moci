@@ -42,13 +42,13 @@ export default class DevicesModule {
 				this.fetchNlbwmonUsage()
 			]);
 
-			this.renderSourceStatus(usage.available);
+			this.renderSourceStatus();
 			const rows = this.mergeRows(leases, arpMacs, usage.totalsByClient);
 			this.renderRows(rows);
 		} catch (err) {
 			console.error('Failed to load devices page:', err);
 			this.core.renderEmptyTable(tbody, 6, 'Failed to load device data');
-			this.renderSourceStatus(false, 'Failed to load nlbwmon data');
+			this.renderSourceStatus();
 		}
 	}
 
@@ -214,17 +214,9 @@ export default class DevicesModule {
 			.join('');
 	}
 
-	renderSourceStatus(nlbwmonAvailable, message = '') {
+	renderSourceStatus() {
 		const el = document.getElementById('devices-source-status');
 		if (!el) return;
-
-		if (message) {
-			el.textContent = message;
-			return;
-		}
-
-		el.textContent = nlbwmonAvailable
-			? 'Bandwidth source: luci-app-nlbwmon'
-			: 'Bandwidth source: unavailable (install/enable luci-app-nlbwmon)';
+		el.textContent = '';
 	}
 }

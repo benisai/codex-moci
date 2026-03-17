@@ -84,7 +84,57 @@
 					syslog: `Jan 25 12:34:56 OpenWrt daemon.info dnsmasq[1234]: started, version 2.86
 Jan 25 12:35:12 OpenWrt daemon.info dnsmasq-dhcp[1234]: DHCP, IP range 192.168.1.100 -- 192.168.1.200
 Jan 25 12:36:45 OpenWrt kern.info kernel: [12345.678] ath9k: Atheros AR9344 rev 2
-Jan 25 12:37:22 OpenWrt daemon.notice netifd: Interface 'wan' is now up`
+Jan 25 12:37:22 OpenWrt daemon.notice netifd: Interface 'wan' is now up`,
+					vnstat: {
+						interfaces: [
+							{
+								name: 'br-lan',
+								traffic: {
+									hour: [
+										{ date: { year: 2026, month: 3, day: 16, hour: 13 }, rx: 2147483648, tx: 536870912 },
+										{ date: { year: 2026, month: 3, day: 16, hour: 14 }, rx: 1932735283, tx: 515396075 },
+										{ date: { year: 2026, month: 3, day: 16, hour: 15 }, rx: 2415919104, tx: 671088640 },
+										{ date: { year: 2026, month: 3, day: 16, hour: 16 }, rx: 2684354560, tx: 805306368 },
+										{ date: { year: 2026, month: 3, day: 16, hour: 17 }, rx: 2254857830, tx: 644245094 },
+										{ date: { year: 2026, month: 3, day: 16, hour: 18 }, rx: 1825361101, tx: 483183820 },
+										{ date: { year: 2026, month: 3, day: 16, hour: 19 }, rx: 2791728742, tx: 751619276 },
+										{ date: { year: 2026, month: 3, day: 16, hour: 20 }, rx: 3113851289, tx: 858993459 },
+										{ date: { year: 2026, month: 3, day: 16, hour: 21 }, rx: 2576980377, tx: 697932186 },
+										{ date: { year: 2026, month: 3, day: 16, hour: 22 }, rx: 2040109465, tx: 590558003 },
+										{ date: { year: 2026, month: 3, day: 16, hour: 23 }, rx: 1503238553, tx: 429496729 },
+										{ date: { year: 2026, month: 3, day: 17, hour: 0 }, rx: 1181116006, tx: 322122547 }
+									],
+									day: [
+										{ date: { year: 2026, month: 3, day: 6 }, rx: 26575110144, tx: 6442450944 },
+										{ date: { year: 2026, month: 3, day: 7 }, rx: 28991029248, tx: 7516192768 },
+										{ date: { year: 2026, month: 3, day: 8 }, rx: 31138512896, tx: 8589934592 },
+										{ date: { year: 2026, month: 3, day: 9 }, rx: 25769803776, tx: 6979321856 },
+										{ date: { year: 2026, month: 3, day: 10 }, rx: 30064771072, tx: 8053063680 },
+										{ date: { year: 2026, month: 3, day: 11 }, rx: 33285996544, tx: 9126805504 },
+										{ date: { year: 2026, month: 3, day: 12 }, rx: 34359738368, tx: 9663676416 },
+										{ date: { year: 2026, month: 3, day: 13 }, rx: 32212254720, tx: 8589934592 },
+										{ date: { year: 2026, month: 3, day: 14 }, rx: 28991029248, tx: 7516192768 },
+										{ date: { year: 2026, month: 3, day: 15 }, rx: 25769803776, tx: 6979321856 },
+										{ date: { year: 2026, month: 3, day: 16 }, rx: 33285996544, tx: 9126805504 },
+										{ date: { year: 2026, month: 3, day: 17 }, rx: 17179869184, tx: 4294967296 }
+									],
+									month: [
+										{ date: { year: 2025, month: 5 }, rx: 90324529152, tx: 20253343744 },
+										{ date: { year: 2025, month: 6 }, rx: 100235010048, tx: 24395415552 },
+										{ date: { year: 2025, month: 7 }, rx: 118422104064, tx: 28689039360 },
+										{ date: { year: 2025, month: 8 }, rx: 107468005376, tx: 26508009472 },
+										{ date: { year: 2025, month: 9 }, rx: 98045300736, tx: 23173550080 },
+										{ date: { year: 2025, month: 10 }, rx: 111669149696, tx: 29283041280 },
+										{ date: { year: 2025, month: 11 }, rx: 124339822592, tx: 31584817152 },
+										{ date: { year: 2025, month: 12 }, rx: 132409196544, tx: 34626039808 },
+										{ date: { year: 2026, month: 1 }, rx: 127763488768, tx: 32644739072 },
+										{ date: { year: 2026, month: 2 }, rx: 121482149888, tx: 29812948992 },
+										{ date: { year: 2026, month: 3 }, rx: 84506664960, tx: 21479002112 }
+									]
+								}
+							}
+						]
+					}
 				};
 
 				const originalFetch = win.fetch.bind(win);
@@ -122,6 +172,12 @@ Jan 25 12:37:22 OpenWrt daemon.notice netifd: Interface 'wan' is now up`
 						} else if (object === 'file' && method === 'exec') {
 							if (params.command === '/usr/libexec/syslog-wrapper' && Array.isArray(params.params)) {
 								result = [0, { stdout: mockData.syslog }];
+							} else if (
+								(params.command === '/usr/bin/vnstat' || params.command === '/usr/sbin/vnstat') &&
+								Array.isArray(params.params) &&
+								params.params.includes('--json')
+							) {
+								result = [0, { stdout: JSON.stringify(mockData.vnstat) }];
 							} else if (
 								params.command === '/usr/libexec/nlbwmon-action' &&
 								Array.isArray(params.params) &&
