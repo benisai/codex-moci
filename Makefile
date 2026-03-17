@@ -37,6 +37,7 @@ define Package/moci/install
 	$(INSTALL_DIR) $(1)/www/moci/js/modules
 	$(INSTALL_DATA) ./dist/moci/js/modules/dashboard.js $(1)/www/moci/js/modules/
 	$(INSTALL_DATA) ./dist/moci/js/modules/network.js $(1)/www/moci/js/modules/
+	$(INSTALL_DATA) ./dist/moci/js/modules/monitoring.js $(1)/www/moci/js/modules/
 	$(INSTALL_DATA) ./dist/moci/js/modules/system.js $(1)/www/moci/js/modules/
 	$(INSTALL_DATA) ./dist/moci/js/modules/vpn.js $(1)/www/moci/js/modules/
 	$(INSTALL_DATA) ./dist/moci/js/modules/services.js $(1)/www/moci/js/modules/
@@ -50,9 +51,11 @@ define Package/moci/install
 
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) ./files/moci-netify-collector.sh $(1)/usr/bin/moci-netify-collector
+	$(INSTALL_BIN) ./files/moci-ping-monitor.sh $(1)/usr/bin/moci-ping-monitor
 
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/netify-collector.init $(1)/etc/init.d/netify-collector
+	$(INSTALL_BIN) ./files/ping-monitor.init $(1)/etc/init.d/ping-monitor
 endef
 
 define Package/moci/postinst

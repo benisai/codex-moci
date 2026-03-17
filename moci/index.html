@@ -68,6 +68,7 @@
 					<nav class="nav">
 						<a href="#/dashboard" class="active">DASHBOARD</a>
 						<a href="#/network">NETWORK</a>
+						<a href="#/monitoring" data-feature="monitoring">MONITORING</a>
 						<a href="#/netify" data-feature="netify">NETIFY</a>
 						<a href="#/system">SYSTEM</a>
 					</nav>
@@ -76,7 +77,7 @@
 
 					<main class="content">
 						<div id="dashboard-page" class="page">
-							<div class="hero-card" id="wan-status-hero">
+							<div class="hero-card dashboard-status-slim" id="wan-status-hero">
 								<div class="hero-status">
 									<div class="hero-indicator">●</div>
 									<div class="hero-text">
@@ -84,11 +85,11 @@
 										<div class="hero-value" id="wan-status">CHECKING...</div>
 									</div>
 								</div>
-								<div class="hero-details">
-									<div class="hero-detail">
-										<span class="hero-detail-label">LAN</span>
-										<span class="hero-detail-value" id="lan-ip">---.---.---.---</span>
-									</div>
+									<div class="hero-details">
+										<div class="hero-detail hidden" id="lan-detail">
+											<span class="hero-detail-label">LAN</span>
+											<span class="hero-detail-value" id="lan-ip">---.---.---.---</span>
+										</div>
 									<div class="hero-detail">
 										<span class="hero-detail-label">WAN</span>
 										<span class="hero-detail-value" id="wan-ip">---.---.---.---</span>
@@ -1333,7 +1334,77 @@
 									</div>
 								</div>
 							</div>
+							</div>
 						</div>
+
+						<div id="monitoring-page" class="page hidden" data-feature="monitoring">
+							<h2>MONITORING</h2>
+
+							<div class="stat-card">
+								<div class="section-title">PING MONITOR</div>
+								<div class="monitoring-controls">
+									<div class="form-group">
+										<label class="form-label">TARGET HOST / IP</label>
+										<input type="text" id="monitoring-target" class="form-input" value="1.1.1.1" />
+									</div>
+									<div class="form-group">
+										<label class="form-label">INTERVAL (SECONDS)</label>
+										<input type="number" id="monitoring-interval" class="form-input" min="5" max="3600" value="60" />
+									</div>
+								</div>
+								<div class="quick-actions">
+									<button class="action-btn" id="monitoring-apply-btn">APPLY</button>
+									<button class="action-btn" id="monitoring-toggle-btn">START SERVICE</button>
+									<button class="action-btn" id="monitoring-run-now-btn">RUN ONCE</button>
+									<button class="action-btn" id="monitoring-clear-btn">CLEAR HISTORY</button>
+								</div>
+							</div>
+
+							<div class="stats-grid monitoring-metrics-grid">
+								<div class="stat-card">
+									<div class="stat-label">CURRENT LATENCY</div>
+									<div class="stat-value" id="monitoring-latency">N/A</div>
+								</div>
+								<div class="stat-card">
+									<div class="stat-label">STATUS</div>
+									<div class="stat-value" id="monitoring-status"></div>
+								</div>
+								<div class="stat-card">
+									<div class="stat-label">AVERAGE (LAST 12)</div>
+									<div class="stat-value" id="monitoring-avg">0.0 ms</div>
+								</div>
+								<div class="stat-card">
+									<div class="stat-label">PACKET LOSS (LAST 12)</div>
+									<div class="stat-value" id="monitoring-loss">0%</div>
+								</div>
+							</div>
+
+							<div class="stat-card" style="margin-top: 24px">
+								<div class="section-title">NETWORK PERFORMANCE TIMELINE</div>
+								<div class="monitoring-timeline-wrap">
+									<div class="monitoring-timeline-bars" id="monitoring-timeline-bars"></div>
+									<div class="monitoring-timeline-labels" id="monitoring-timeline-labels"></div>
+								</div>
+							</div>
+
+							<div class="stat-card" style="margin-top: 24px">
+								<div class="section-title">RECENT PING SAMPLES</div>
+								<table class="data-table" id="monitoring-recent-table">
+									<thead>
+										<tr>
+											<th>TIME</th>
+											<th>TARGET</th>
+											<th>LATENCY</th>
+											<th>STATUS</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td colspan="4" style="text-align: center; color: var(--steel-muted)">No ping samples yet</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
 						</div>
 
 						<div id="netify-page" class="page hidden" data-feature="netify">
@@ -1354,33 +1425,6 @@
 								<div class="stat-card">
 									<div class="stat-label">TOTAL BYTES</div>
 									<div class="stat-value" id="netify-total-bytes">0 B</div>
-								</div>
-							</div>
-
-							<div class="stat-card">
-								<div class="section-title">COLLECTOR STATUS</div>
-								<div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px">
-									<div>
-										<div class="stat-label">SERVICE</div>
-										<div id="netify-service-status" style="margin-top: 8px">Loading...</div>
-									</div>
-									<div>
-										<div class="stat-label">DATABASE</div>
-										<div id="netify-db-status" style="margin-top: 8px">Loading...</div>
-									</div>
-									<div>
-										<div class="stat-label">DB PATH</div>
-										<div id="netify-db-path" style="margin-top: 8px; font-family: monospace; color: var(--steel-light)">
-											/tmp/moci-netify.sqlite
-										</div>
-									</div>
-								</div>
-								<div class="quick-actions">
-									<button class="action-btn" id="netify-start-btn">START COLLECTOR</button>
-									<button class="action-btn" id="netify-stop-btn">STOP COLLECTOR</button>
-									<button class="action-btn" id="netify-restart-btn">RESTART COLLECTOR</button>
-									<button class="action-btn" id="netify-init-db-btn">INIT DB</button>
-									<button class="action-btn" id="netify-refresh-btn">REFRESH</button>
 								</div>
 							</div>
 
@@ -1421,6 +1465,40 @@
 										</tr>
 									</tbody>
 								</table>
+							</div>
+
+							<div class="stat-card netify-collapsible-card" style="margin-top: 24px">
+								<div class="netify-collapsible-header">
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">COLLECTOR STATUS</div>
+									<button class="netify-toggle-btn" id="netify-collector-toggle-btn" type="button" aria-expanded="false">
+										<span id="netify-collector-toggle-icon">▸</span>
+									</button>
+								</div>
+								<div id="netify-collector-body" style="margin-top: 16px; display: none">
+									<div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px">
+										<div>
+											<div class="stat-label">SERVICE</div>
+											<div id="netify-service-status" style="margin-top: 8px">Loading...</div>
+										</div>
+										<div>
+											<div class="stat-label">DATABASE</div>
+											<div id="netify-db-status" style="margin-top: 8px">Loading...</div>
+										</div>
+										<div>
+											<div class="stat-label">DB PATH</div>
+											<div id="netify-db-path" style="margin-top: 8px; font-family: monospace; color: var(--steel-light)">
+												/tmp/moci-netify.sqlite
+											</div>
+										</div>
+									</div>
+									<div class="quick-actions">
+										<button class="action-btn" id="netify-start-btn">START COLLECTOR</button>
+										<button class="action-btn" id="netify-stop-btn">STOP COLLECTOR</button>
+										<button class="action-btn" id="netify-restart-btn">RESTART COLLECTOR</button>
+										<button class="action-btn" id="netify-init-db-btn">INIT DB</button>
+										<button class="action-btn" id="netify-refresh-btn">REFRESH</button>
+									</div>
+								</div>
 							</div>
 						</div>
 

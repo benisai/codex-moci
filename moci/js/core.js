@@ -19,6 +19,7 @@ export class OpenWrtCore {
 		const routeModuleMap = {
 			dashboard: 'dashboard',
 			network: 'network',
+			monitoring: 'monitoring',
 			system: 'system',
 			netify: 'netify'
 		};
@@ -100,17 +101,19 @@ export class OpenWrtCore {
 	}
 
 	async loadFeatures() {
+		const defaults = this.getDefaultFeatures();
 		try {
 			const [status, result] = await this.uciGet('moci', 'features');
 
 			if (status === 0 && result && result.values) {
-				this.features = result.values;
+				// Merge router config over defaults so newly added features remain visible.
+				this.features = { ...defaults, ...result.values };
 			} else {
-				this.features = this.getDefaultFeatures();
+				this.features = defaults;
 			}
 		} catch (err) {
 			console.error('Feature config not found, using defaults:', err);
-			this.features = this.getDefaultFeatures();
+			this.features = defaults;
 		}
 	}
 
@@ -118,7 +121,9 @@ export class OpenWrtCore {
 		return {
 			dashboard: '1',
 			network: '1',
+			monitoring: '1',
 			netify: '1',
+			show_lan_ip: '0',
 			wireless: '1',
 			firewall: '1',
 			dhcp: '1',
@@ -146,6 +151,7 @@ export class OpenWrtCore {
 		return {
 			dashboard: './modules/dashboard.js',
 			network: './modules/network.js',
+			monitoring: './modules/monitoring.js',
 			system: './modules/system.js',
 			netify: './modules/netify.js',
 			vpn: './modules/vpn.js',
@@ -182,6 +188,7 @@ export class OpenWrtCore {
 		const moduleFeatures = {
 			dashboard: ['dashboard'],
 			network: ['network', 'wireless', 'firewall', 'dhcp', 'dns', 'diagnostics'],
+			monitoring: ['monitoring'],
 			system: ['system', 'backup', 'packages', 'services', 'ssh_keys', 'storage', 'leds', 'firmware'],
 			netify: ['netify'],
 			vpn: ['wireguard'],

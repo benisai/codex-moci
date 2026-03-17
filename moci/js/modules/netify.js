@@ -25,10 +25,53 @@ export default class NetifyModule {
 		document.getElementById('netify-stop-btn')?.addEventListener('click', () => this.runServiceAction('stop'));
 		document.getElementById('netify-restart-btn')?.addEventListener('click', () => this.runServiceAction('restart'));
 		document.getElementById('netify-init-db-btn')?.addEventListener('click', () => this.initDatabase());
+		document
+			.getElementById('netify-collector-toggle-btn')
+			?.addEventListener('click', () => this.toggleCollectorPanel());
+		this.syncCollectorPanel();
+	}
+
+	toggleCollectorPanel() {
+		const body = document.getElementById('netify-collector-body');
+		const icon = document.getElementById('netify-collector-toggle-icon');
+		const btn = document.getElementById('netify-collector-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const isHidden = body.style.display === 'none' || body.style.display === '';
+		if (isHidden) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+			localStorage.setItem('netify_collector_expanded', '1');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+			localStorage.setItem('netify_collector_expanded', '0');
+		}
+	}
+
+	syncCollectorPanel() {
+		const body = document.getElementById('netify-collector-body');
+		const icon = document.getElementById('netify-collector-toggle-icon');
+		const btn = document.getElementById('netify-collector-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const expanded = localStorage.getItem('netify_collector_expanded') === '1';
+		if (expanded) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+		}
 	}
 
 	async load() {
 		await this.loadConfig();
+		this.syncCollectorPanel();
 		this.startPolling();
 		await this.refresh(false);
 	}

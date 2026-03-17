@@ -48,6 +48,7 @@ export default class DashboardModule {
 	async load() {
 		const pageElement = document.getElementById('dashboard-page');
 		if (pageElement) pageElement.classList.remove('hidden');
+		this.applyLanVisibility();
 		try {
 			const systemInfo = await this.fetchSystemInfo();
 			const boardInfo = await this.fetchBoardInfo();
@@ -62,6 +63,17 @@ export default class DashboardModule {
 		} catch (err) {
 			console.error('Failed to load dashboard:', err);
 			this.core.showToast('Failed to load system information', 'error');
+		}
+	}
+
+	applyLanVisibility() {
+		const lanDetailEl = document.getElementById('lan-detail');
+		if (!lanDetailEl) return;
+
+		if (this.core.isFeatureEnabled('show_lan_ip')) {
+			lanDetailEl.classList.remove('hidden');
+		} else {
+			lanDetailEl.classList.add('hidden');
 		}
 	}
 
