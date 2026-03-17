@@ -1155,6 +1155,14 @@ select.form-input {
 	height: 100%;
 }
 
+.traffic-header-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
 .monthly-traffic-meta {
 	margin: 0 16px 12px 16px;
 	font-size: 11px;
@@ -1165,7 +1173,7 @@ select.form-input {
 .traffic-period-switch {
 	display: flex;
 	gap: 8px;
-	padding: 0 16px 8px 16px;
+	padding: 0;
 	flex-wrap: wrap;
 }
 

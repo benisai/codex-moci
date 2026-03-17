@@ -123,6 +123,7 @@ export class OpenWrtCore {
 			dashboard: '1',
 			devices: '1',
 			network: '1',
+			traffic_history: '1',
 			monitoring: '1',
 			netify: '1',
 			show_lan_ip: '0',

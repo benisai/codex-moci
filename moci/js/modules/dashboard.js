@@ -668,14 +668,7 @@ export default class DashboardModule {
 	renderMonthlyMeta(data, period) {
 		const metaEl = document.getElementById('monthly-traffic-meta');
 		if (!metaEl) return;
-
-		if (!data || !data.points || data.points.length === 0) {
-			metaEl.textContent = `vnstat ${period} data unavailable. Install/enable luci-app-vnstat.`;
-			return;
-		}
-
-		const ifaceLabel = data.interfaceName || 'default interface';
-		metaEl.textContent = `Interface: ${ifaceLabel} - Last ${data.points.length} ${period} samples`;
+		metaEl.textContent = '';
 	}
 
 	renderMonthlyGraph(points) {
