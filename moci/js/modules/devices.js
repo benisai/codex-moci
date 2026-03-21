@@ -30,6 +30,7 @@ export default class DevicesModule {
 			saveBtnId: 'save-devices-pin-btn',
 			saveHandler: () => this.savePinnedIp()
 		});
+		document.getElementById('devices-pin-static')?.addEventListener('change', () => this.syncStaticIpField());
 
 		this.core.delegateActions('devices-table', {
 			pin: mac => this.openPinDialog(mac)
@@ -308,8 +309,20 @@ export default class DevicesModule {
 		document.getElementById('devices-pin-section').value = row.staticSection || '';
 		document.getElementById('devices-pin-hostname').value = row.hostname && row.hostname !== 'Unknown' ? row.hostname : '';
 		document.getElementById('devices-pin-mac').value = normalizedMac;
+		const staticCheckbox = document.getElementById('devices-pin-static');
+		if (staticCheckbox) staticCheckbox.checked = Boolean(row.pinned);
 		document.getElementById('devices-pin-ip').value = row.ip && row.ip !== 'N/A' ? row.ip : '';
+		this.syncStaticIpField();
 		this.core.openModal('devices-pin-modal');
+	}
+
+	syncStaticIpField() {
+		const staticCheckbox = document.getElementById('devices-pin-static');
+		const ipInput = document.getElementById('devices-pin-ip');
+		if (!staticCheckbox || !ipInput) return;
+		const useStatic = Boolean(staticCheckbox.checked);
+		ipInput.disabled = !useStatic;
+		ipInput.placeholder = useStatic ? '192.168.1.50' : 'Disabled unless Static is checked';
 	}
 
 	isValidIpv4(ip) {
@@ -327,24 +340,32 @@ export default class DevicesModule {
 		const hostname = (document.getElementById('devices-pin-hostname').value || '').trim();
 		const mac = this.normalizeMac(document.getElementById('devices-pin-mac').value);
 		const ip = (document.getElementById('devices-pin-ip').value || '').trim();
+		const useStatic = Boolean(document.getElementById('devices-pin-static')?.checked);
 
 		if (!mac) {
 			this.core.showToast('Invalid MAC address', 'error');
 			return;
 		}
-		if (!this.isValidIpv4(ip)) {
+		if (useStatic && !this.isValidIpv4(ip)) {
 			this.core.showToast('Enter a valid IPv4 address', 'error');
+			return;
+		}
+		if (!useStatic && !hostname && !section) {
+			this.core.showToast('Set a hostname or enable Static IP', 'error');
 			return;
 		}
 
 		try {
 			const values = {
 				name: hostname,
-				mac,
-				ip
+				mac
 			};
+			if (useStatic) values.ip = ip;
 			if (section) {
 				await this.core.uciSet('dhcp', section, values);
+				if (!useStatic) {
+					await this.core.uciDelete('dhcp', section, 'ip').catch(() => {});
+				}
 			} else {
 				const [, addResult] = await this.core.uciAdd('dhcp', 'host');
 				const targetSection = addResult?.section;
@@ -354,7 +375,7 @@ export default class DevicesModule {
 			await this.core.uciCommit('dhcp');
 
 			this.core.closeModal('devices-pin-modal');
-			this.core.showToast('Static lease saved for device', 'success');
+			this.core.showToast(useStatic ? 'Static lease saved for device' : 'Device name saved', 'success');
 			await this.loadDevices();
 		} catch (err) {
 			console.error('Failed to save static lease:', err);
