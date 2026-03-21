@@ -1586,6 +1586,54 @@
 								</table>
 							</div>
 
+							<div class="modal hidden" id="netify-flow-action-modal">
+								<div class="modal-backdrop"></div>
+								<div class="modal-content">
+									<div class="modal-header">
+										<h3 class="modal-title">FLOW ACTION</h3>
+										<button class="modal-close" id="close-netify-flow-action-modal">&times;</button>
+									</div>
+									<div class="modal-body">
+										<input type="hidden" id="netify-action-flow-index" />
+
+										<div class="form-group">
+											<label class="form-label">ACTION TYPE</label>
+											<select id="netify-action-type" class="form-input">
+												<option value="domain">BLOCK DOMAIN (HOSTS)</option>
+												<option value="ip">BLOCK DESTINATION IP (FIREWALL)</option>
+											</select>
+										</div>
+
+										<div class="form-group" id="netify-domain-group">
+											<label class="form-label">DOMAIN</label>
+											<input type="text" id="netify-action-domain" class="form-input" />
+										</div>
+
+										<div id="netify-ip-block-group" class="hidden">
+											<div class="form-group">
+												<label class="form-label">SCOPE</label>
+												<select id="netify-action-scope" class="form-input">
+													<option value="source_dest">THIS SOURCE TO DESTINATION</option>
+													<option value="all_sources">ALL SOURCES TO DESTINATION</option>
+												</select>
+											</div>
+											<div class="form-group">
+												<label class="form-label">SOURCE IP</label>
+												<input type="text" id="netify-action-source-ip" class="form-input" readonly />
+											</div>
+											<div class="form-group">
+												<label class="form-label">DESTINATION IP</label>
+												<input type="text" id="netify-action-dest-ip" class="form-input" readonly />
+											</div>
+										</div>
+									</div>
+									<div class="modal-footer">
+										<button class="action-btn" id="cancel-netify-flow-action-btn">CANCEL</button>
+										<button class="action-btn" id="save-netify-flow-action-btn">SAVE ACTION</button>
+									</div>
+								</div>
+							</div>
+
 							<div class="stat-card netify-collapsible-card" style="margin-top: 24px">
 								<div class="netify-collapsible-header">
 									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">COLLECTOR STATUS</div>

@@ -11,6 +11,7 @@ export default class NetifyModule {
 		this.hostnameByMac = new Map();
 		this.hostnameByIp = new Map();
 		this.lastHostRefreshAt = 0;
+		this.visibleFlows = [];
 
 		this.core.registerRoute('/netify', async () => {
 			const pageElement = document.getElementById('netify-page');
@@ -38,6 +39,15 @@ export default class NetifyModule {
 				.toLowerCase();
 			this.renderRecentFlows();
 		});
+		document.getElementById('netify-action-type')?.addEventListener('change', () => this.syncActionTypeUi());
+		document.getElementById('save-netify-flow-action-btn')?.addEventListener('click', () => this.saveFlowAction());
+		document.getElementById('cancel-netify-flow-action-btn')?.addEventListener('click', () =>
+			this.core.closeModal('netify-flow-action-modal')
+		);
+		document
+			.getElementById('close-netify-flow-action-modal')
+			?.addEventListener('click', () => this.core.closeModal('netify-flow-action-modal'));
+		document.querySelector('#netify-flows-table tbody')?.addEventListener('click', event => this.handleFlowRowClick(event));
 		this.syncCollectorPanel();
 	}
 
@@ -241,6 +251,12 @@ export default class NetifyModule {
 					flow.ssl?.client_sni ||
 					flow.other_ip ||
 					'Unknown';
+				const fqdn =
+					flow.fqdn ||
+					flow.host_server_name ||
+					flow.dns_host_name ||
+					flow.ssl?.client_sni ||
+					'';
 
 				const proto = flow.detected_protocol_name || 'N/A';
 				const device = this.normalizeMac(flow.local_mac) || 'unknown';
@@ -259,6 +275,7 @@ export default class NetifyModule {
 					device,
 					localIp,
 					app,
+					fqdn,
 					proto,
 					destIp,
 					destPort,
@@ -380,6 +397,7 @@ export default class NetifyModule {
 					row.device,
 					row.localIp,
 					row.app,
+					row.fqdn,
 					row.proto,
 					row.destIp,
 					String(row.destPort || '')
@@ -389,6 +407,7 @@ export default class NetifyModule {
 				return haystack.includes(q);
 			});
 		}
+		this.visibleFlows = rows;
 
 		if (rows.length === 0) {
 			this.core.renderEmptyTable(tbody, 7, this.flowSearchQuery ? 'No matching flows found' : 'No Netify flow data yet');
@@ -396,7 +415,8 @@ export default class NetifyModule {
 		}
 
 		tbody.innerHTML = rows
-			.map(row => `<tr>
+			.map(
+				(row, idx) => `<tr class="netify-flow-row" data-flow-index="${idx}" style="cursor: pointer" title="Click for actions">
 				<td>${this.core.escapeHtml(row.timeLabel)}</td>
 				<td>${this.core.escapeHtml(this.resolveDeviceLabel(row))}</td>
 				<td>${this.core.escapeHtml(row.localIp || '-')}</td>
@@ -404,8 +424,172 @@ export default class NetifyModule {
 				<td>${this.core.escapeHtml(row.proto)}</td>
 				<td>${this.core.escapeHtml(row.destIp)}</td>
 				<td>${this.core.escapeHtml(String(row.destPort || 0))}</td>
-			</tr>`)
+			</tr>`
+			)
 			.join('');
+	}
+
+	handleFlowRowClick(event) {
+		const tr = event.target?.closest?.('tr[data-flow-index]');
+		if (!tr) return;
+		const idx = Number(tr.getAttribute('data-flow-index'));
+		if (!Number.isInteger(idx) || idx < 0 || idx >= this.visibleFlows.length) return;
+		this.openFlowActionModal(idx);
+	}
+
+	openFlowActionModal(index) {
+		const flow = this.visibleFlows[index];
+		if (!flow) return;
+
+		document.getElementById('netify-action-flow-index').value = String(index);
+		const domainInput = document.getElementById('netify-action-domain');
+		if (domainInput) domainInput.value = this.sanitizeDomain(flow.fqdn || '');
+
+		const srcIpInput = document.getElementById('netify-action-source-ip');
+		if (srcIpInput) srcIpInput.value = flow.localIp || '';
+		const dstIpInput = document.getElementById('netify-action-dest-ip');
+		if (dstIpInput) dstIpInput.value = flow.destIp || '';
+
+		const scopeSelect = document.getElementById('netify-action-scope');
+		if (scopeSelect) {
+			scopeSelect.value = this.isValidIp(flow.localIp) ? 'source_dest' : 'all_sources';
+		}
+
+		const actionType = document.getElementById('netify-action-type');
+		if (actionType) {
+			actionType.value = domainInput?.value ? 'domain' : 'ip';
+		}
+		this.syncActionTypeUi();
+		this.core.openModal('netify-flow-action-modal');
+	}
+
+	syncActionTypeUi() {
+		const type = document.getElementById('netify-action-type')?.value || 'domain';
+		const domainGroup = document.getElementById('netify-domain-group');
+		const ipGroup = document.getElementById('netify-ip-block-group');
+		if (!domainGroup || !ipGroup) return;
+		const isDomain = type === 'domain';
+		domainGroup.classList.toggle('hidden', !isDomain);
+		ipGroup.classList.toggle('hidden', isDomain);
+	}
+
+	async saveFlowAction() {
+		const index = Number(document.getElementById('netify-action-flow-index')?.value || -1);
+		if (!Number.isInteger(index) || index < 0 || index >= this.visibleFlows.length) {
+			this.core.showToast('Flow not found', 'error');
+			return;
+		}
+		const flow = this.visibleFlows[index];
+		const type = document.getElementById('netify-action-type')?.value || 'domain';
+
+		try {
+			if (type === 'domain') {
+				const domain = this.sanitizeDomain(document.getElementById('netify-action-domain')?.value || '');
+				if (!domain) {
+					this.core.showToast('No valid domain found for this flow', 'error');
+					return;
+				}
+				await this.blockDomainInHosts(domain);
+				this.core.showToast(`Blocked domain via hosts: ${domain}`, 'success');
+			} else {
+				const scope = document.getElementById('netify-action-scope')?.value || 'all_sources';
+				await this.blockDestinationIp(flow, scope);
+				this.core.showToast('Firewall block rule added', 'success');
+			}
+
+			this.core.closeModal('netify-flow-action-modal');
+		} catch (err) {
+			console.error('Failed to save Netify flow action:', err);
+			this.core.showToast(`Failed to save action: ${err?.message || 'unknown error'}`, 'error');
+		}
+	}
+
+	async blockDomainInHosts(domain) {
+		const [status, result] = await this.core.ubusCall('file', 'read', { path: '/etc/hosts' });
+		if (status !== 0) throw new Error('Unable to read /etc/hosts');
+
+		const content = String(result?.data || '');
+		const lines = content.split('\n');
+		const exists = lines.some(line => {
+			const trimmed = line.trim();
+			if (!trimmed || trimmed.startsWith('#')) return false;
+			const parts = trimmed.split(/\s+/);
+			if (parts.length < 2) return false;
+			const ip = parts[0];
+			const names = parts.slice(1);
+			return ip === '127.0.0.1' && names.includes(domain);
+		});
+		if (exists) return;
+
+		if (lines.length && lines[lines.length - 1] === '') lines.pop();
+		lines.push(`127.0.0.1\t${domain}`);
+		const newContent = lines.join('\n') + '\n';
+		await this.core.ubusCall('file', 'write', { path: '/etc/hosts', data: newContent });
+		try {
+			await this.exec('/etc/init.d/dnsmasq', ['restart']);
+		} catch {}
+	}
+
+	async blockDestinationIp(flow, scope) {
+		const destIp = String(flow.destIp || '').trim();
+		if (!this.isValidIp(destIp)) throw new Error('Destination IP missing/invalid');
+
+		const values = {
+			name: `moci_netify_block_${Date.now()}`,
+			src: 'lan',
+			dest: 'wan',
+			proto: 'all',
+			dest_ip: destIp,
+			target: 'REJECT',
+			enabled: '1'
+		};
+		if (scope === 'source_dest') {
+			const srcIp = String(flow.localIp || '').trim();
+			if (!this.isValidIp(srcIp)) throw new Error('Source IP missing/invalid for source→dest block');
+			values.src_ip = srcIp;
+		}
+		if (this.isIPv6(destIp)) values.family = 'ipv6';
+		if (this.isIPv4(destIp)) values.family = 'ipv4';
+
+		const [, res] = await this.core.uciAdd('firewall', 'rule');
+		const section = res?.section;
+		if (!section) throw new Error('Failed to create firewall rule');
+		await this.core.uciSet('firewall', section, values);
+		await this.core.uciCommit('firewall');
+		try {
+			await this.exec('/etc/init.d/firewall', ['restart']);
+		} catch (err) {
+			console.warn('Firewall restart failed after rule commit:', err);
+		}
+	}
+
+	sanitizeDomain(value) {
+		const v = String(value || '')
+			.trim()
+			.toLowerCase();
+		if (!v) return '';
+		if (!/^[a-z0-9.-]+$/.test(v)) return '';
+		if (v.length > 253 || v.startsWith('.') || v.endsWith('.') || v.includes('..')) return '';
+		if (this.isValidIp(v)) return '';
+		return v;
+	}
+
+	isIPv4(value) {
+		const parts = String(value || '').trim().split('.');
+		if (parts.length !== 4) return false;
+		return parts.every(part => {
+			if (!/^\d+$/.test(part)) return false;
+			const n = Number(part);
+			return n >= 0 && n <= 255;
+		});
+	}
+
+	isIPv6(value) {
+		return /^[0-9a-f:]+$/i.test(String(value || '').trim()) && String(value || '').includes(':');
+	}
+
+	isValidIp(value) {
+		return this.isIPv4(value) || this.isIPv6(value);
 	}
 
 	formatTimestamp(ts) {
