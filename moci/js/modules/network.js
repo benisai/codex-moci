@@ -578,7 +578,7 @@ export default class NetworkModule {
 							const hasStaticIp = Boolean(String(s.ip || '').trim());
 							const ipCell = hasStaticIp
 								? this.core.escapeHtml(s.ip)
-								: `<span title="No static IP assigned; this entry only sets the device hostname.">N/A</span>`;
+								: `<span title="No static IP assigned; this entry only sets the device hostname." style="text-decoration: underline; text-underline-offset: 2px; cursor: help; color: var(--steel-light);">N/A</span>`;
 							return `<tr>
 						<td>${this.core.escapeHtml(s.name || 'N/A')}</td>
 						<td>${this.core.escapeHtml(s.mac || 'N/A')}</td>
