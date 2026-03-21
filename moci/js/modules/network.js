@@ -574,14 +574,18 @@ export default class NetworkModule {
 					this.core.renderEmptyTable(staticTbody, 4, 'No static leases');
 				} else {
 					staticTbody.innerHTML = statics
-						.map(
-							s => `<tr>
+						.map(s => {
+							const hasStaticIp = Boolean(String(s.ip || '').trim());
+							const ipCell = hasStaticIp
+								? this.core.escapeHtml(s.ip)
+								: `<span title="No static IP assigned; this entry only sets the device hostname.">N/A</span>`;
+							return `<tr>
 						<td>${this.core.escapeHtml(s.name || 'N/A')}</td>
 						<td>${this.core.escapeHtml(s.mac || 'N/A')}</td>
-						<td>${this.core.escapeHtml(s.ip || 'N/A')}</td>
+						<td>${ipCell}</td>
 						<td>${this.core.renderActionButtons(s.section)}</td>
-					</tr>`
-						)
+					</tr>`;
+						})
 						.join('');
 				}
 			}
