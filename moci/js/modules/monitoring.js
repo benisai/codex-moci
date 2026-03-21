@@ -124,9 +124,20 @@ export default class MonitoringModule {
 			this.pingSection = section;
 			this.target = target;
 			this.intervalSec = interval;
-			await this.exec('/etc/init.d/ping-monitor', ['restart']);
+			let restartFailed = false;
+			try {
+				await this.exec('/etc/init.d/ping-monitor', ['restart']);
+			} catch (err) {
+				restartFailed = true;
+				console.warn('Ping monitor restart failed after settings commit:', err);
+			}
 			await this.refresh();
-			this.core.showToast('Ping monitor settings applied', 'success');
+			this.core.showToast(
+				restartFailed
+					? 'Settings saved. Service restart was blocked; new target applies on next monitor cycle.'
+					: 'Ping monitor settings applied',
+				restartFailed ? 'warning' : 'success'
+			);
 		} catch (err) {
 			console.error('Failed to apply ping monitor settings:', err);
 			this.core.showToast(`Failed to apply settings: ${err?.message || 'unknown error'}`, 'error');

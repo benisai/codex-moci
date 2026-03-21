@@ -41,6 +41,14 @@ load_config() {
 	fi
 }
 
+refresh_runtime_config() {
+	load_config
+	PING_INTERVAL="$(sanitize_int "$PING_INTERVAL" "$DEFAULT_INTERVAL")"
+	PING_TIMEOUT="$(sanitize_int "$PING_TIMEOUT" "$DEFAULT_TIMEOUT")"
+	PING_MAX_LINES="$(sanitize_int "$PING_MAX_LINES" "$DEFAULT_MAX_LINES")"
+	ensure_output_file
+}
+
 sanitize_int() {
 	case "${1:-}" in
 		'' | *[!0-9]*)
@@ -108,19 +116,17 @@ run_ping_once() {
 }
 
 run_forever() {
+	refresh_runtime_config
 	log "starting target=$PING_TARGET interval=${PING_INTERVAL}s output=$PING_OUTPUT"
 	while true; do
+		refresh_runtime_config
 		run_ping_once
 		sleep "$PING_INTERVAL"
 	done
 }
 
 main() {
-	load_config
-	PING_INTERVAL="$(sanitize_int "$PING_INTERVAL" "$DEFAULT_INTERVAL")"
-	PING_TIMEOUT="$(sanitize_int "$PING_TIMEOUT" "$DEFAULT_TIMEOUT")"
-	PING_MAX_LINES="$(sanitize_int "$PING_MAX_LINES" "$DEFAULT_MAX_LINES")"
-	ensure_output_file
+	refresh_runtime_config
 
 	case "${1:-}" in
 		--once)
