@@ -9,7 +9,7 @@ export default class NetifyModule {
 		this.flows = [];
 		this.flowSearchQuery = '';
 		this.flowsPage = 0;
-		this.flowsPageSize = 100;
+		this.flowsPageSize = 50;
 		this.hostnameByMac = new Map();
 		this.hostnameByIp = new Map();
 		this.lastHostRefreshAt = 0;
