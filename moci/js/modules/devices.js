@@ -306,7 +306,7 @@ export default class DevicesModule {
 		}
 
 		document.getElementById('devices-pin-section').value = row.staticSection || '';
-		document.getElementById('devices-pin-hostname').value = row.hostname || '';
+		document.getElementById('devices-pin-hostname').value = row.hostname && row.hostname !== 'Unknown' ? row.hostname : '';
 		document.getElementById('devices-pin-mac').value = normalizedMac;
 		document.getElementById('devices-pin-ip').value = row.ip && row.ip !== 'N/A' ? row.ip : '';
 		this.core.openModal('devices-pin-modal');
@@ -339,7 +339,7 @@ export default class DevicesModule {
 
 		try {
 			const values = {
-				name: hostname && hostname !== 'Unknown' ? hostname : '',
+				name: hostname,
 				mac,
 				ip
 			};
