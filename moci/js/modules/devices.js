@@ -285,7 +285,7 @@ export default class DevicesModule {
 					<td>${this.core.escapeHtml(row.mac)}</td>
 					<td>${this.core.escapeHtml(upload)}</td>
 					<td>${this.core.escapeHtml(download)}</td>
-					<td>${row.online ? this.core.renderBadge('success', 'ONLINE') : this.core.renderBadge('error', 'OFFLINE')}</td>
+					<td>${row.online ? '<span class="badge badge-online-soft">ONLINE</span>' : '<span class="badge badge-offline-soft">OFFLINE</span>'}</td>
 					<td>${pinBtn}</td>
 				</tr>`;
 			})

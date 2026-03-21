@@ -347,6 +347,18 @@ body {
 	border: 1px solid rgba(226, 226, 229, 0.3);
 }
 
+.badge-online-soft {
+	background: rgba(144, 238, 144, 0.12);
+	color: #c9f7c9;
+	border: 1px solid rgba(144, 238, 144, 0.25);
+}
+
+.badge-offline-soft {
+	background: rgba(120, 100, 40, 0.18);
+	color: #d7c585;
+	border: 1px solid rgba(180, 155, 72, 0.32);
+}
+
 .data-table {
 	width: 100%;
 	border-collapse: collapse;
