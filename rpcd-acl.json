@@ -12,6 +12,7 @@
 				"/etc/dropbear/authorized_keys": ["read"],
 				"/etc/hosts": ["read"],
 				"/tmp/pingTest.txt": ["read"],
+				"/tmp/moci-netify-flow.jsonl": ["read"],
 				"/tmp/firmware.bin": ["read"],
 				"/tmp/backup.tar.gz": ["read"]
 			},
