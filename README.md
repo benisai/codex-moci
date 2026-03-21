@@ -111,6 +111,35 @@ uci commit uhttpd
 
 Access at `http://192.168.1.1/moci/` and login with your root credentials.
 
+### Option 3: New Router Bootstrap Script
+
+For a fresh OpenWrt router, run the included bootstrap script directly on the router:
+
+```bash
+opkg update
+opkg install git git-http ca-bundle
+git clone https://github.com/benisai/codex-moci.git
+cd codex-moci
+sh scripts/setup-openwrt-router.sh
+```
+
+What it does:
+- installs required packages (`netifyd`, `netcat`, `vnstat`, `nlbwmon`, etc.)
+- deploys web UI to `/www/moci`
+- installs/updates `rpcd` ACL (`/usr/share/rpcd/acl.d/moci.json`)
+- installs backend workers + init scripts:
+  - `/usr/bin/moci-netify-collector`
+  - `/usr/bin/moci-ping-monitor`
+  - `/etc/init.d/netify-collector`
+  - `/etc/init.d/ping-monitor`
+- installs `/etc/config/moci` defaults for Monitoring + Netify
+- enables/restarts `rpcd`, `uhttpd`, `netify-collector`, `ping-monitor`, `vnstat`, `nlbwmon`, `netifyd`
+
+After running, open:
+- `http://<router-lan-ip>/moci/`
+
+If ACLs changed, log out/in once to refresh your ubus session permissions.
+
 ---
 
 ## Building from Source
