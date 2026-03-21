@@ -34,6 +34,48 @@ export default class MonitoringModule {
 		document.getElementById('monitoring-toggle-btn')?.addEventListener('click', () => this.toggleService());
 		document.getElementById('monitoring-run-now-btn')?.addEventListener('click', () => this.runOnce());
 		document.getElementById('monitoring-clear-btn')?.addEventListener('click', () => this.clearHistory());
+		document
+			.getElementById('monitoring-settings-toggle-btn')
+			?.addEventListener('click', () => this.toggleSettingsPanel());
+		this.syncSettingsPanel();
+	}
+
+	toggleSettingsPanel() {
+		const body = document.getElementById('monitoring-settings-body');
+		const icon = document.getElementById('monitoring-settings-toggle-icon');
+		const btn = document.getElementById('monitoring-settings-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const isHidden = body.style.display === 'none' || body.style.display === '';
+		if (isHidden) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+			localStorage.setItem('monitoring_settings_expanded', '1');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+			localStorage.setItem('monitoring_settings_expanded', '0');
+		}
+	}
+
+	syncSettingsPanel() {
+		const body = document.getElementById('monitoring-settings-body');
+		const icon = document.getElementById('monitoring-settings-toggle-icon');
+		const btn = document.getElementById('monitoring-settings-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const expanded = localStorage.getItem('monitoring_settings_expanded') === '1';
+		if (expanded) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+		}
 	}
 
 	async loadConfig() {

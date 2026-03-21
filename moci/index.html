@@ -1425,26 +1425,6 @@
 						<div id="monitoring-page" class="page hidden" data-feature="monitoring">
 							<h2>MONITORING</h2>
 
-							<div class="stat-card">
-								<div class="section-title">PING MONITOR</div>
-								<div class="monitoring-controls">
-									<div class="form-group">
-										<label class="form-label">TARGET HOST / IP</label>
-										<input type="text" id="monitoring-target" class="form-input" value="1.1.1.1" />
-									</div>
-									<div class="form-group">
-										<label class="form-label">INTERVAL (SECONDS)</label>
-										<input type="number" id="monitoring-interval" class="form-input" min="5" max="3600" value="60" />
-									</div>
-								</div>
-								<div class="quick-actions">
-									<button class="action-btn" id="monitoring-apply-btn">APPLY</button>
-									<button class="action-btn" id="monitoring-toggle-btn">START SERVICE</button>
-									<button class="action-btn" id="monitoring-run-now-btn">RUN ONCE</button>
-									<button class="action-btn" id="monitoring-clear-btn">CLEAR HISTORY</button>
-								</div>
-							</div>
-
 							<div class="stats-grid monitoring-metrics-grid">
 								<div class="stat-card">
 									<div class="stat-label">CURRENT LATENCY</div>
@@ -1489,6 +1469,42 @@
 										</tr>
 									</tbody>
 								</table>
+							</div>
+
+							<div class="stat-card netify-collapsible-card" style="margin-top: 24px">
+								<div class="netify-collapsible-header">
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">
+										PING SETTINGS
+									</div>
+									<button class="netify-toggle-btn" id="monitoring-settings-toggle-btn" type="button" aria-expanded="false">
+										<span id="monitoring-settings-toggle-icon">▸</span>
+									</button>
+								</div>
+								<div id="monitoring-settings-body" style="margin-top: 16px; display: none">
+									<div class="monitoring-controls">
+										<div class="form-group">
+											<label class="form-label">TARGET HOST / IP</label>
+											<input type="text" id="monitoring-target" class="form-input" value="1.1.1.1" />
+										</div>
+										<div class="form-group">
+											<label class="form-label">INTERVAL (SECONDS)</label>
+											<input
+												type="number"
+												id="monitoring-interval"
+												class="form-input"
+												min="5"
+												max="3600"
+												value="60"
+											/>
+										</div>
+									</div>
+									<div class="quick-actions">
+										<button class="action-btn" id="monitoring-apply-btn">APPLY</button>
+										<button class="action-btn" id="monitoring-toggle-btn">START SERVICE</button>
+										<button class="action-btn" id="monitoring-run-now-btn">RUN ONCE</button>
+										<button class="action-btn" id="monitoring-clear-btn">CLEAR HISTORY</button>
+									</div>
+								</div>
 							</div>
 						</div>
 
