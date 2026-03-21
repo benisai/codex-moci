@@ -1572,6 +1572,7 @@
 											<th>TIME</th>
 											<th>DEVICE</th>
 											<th>LOCAL IP</th>
+											<th>FQDN</th>
 											<th>APPLICATION</th>
 											<th>PROTOCOL</th>
 											<th>DESTINATION IP</th>
@@ -1580,7 +1581,7 @@
 									</thead>
 									<tbody>
 										<tr>
-											<td colspan="7" style="text-align: center; color: var(--steel-muted)">Loading...</td>
+											<td colspan="8" style="text-align: center; color: var(--steel-muted)">Loading...</td>
 										</tr>
 									</tbody>
 								</table>
@@ -1607,6 +1608,13 @@
 										<div class="form-group" id="netify-domain-group">
 											<label class="form-label">DOMAIN</label>
 											<input type="text" id="netify-action-domain" class="form-input" />
+											<div style="margin-top: 8px">
+												<label class="form-label">BLOCK SCOPE</label>
+												<select id="netify-action-domain-scope" class="form-input">
+													<option value="full">THIS EXACT DOMAIN / SUBDOMAIN</option>
+													<option value="root">ROOT DOMAIN</option>
+												</select>
+											</div>
 										</div>
 
 										<div id="netify-ip-block-group" class="hidden">

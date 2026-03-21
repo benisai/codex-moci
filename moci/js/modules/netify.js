@@ -276,8 +276,8 @@ pgrep -fa moci-netify-collector || true
 					flow.other_ip ||
 					'Unknown';
 				const fqdn =
-					flow.fqdn ||
 					flow.host_server_name ||
+					flow.fqdn ||
 					flow.dns_host_name ||
 					flow.ssl?.client_sni ||
 					'';
@@ -434,7 +434,7 @@ pgrep -fa moci-netify-collector || true
 		this.visibleFlows = rows;
 
 		if (rows.length === 0) {
-			this.core.renderEmptyTable(tbody, 7, this.flowSearchQuery ? 'No matching flows found' : 'No Netify flow data yet');
+			this.core.renderEmptyTable(tbody, 8, this.flowSearchQuery ? 'No matching flows found' : 'No Netify flow data yet');
 			return;
 		}
 
@@ -444,6 +444,7 @@ pgrep -fa moci-netify-collector || true
 				<td>${this.core.escapeHtml(row.timeLabel)}</td>
 				<td>${this.core.escapeHtml(this.resolveDeviceLabel(row))}</td>
 				<td>${this.core.escapeHtml(row.localIp || '-')}</td>
+				<td>${this.core.escapeHtml(row.fqdn || '-')}</td>
 				<td>${this.core.escapeHtml(row.app)}</td>
 				<td>${this.core.escapeHtml(row.proto)}</td>
 				<td>${this.core.escapeHtml(row.destIp)}</td>
@@ -467,7 +468,19 @@ pgrep -fa moci-netify-collector || true
 
 		document.getElementById('netify-action-flow-index').value = String(index);
 		const domainInput = document.getElementById('netify-action-domain');
-		if (domainInput) domainInput.value = this.sanitizeDomain(flow.fqdn || '');
+		const resolvedDomain = this.sanitizeDomain(flow.fqdn || '');
+		if (domainInput) domainInput.value = resolvedDomain;
+		const domainScope = document.getElementById('netify-action-domain-scope');
+		if (domainScope) {
+			const root = this.extractRootDomain(resolvedDomain);
+			const hasSubdomain = root && root !== resolvedDomain;
+			domainScope.value = hasSubdomain ? 'full' : 'root';
+			if (domainScope.options?.length >= 2) {
+				domainScope.options[0].text = `THIS EXACT DOMAIN (${resolvedDomain || 'N/A'})`;
+				domainScope.options[1].text = `ROOT DOMAIN (${root || resolvedDomain || 'N/A'})`;
+				domainScope.options[1].disabled = !root;
+			}
+		}
 
 		const srcIpInput = document.getElementById('netify-action-source-ip');
 		if (srcIpInput) srcIpInput.value = flow.localIp || '';
@@ -508,9 +521,16 @@ pgrep -fa moci-netify-collector || true
 
 		try {
 			if (type === 'domain') {
-				const domain = this.sanitizeDomain(document.getElementById('netify-action-domain')?.value || '');
-				if (!domain) {
+				const inputDomain = this.sanitizeDomain(document.getElementById('netify-action-domain')?.value || '');
+				if (!inputDomain) {
 					this.core.showToast('No valid domain found for this flow', 'error');
+					return;
+				}
+				const scope = document.getElementById('netify-action-domain-scope')?.value || 'full';
+				const rootDomain = this.extractRootDomain(inputDomain);
+				const domain = scope === 'root' ? rootDomain || inputDomain : inputDomain;
+				if (!domain) {
+					this.core.showToast('Unable to resolve root domain for this entry', 'error');
 					return;
 				}
 				await this.blockDomainInCustomDns(domain);
@@ -603,6 +623,30 @@ pgrep -fa moci-netify-collector || true
 		if (v.length > 253 || v.startsWith('.') || v.endsWith('.') || v.includes('..')) return '';
 		if (this.isValidIp(v)) return '';
 		return v;
+	}
+
+	extractRootDomain(domain) {
+		const d = this.sanitizeDomain(domain);
+		if (!d) return '';
+		const parts = d.split('.').filter(Boolean);
+		if (parts.length < 2) return d;
+
+		const last2 = parts.slice(-2).join('.');
+		const last3 = parts.slice(-3).join('.');
+		const sldTlds = new Set([
+			'co.uk',
+			'org.uk',
+			'ac.uk',
+			'gov.uk',
+			'co.jp',
+			'com.au',
+			'net.au',
+			'org.au',
+			'co.nz'
+		]);
+		const tld2 = parts.slice(-2).join('.');
+		if (parts.length >= 3 && sldTlds.has(tld2)) return last3;
+		return last2;
 	}
 
 	isIPv4(value) {
