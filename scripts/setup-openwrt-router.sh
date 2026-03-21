@@ -56,7 +56,7 @@ opkg update
 # -----------------------------------------------------------------------------
 # Install required software if missing
 # -----------------------------------------------------------------------------
-software="nano vnstat2 vnstati2 luci-app-vnstat2 netifyd netdata nlbwmon luci-app-nlbwmon htop tcpdump-mini uhttpd-mod-ubus sqlite3-cli netcat"
+software="nano vnstat2 vnstati2 luci-app-vnstat2 netifyd netdata nlbwmon luci-app-nlbwmon htop tcpdump-mini uhttpd-mod-ubus netcat"
 
 for s in $software; do
 	if opkg list-installed | grep -q "^$s -"; then

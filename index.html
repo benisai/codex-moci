@@ -146,30 +146,17 @@ Jan 25 12:37:22 OpenWrt daemon.notice netifd: Interface 'wan' is now up`,
 2026-03-20T09:08:00.000Z|1.1.1.1|OK|14.5|icmp_seq=1 ttl=58
 2026-03-20T09:09:00.000Z|1.1.1.1|OK|13.2|icmp_seq=1 ttl=58
 `,
-					netifySql: {
-						overview: '154\\t8\\t19\\n',
-						purge: '728498120\\n',
-						topApps: `YouTube\t28\t2026-03-20 09:08:11
-Netflix\t19\t2026-03-20 08:59:44
-Cloudflare DNS\t17\t2026-03-20 09:09:50
-Google Services\t16\t2026-03-20 09:07:20
-Apple Push\t14\t2026-03-20 09:06:02
-OpenAI\t11\t2026-03-20 09:05:31
-Discord\t9\t2026-03-20 08:47:18
-NTP\t7\t2026-03-20 09:08:56
-`,
-						recentFlows: `2026-03-20 09:09:50\t00:11:22:33:44:55\tCloudflare DNS\tDNS\t1.1.1.1\t53
-2026-03-20 09:09:44\t00:11:22:33:44:66\tYouTube\tHTTPS\t142.250.68.14\t443
-2026-03-20 09:09:40\t00:11:22:33:44:77\tNetflix\tHTTPS\t52.4.120.22\t443
-2026-03-20 09:09:28\t00:11:22:33:44:55\tOpenAI\tHTTPS\t104.18.33.45\t443
-2026-03-20 09:09:11\t00:11:22:33:44:66\tDiscord\tHTTPS\t162.159.130.234\t443
-2026-03-20 09:08:56\t00:11:22:33:44:77\tNTP\tNTP\t129.6.15.28\t123
+					netifyFlowLog: `{"type":"flow","interface":"eth1","internal":false,"flow":{"last_seen_at":1774101189000,"local_mac":"00:11:22:33:44:55","detected_application_name":"Cloudflare DNS","detected_protocol_name":"DNS","other_ip":"1.1.1.1","other_port":53}}
+{"type":"flow","interface":"eth1","internal":false,"flow":{"last_seen_at":1774101184000,"local_mac":"00:11:22:33:44:66","detected_application_name":"YouTube","detected_protocol_name":"HTTP/S","other_ip":"142.250.68.14","other_port":443}}
+{"type":"flow","interface":"eth1","internal":false,"flow":{"last_seen_at":1774101180000,"local_mac":"00:11:22:33:44:77","detected_application_name":"Netflix","detected_protocol_name":"HTTP/S","other_ip":"52.4.120.22","other_port":443}}
+{"type":"flow","interface":"eth1","internal":false,"flow":{"last_seen_at":1774101176000,"local_mac":"00:11:22:33:44:55","detected_application_name":"OpenAI","detected_protocol_name":"HTTP/S","other_ip":"104.18.33.45","other_port":443}}
+{"type":"flow","interface":"eth1","internal":false,"flow":{"last_seen_at":1774101171000,"local_mac":"00:11:22:33:44:66","detected_application_name":"Discord","detected_protocol_name":"HTTP/S","other_ip":"162.159.130.234","other_port":443}}
+{"type":"flow","interface":"eth1","internal":false,"flow":{"last_seen_at":1774101166000,"local_mac":"00:11:22:33:44:77","detected_application_name":"NTP","detected_protocol_name":"NTP","other_ip":"129.6.15.28","other_port":123}}
 `
-					}
 				};
 				let pingServiceRunning = true;
 				let netifyServiceRunning = true;
-				let netifyDbPresent = true;
+				let netifyFilePresent = true;
 
 				const originalFetch = win.fetch.bind(win);
 				win.fetch = async (url, options) => {
@@ -204,6 +191,8 @@ NTP\t7\t2026-03-20 09:08:56
 								result = [0, { data: mockData.packages }];
 							} else if (params.path === '/tmp/pingTest.txt') {
 								result = [0, { data: mockData.pingHistory }];
+							} else if (params.path === '/tmp/moci-netify-flow.jsonl') {
+								result = [0, { data: mockData.netifyFlowLog }];
 							}
 						} else if (object === 'file' && method === 'write') {
 							if (params.path === '/tmp/pingTest.txt') {
@@ -243,8 +232,8 @@ NTP\t7\t2026-03-20 09:08:56
 									result = [0, { stdout: pingServiceRunning ? 'RUNNING\n' : 'STOPPED\n' }];
 								} else if (cmd.includes('pgrep -f moci-netify-collector')) {
 									result = [0, { stdout: netifyServiceRunning ? 'RUNNING\n' : 'STOPPED\n' }];
-								} else if (cmd.includes('[ -f') && cmd.includes('moci-netify.sqlite')) {
-									result = [0, { stdout: netifyDbPresent ? 'PRESENT\n' : 'MISSING\n' }];
+								} else if (cmd.includes('[ -f') && cmd.includes('moci-netify-flow.jsonl')) {
+									result = [0, { stdout: netifyFilePresent ? 'PRESENT\n' : 'MISSING\n' }];
 								}
 							} else if (params.command === '/etc/init.d/ping-monitor' && Array.isArray(params.params)) {
 								const action = params.params[0];
@@ -264,22 +253,12 @@ NTP\t7\t2026-03-20 09:08:56
 								if (action === 'restart') netifyServiceRunning = true;
 								result = [0, { stdout: '' }];
 							} else if (params.command === '/usr/bin/moci-netify-collector' && Array.isArray(params.params)) {
-								if (params.params.includes('--init-db')) {
-									netifyDbPresent = true;
+								if (params.params.includes('--init-db') || params.params.includes('--init-file')) {
+									netifyFilePresent = true;
+									if (!mockData.netifyFlowLog) {
+										mockData.netifyFlowLog = '';
+									}
 									result = [0, { stdout: 'initialized\n' }];
-								}
-							} else if (params.command === '/usr/bin/sqlite3' && Array.isArray(params.params)) {
-								const sql = params.params[3] || '';
-								if (sql.includes('COUNT(*) AS flow_count')) {
-									result = [0, { stdout: mockData.netifySql.overview }];
-								} else if (sql.includes('FROM stats_purge')) {
-									result = [0, { stdout: mockData.netifySql.purge }];
-								} else if (sql.includes('GROUP BY app')) {
-									result = [0, { stdout: mockData.netifySql.topApps }];
-								} else if (sql.includes('ORDER BY id DESC')) {
-									result = [0, { stdout: mockData.netifySql.recentFlows }];
-								} else {
-									result = [0, { stdout: '' }];
 								}
 							}
 						} else if (object === 'uci' && method === 'get') {
@@ -329,7 +308,8 @@ NTP\t7\t2026-03-20 09:08:56
 									0,
 									{
 										values: {
-											db_path: '/tmp/moci-netify.sqlite',
+											output_file: '/tmp/moci-netify-flow.jsonl',
+											max_lines: '5000',
 											enabled: '1',
 											host: '127.0.0.1',
 											port: '7150'

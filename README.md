@@ -166,7 +166,7 @@ The frontend reads data via `ubus` (`file.read`, `file.exec`, `uci.get`) and doe
 /etc/init.d/ping-monitor restart
 ```
 
-### Netify backend (Collector + SQLite)
+### Netify backend (Collector + JSONL flow file)
 
 **Service and scripts**
 - Init script: `files/netify-collector.init`
@@ -176,26 +176,24 @@ The frontend reads data via `ubus` (`file.read`, `file.exec`, `uci.get`) and doe
 **Data flow**
 1. Procd starts `moci-netify-collector` (if `moci.collector.enabled=1`).
 2. Collector reads UCI config (`moci.collector.*`).
-3. It connects to Netify JSONL stream via netcat (`nc host port`).
-4. Parsed events are inserted into SQLite:
-   - `flow` table (connection/application events)
-   - `stats_purge` table (purge/stat snapshots)
-5. Netify UI queries DB via `sqlite3` + `file.exec` and renders:
+3. It connects to Netify stream via netcat (`nc host port`).
+4. `type:"flow"` events are written to a local JSONL file.
+5. Netify UI reads/parses that file via `file.read` and renders:
    - flow/app/device counters
    - top applications
    - recent flows
-   - collector and DB status
+   - collector and file status
 
-**Default DB**
-- `/tmp/moci-netify.sqlite`
+**Default output file**
+- `/tmp/moci-netify-flow.jsonl`
 
 **Config keys (`/etc/config/moci`)**
 - `config netify 'collector'`
 - `option enabled '1'`
 - `option host '127.0.0.1'`
 - `option port '7150'`
-- `option db_path '/tmp/moci-netify.sqlite'`
-- `option retention_rows '5000'`
+- `option output_file '/tmp/moci-netify-flow.jsonl'`
+- `option max_lines '5000'`
 
 **Service control**
 ```bash
@@ -208,7 +206,7 @@ The frontend reads data via `ubus` (`file.read`, `file.exec`, `uci.get`) and doe
 
 When using the root `index.html` demo wrapper (`/index.html`), Monitoring and Netify data are mocked in-browser:
 - ping history/service responses are simulated
-- Netify sqlite query outputs are simulated
+- Netify flow JSONL input is simulated
 
 This lets you test UI behavior locally without running router services.
 

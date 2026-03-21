@@ -3,8 +3,10 @@ export default class NetifyModule {
 		this.core = core;
 		this.initialized = false;
 		this.pollInterval = null;
-		this.dbPath = '/tmp/moci-netify.sqlite';
+		this.outputPath = '/tmp/moci-netify-flow.jsonl';
+		this.maxLines = 5000;
 		this.isRefreshing = false;
+		this.flows = [];
 
 		this.core.registerRoute('/netify', async () => {
 			const pageElement = document.getElementById('netify-page');
@@ -24,10 +26,8 @@ export default class NetifyModule {
 		document.getElementById('netify-start-btn')?.addEventListener('click', () => this.runServiceAction('start'));
 		document.getElementById('netify-stop-btn')?.addEventListener('click', () => this.runServiceAction('stop'));
 		document.getElementById('netify-restart-btn')?.addEventListener('click', () => this.runServiceAction('restart'));
-		document.getElementById('netify-init-db-btn')?.addEventListener('click', () => this.initDatabase());
-		document
-			.getElementById('netify-collector-toggle-btn')
-			?.addEventListener('click', () => this.toggleCollectorPanel());
+		document.getElementById('netify-init-db-btn')?.addEventListener('click', () => this.initCollectorOutput());
+		document.getElementById('netify-collector-toggle-btn')?.addEventListener('click', () => this.toggleCollectorPanel());
 		this.syncCollectorPanel();
 	}
 
@@ -88,13 +88,15 @@ export default class NetifyModule {
 	async loadConfig() {
 		try {
 			const [status, result] = await this.core.uciGet('moci', 'collector');
-			if (status === 0 && result?.values?.db_path) {
-				this.dbPath = result.values.db_path;
+			if (status === 0 && result?.values) {
+				const c = result.values;
+				this.outputPath = c.output_file || c.db_path || this.outputPath;
+				this.maxLines = Number(c.max_lines || c.retention_rows) || this.maxLines;
 			}
 		} catch {}
 
-		const dbPathEl = document.getElementById('netify-db-path');
-		if (dbPathEl) dbPathEl.textContent = this.dbPath;
+		const pathEl = document.getElementById('netify-db-path');
+		if (pathEl) pathEl.textContent = this.outputPath;
 	}
 
 	async runServiceAction(action) {
@@ -108,14 +110,14 @@ export default class NetifyModule {
 		}
 	}
 
-	async initDatabase() {
+	async initCollectorOutput() {
 		try {
-			await this.exec('/usr/bin/moci-netify-collector', ['--init-db']);
-			this.core.showToast('Netify database initialized', 'success');
+			await this.exec('/usr/bin/moci-netify-collector', ['--init-file']);
+			this.core.showToast('Netify output file initialized', 'success');
 			await this.refresh(false);
 		} catch (err) {
-			console.error('Failed to initialize Netify DB:', err);
-			this.core.showToast('Failed to initialize database', 'error');
+			console.error('Failed to initialize Netify output file:', err);
+			this.core.showToast('Failed to initialize output file', 'error');
 		}
 	}
 
@@ -125,7 +127,10 @@ export default class NetifyModule {
 
 		try {
 			await this.updateStatus();
-			await Promise.all([this.loadOverview(), this.loadTopApps(), this.loadRecentFlows()]);
+			await this.loadFlowFile();
+			this.renderOverview();
+			this.renderTopApps();
+			this.renderRecentFlows();
 		} catch (err) {
 			console.error('Failed to refresh Netify view:', err);
 			if (showErrorToast) this.core.showToast('Failed to refresh Netify data', 'error');
@@ -136,8 +141,8 @@ export default class NetifyModule {
 
 	async updateStatus() {
 		const statusEl = document.getElementById('netify-service-status');
-		const dbStatusEl = document.getElementById('netify-db-status');
-		if (!statusEl || !dbStatusEl) return;
+		const fileStatusEl = document.getElementById('netify-db-status');
+		if (!statusEl || !fileStatusEl) return;
 
 		try {
 			const running = await this.execShell('pgrep -f moci-netify-collector >/dev/null && echo RUNNING || echo STOPPED');
@@ -150,61 +155,115 @@ export default class NetifyModule {
 		}
 
 		try {
-			const checkDb = await this.execShell(`[ -f ${this.shellQuote(this.dbPath)} ] && echo PRESENT || echo MISSING`);
-			const dbPresent = (checkDb.stdout || '').trim() === 'PRESENT';
-			dbStatusEl.innerHTML = dbPresent
+			const checkFile = await this.execShell(`[ -f ${this.shellQuote(this.outputPath)} ] && echo PRESENT || echo MISSING`);
+			const filePresent = (checkFile.stdout || '').trim() === 'PRESENT';
+			fileStatusEl.innerHTML = filePresent
 				? this.core.renderBadge('success', 'READY')
 				: this.core.renderBadge('error', 'MISSING');
 		} catch {
-			dbStatusEl.innerHTML = this.core.renderBadge('error', 'UNKNOWN');
+			fileStatusEl.innerHTML = this.core.renderBadge('error', 'UNKNOWN');
 		}
 	}
 
-	async loadOverview() {
-		const overviewSql = `
-			SELECT
-				COUNT(*) AS flow_count,
-				COUNT(DISTINCT local_mac) AS device_count,
-				COUNT(DISTINCT COALESCE(NULLIF(detected_app_name, ''), NULLIF(fqdn, ''), dest_ip)) AS app_count
-			FROM flow
-		`;
-		const purgeSql = `
-			SELECT COALESCE(SUM(total_bytes), 0) AS total_bytes
-			FROM stats_purge
-		`;
-
-		const [flowOut, purgeOut] = await Promise.all([this.querySql(overviewSql), this.querySql(purgeSql)]);
-
-		const flowRow = this.firstRow(flowOut);
-		const bytesRow = this.firstRow(purgeOut);
-
-		document.getElementById('netify-flow-count').textContent = flowRow[0] || '0';
-		document.getElementById('netify-device-count').textContent = flowRow[1] || '0';
-		document.getElementById('netify-app-count').textContent = flowRow[2] || '0';
-		document.getElementById('netify-total-bytes').textContent = this.core.formatBytes(parseInt(bytesRow[0] || '0', 10));
+	async loadFlowFile() {
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'read', { path: this.outputPath });
+			if (status !== 0 || !result?.data) {
+				this.flows = [];
+				return;
+			}
+			this.flows = this.parseFlowJsonl(result.data);
+		} catch {
+			this.flows = [];
+		}
 	}
 
-	async loadTopApps() {
-		const sql = `
-			SELECT
-				COALESCE(NULLIF(detected_app_name, ''), NULLIF(fqdn, ''), dest_ip, 'Unknown') AS app,
-				COUNT(*) AS flows,
-				MAX(timeinsert) AS last_seen
-			FROM flow
-			GROUP BY app
-			ORDER BY flows DESC
-			LIMIT 20
-		`;
+	parseFlowJsonl(content) {
+		return (content || '')
+			.split('\n')
+			.map(line => line.trim())
+			.filter(Boolean)
+			.map(line => {
+				let parsed;
+				try {
+					parsed = JSON.parse(line);
+				} catch {
+					return null;
+				}
+				if (!parsed || parsed.type !== 'flow' || !parsed.flow) return null;
 
-		const out = await this.querySql(sql);
-		const rows = this.parseTsv(out).map(cols => ({
-			app: cols[0] || 'Unknown',
-			flows: cols[1] || '0',
-			lastSeen: cols[2] || '-'
-		}));
+				const flow = parsed.flow;
+				const tsRaw = flow.last_seen_at || flow.first_seen_at || Date.now();
+				const tsMs = Number(tsRaw) > 1e12 ? Number(tsRaw) : Number(tsRaw) * 1000;
+				const ts = Number.isFinite(tsMs) && tsMs > 0 ? tsMs : Date.now();
 
+				const app =
+					flow.detected_application_name ||
+					flow.detected_app_name ||
+					flow.host_server_name ||
+					flow.dns_host_name ||
+					flow.ssl?.client_sni ||
+					flow.other_ip ||
+					'Unknown';
+
+				const proto = flow.detected_protocol_name || 'N/A';
+				const device = flow.local_mac || 'unknown';
+				const destIp = flow.other_ip || '-';
+				const destPort = flow.other_port || 0;
+				const bytes =
+					Number(flow.total_bytes || 0) ||
+					Number(flow.other_bytes || 0) ||
+					Number(flow.local_bytes || 0) ||
+					0;
+
+				return {
+					ts,
+					timeLabel: this.formatTimestamp(ts),
+					device,
+					app,
+					proto,
+					destIp,
+					destPort,
+					bytes
+				};
+			})
+			.filter(Boolean)
+			.slice(-this.maxLines);
+	}
+
+	renderOverview() {
+		const flowCount = this.flows.length;
+		const devices = new Set(this.flows.map(f => f.device).filter(v => v && v !== 'unknown'));
+		const apps = new Set(this.flows.map(f => f.app).filter(Boolean));
+		const totalBytes = this.flows.reduce((sum, f) => sum + (f.bytes || 0), 0);
+
+		document.getElementById('netify-flow-count').textContent = String(flowCount);
+		document.getElementById('netify-device-count').textContent = String(devices.size);
+		document.getElementById('netify-app-count').textContent = String(apps.size);
+		document.getElementById('netify-total-bytes').textContent = this.core.formatBytes(totalBytes);
+	}
+
+	renderTopApps() {
 		const tbody = document.querySelector('#netify-top-apps-table tbody');
 		if (!tbody) return;
+
+		const map = new Map();
+		for (const flow of this.flows) {
+			const key = flow.app || 'Unknown';
+			const current = map.get(key) || { app: key, flows: 0, lastTs: 0 };
+			current.flows += 1;
+			if (flow.ts > current.lastTs) current.lastTs = flow.ts;
+			map.set(key, current);
+		}
+
+		const rows = Array.from(map.values())
+			.sort((a, b) => b.flows - a.flows)
+			.slice(0, 20)
+			.map(item => ({
+				app: item.app,
+				flows: String(item.flows),
+				lastSeen: item.lastTs ? this.formatTimestamp(item.lastTs) : '-'
+			}));
 
 		if (rows.length === 0) {
 			this.core.renderEmptyTable(tbody, 3, 'No Netify flow data yet');
@@ -222,24 +281,13 @@ export default class NetifyModule {
 			.join('');
 	}
 
-	async loadRecentFlows() {
-		const sql = `
-			SELECT
-				timeinsert,
-				COALESCE(NULLIF(local_mac, ''), 'unknown') AS device,
-				COALESCE(NULLIF(detected_app_name, ''), NULLIF(fqdn, ''), dest_ip, 'Unknown') AS app,
-				COALESCE(NULLIF(detected_protocol_name, ''), 'N/A') AS proto,
-				COALESCE(NULLIF(dest_ip, ''), '-') AS dest_ip,
-				COALESCE(dest_port, 0) AS dest_port
-			FROM flow
-			ORDER BY id DESC
-			LIMIT 50
-		`;
-
-		const out = await this.querySql(sql);
-		const rows = this.parseTsv(out);
+	renderRecentFlows() {
 		const tbody = document.querySelector('#netify-flows-table tbody');
 		if (!tbody) return;
+
+		const rows = [...this.flows]
+			.sort((a, b) => b.ts - a.ts)
+			.slice(0, 50);
 
 		if (rows.length === 0) {
 			this.core.renderEmptyTable(tbody, 6, 'No Netify flow data yet');
@@ -247,44 +295,27 @@ export default class NetifyModule {
 		}
 
 		tbody.innerHTML = rows
-			.map(cols => {
-				const time = cols[0] || '-';
-				const device = cols[1] || '-';
-				const app = cols[2] || '-';
-				const proto = cols[3] || '-';
-				const destIp = cols[4] || '-';
-				const destPort = cols[5] || '0';
-				return `<tr>
-					<td>${this.core.escapeHtml(time)}</td>
-					<td>${this.core.escapeHtml(device)}</td>
-					<td>${this.core.escapeHtml(app)}</td>
-					<td>${this.core.escapeHtml(proto)}</td>
-					<td>${this.core.escapeHtml(destIp)}</td>
-					<td>${this.core.escapeHtml(destPort)}</td>
-				</tr>`;
-			})
+			.map(row => `<tr>
+				<td>${this.core.escapeHtml(row.timeLabel)}</td>
+				<td>${this.core.escapeHtml(row.device)}</td>
+				<td>${this.core.escapeHtml(row.app)}</td>
+				<td>${this.core.escapeHtml(row.proto)}</td>
+				<td>${this.core.escapeHtml(row.destIp)}</td>
+				<td>${this.core.escapeHtml(String(row.destPort || 0))}</td>
+			</tr>`)
 			.join('');
 	}
 
-	firstRow(text) {
-		const rows = this.parseTsv(text);
-		return rows[0] || ['0', '0', '0'];
-	}
-
-	parseTsv(text) {
-		return (text || '')
-			.split('\n')
-			map(line => line.trim())
-			.filter(Boolean)
-			.map(line => line.split('\t'));
-	}
-
-	async querySql(sql) {
-		const result = await this.exec('/usr/bin/sqlite3', [this.dbPath, '-separator', '\t', sql]);
-		if (result.stderr && result.stderr.trim()) {
-			throw new Error(result.stderr.trim());
-		}
-		return result.stdout || '';
+	formatTimestamp(ts) {
+		const d = new Date(ts);
+		return d.toLocaleString([], {
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		});
 	}
 
 	async execShell(cmd) {
