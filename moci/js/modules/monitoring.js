@@ -230,6 +230,12 @@ export default class MonitoringModule {
 		}
 	}
 
+	renderAll() {
+		this.renderStatusCard();
+		this.renderTimeline();
+		this.renderRecentTable();
+	}
+
 	renderStatusCard() {
 		const toggleBtn = document.getElementById('monitoring-toggle-btn');
 		if (toggleBtn) toggleBtn.textContent = this.serviceRunning ? 'STOP SERVICE' : 'START SERVICE';
