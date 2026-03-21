@@ -127,6 +127,93 @@ The package will be in `bin/packages/*/base/moci_*.ipk`
 
 ---
 
+## Monitoring & Netify Backends
+
+MoCI’s Monitoring and Netify tabs are backed by local services running on the router.  
+The frontend reads data via `ubus` (`file.read`, `file.exec`, `uci.get`) and does not do in-browser probing.
+
+### Monitoring backend (Ping service)
+
+**Service and scripts**
+- Init script: `files/ping-monitor.init`
+- Worker: `files/moci-ping-monitor.sh`
+- Runtime command: `/usr/bin/moci-ping-monitor`
+
+**Data flow**
+1. Procd starts `moci-ping-monitor` (if `moci.ping_monitor.enabled=1`).
+2. Script loads config from UCI (`moci.ping_monitor.*`).
+3. It pings target (default `1.1.1.1`) on interval and appends rows to flat file.
+4. Rows are stored in `output_file` (default `/tmp/pingTest.txt`) as:
+   - `timestamp|target|status|latency|message`
+5. Monitoring UI reads `/tmp/pingTest.txt` and renders:
+   - status cards
+   - timeline
+   - recent samples table
+
+**Config keys (`/etc/config/moci`)**
+- `config ping 'ping_monitor'`
+- `option enabled '1'`
+- `option target '1.1.1.1'`
+- `option interval '60'`
+- `option timeout '2'`
+- `option output_file '/tmp/pingTest.txt'`
+- `option max_lines '2000'`
+
+**Service control**
+```bash
+/etc/init.d/ping-monitor enable
+/etc/init.d/ping-monitor start
+/etc/init.d/ping-monitor restart
+```
+
+### Netify backend (Collector + SQLite)
+
+**Service and scripts**
+- Init script: `files/netify-collector.init`
+- Worker: `files/moci-netify-collector.sh`
+- Runtime command: `/usr/bin/moci-netify-collector`
+
+**Data flow**
+1. Procd starts `moci-netify-collector` (if `moci.collector.enabled=1`).
+2. Collector reads UCI config (`moci.collector.*`).
+3. It connects to Netify JSONL stream via netcat (`nc host port`).
+4. Parsed events are inserted into SQLite:
+   - `flow` table (connection/application events)
+   - `stats_purge` table (purge/stat snapshots)
+5. Netify UI queries DB via `sqlite3` + `file.exec` and renders:
+   - flow/app/device counters
+   - top applications
+   - recent flows
+   - collector and DB status
+
+**Default DB**
+- `/tmp/moci-netify.sqlite`
+
+**Config keys (`/etc/config/moci`)**
+- `config netify 'collector'`
+- `option enabled '1'`
+- `option host '127.0.0.1'`
+- `option port '7150'`
+- `option db_path '/tmp/moci-netify.sqlite'`
+- `option retention_rows '5000'`
+
+**Service control**
+```bash
+/etc/init.d/netify-collector enable
+/etc/init.d/netify-collector start
+/etc/init.d/netify-collector restart
+```
+
+### Local demo mode
+
+When using the root `index.html` demo wrapper (`/index.html`), Monitoring and Netify data are mocked in-browser:
+- ping history/service responses are simulated
+- Netify sqlite query outputs are simulated
+
+This lets you test UI behavior locally without running router services.
+
+---
+
 ## Security
 
 Uses OpenWrt's native authentication system. Same security model as LuCI:
