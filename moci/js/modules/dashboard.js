@@ -517,6 +517,7 @@ export default class DashboardModule {
 			<div class="bandwidth-tooltip-title">${this.core.escapeHtml(when)}</div>
 			<div>Download: ${this.core.escapeHtml(this.core.formatSpeed(down))}</div>
 			<div>Upload: ${this.core.escapeHtml(this.core.formatSpeed(up))}</div>
+			<div>Sample: ${index + 1}/${this.bandwidthHistory.down.length}</div>
 		`;
 
 		this.bandwidthTooltip.classList.remove('hidden');
@@ -530,6 +531,51 @@ export default class DashboardModule {
 	hideBandwidthTooltip() {
 		if (!this.bandwidthTooltip) return;
 		this.bandwidthTooltip.classList.add('hidden');
+	}
+
+	buildBandwidthPoints(data, width, height, padding, max) {
+		const stepX = (width - padding * 2) / (data.length - 1);
+		return data.map((val, i) => ({
+			x: padding + i * stepX,
+			y: height - padding - (val / max) * (height - padding * 2)
+		}));
+	}
+
+	traceSmoothLine(ctx, points) {
+		if (!points.length) return;
+		ctx.beginPath();
+		ctx.moveTo(points[0].x, points[0].y);
+		for (let i = 1; i < points.length; i++) {
+			const prev = points[i - 1];
+			const curr = points[i];
+			const cpx = (prev.x + curr.x) / 2;
+			const cpy = (prev.y + curr.y) / 2;
+			ctx.quadraticCurveTo(prev.x, prev.y, cpx, cpy);
+		}
+		const last = points[points.length - 1];
+		ctx.lineTo(last.x, last.y);
+	}
+
+	fillSmoothArea(ctx, points, baselineY, fillStyle) {
+		if (!points.length) return;
+		ctx.save();
+		ctx.fillStyle = fillStyle;
+		ctx.beginPath();
+		ctx.moveTo(points[0].x, baselineY);
+		ctx.lineTo(points[0].x, points[0].y);
+		for (let i = 1; i < points.length; i++) {
+			const prev = points[i - 1];
+			const curr = points[i];
+			const cpx = (prev.x + curr.x) / 2;
+			const cpy = (prev.y + curr.y) / 2;
+			ctx.quadraticCurveTo(prev.x, prev.y, cpx, cpy);
+		}
+		const last = points[points.length - 1];
+		ctx.lineTo(last.x, last.y);
+		ctx.lineTo(last.x, baselineY);
+		ctx.closePath();
+		ctx.fill();
+		ctx.restore();
 	}
 
 	updateBandwidthGraph() {
@@ -550,6 +596,9 @@ export default class DashboardModule {
 
 		const max = Math.max(...downData, ...upData, 100);
 		const stepX = (width - padding * 2) / (downData.length - 1);
+		const baselineY = height - padding;
+		const downPoints = this.buildBandwidthPoints(downData, width, height, padding, max);
+		const upPoints = this.buildBandwidthPoints(upData, width, height, padding, max);
 
 		ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
 		ctx.lineWidth = 1;
@@ -561,56 +610,24 @@ export default class DashboardModule {
 			ctx.stroke();
 		}
 
-		ctx.fillStyle = 'rgba(226, 226, 229, 0.15)';
-		ctx.beginPath();
-		ctx.moveTo(padding, height - padding);
-		downData.forEach((val, i) => {
-			const x = padding + i * stepX;
-			const y = height - padding - (val / max) * (height - padding * 2);
-			ctx.lineTo(x, y);
-		});
-		ctx.lineTo(width - padding, height - padding);
-		ctx.closePath();
-		ctx.fill();
+		this.fillSmoothArea(ctx, downPoints, baselineY, 'rgba(226, 226, 229, 0.15)');
 
 		ctx.strokeStyle = 'rgba(226, 226, 229, 0.9)';
 		ctx.lineWidth = 2;
-		ctx.beginPath();
-		downData.forEach((val, i) => {
-			const x = padding + i * stepX;
-			const y = height - padding - (val / max) * (height - padding * 2);
-			if (i === 0) ctx.moveTo(x, y);
-			else ctx.lineTo(x, y);
-		});
+		this.traceSmoothLine(ctx, downPoints);
 		ctx.stroke();
 
-		ctx.fillStyle = 'rgba(226, 226, 229, 0.08)';
-		ctx.beginPath();
-		ctx.moveTo(padding, height - padding);
-		upData.forEach((val, i) => {
-			const x = padding + i * stepX;
-			const y = height - padding - (val / max) * (height - padding * 2);
-			ctx.lineTo(x, y);
-		});
-		ctx.lineTo(width - padding, height - padding);
-		ctx.closePath();
-		ctx.fill();
+		this.fillSmoothArea(ctx, upPoints, baselineY, 'rgba(226, 226, 229, 0.08)');
 
 		ctx.strokeStyle = 'rgba(226, 226, 229, 0.5)';
 		ctx.lineWidth = 2;
-		ctx.beginPath();
-		upData.forEach((val, i) => {
-			const x = padding + i * stepX;
-			const y = height - padding - (val / max) * (height - padding * 2);
-			if (i === 0) ctx.moveTo(x, y);
-			else ctx.lineTo(x, y);
-		});
+		this.traceSmoothLine(ctx, upPoints);
 		ctx.stroke();
 
 		if (this.bandwidthHoverIndex >= 0 && this.bandwidthHoverIndex < downData.length) {
 			const x = padding + this.bandwidthHoverIndex * stepX;
-			const downY = height - padding - (downData[this.bandwidthHoverIndex] / max) * (height - padding * 2);
-			const upY = height - padding - (upData[this.bandwidthHoverIndex] / max) * (height - padding * 2);
+			const downY = downPoints[this.bandwidthHoverIndex].y;
+			const upY = upPoints[this.bandwidthHoverIndex].y;
 
 			ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
 			ctx.lineWidth = 1;
