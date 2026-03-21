@@ -6,6 +6,7 @@ export default class MonitoringModule {
 		this.serviceRunning = false;
 		this.target = '1.1.1.1';
 		this.intervalSec = 60;
+		this.thresholdMs = 100;
 		this.outputFile = '/tmp/moci-ping-monitor.txt';
 		this.samples = [];
 		this.pingSection = 'ping_monitor';
@@ -28,8 +29,10 @@ export default class MonitoringModule {
 	setupHandlers() {
 		const targetInput = document.getElementById('monitoring-target');
 		const intervalInput = document.getElementById('monitoring-interval');
+		const thresholdInput = document.getElementById('monitoring-threshold');
 		if (targetInput) targetInput.value = this.target;
 		if (intervalInput) intervalInput.value = String(this.intervalSec);
+		if (thresholdInput) thresholdInput.value = String(this.thresholdMs);
 
 		document.getElementById('monitoring-apply-btn')?.addEventListener('click', () => this.applySettings());
 		document.getElementById('monitoring-toggle-btn')?.addEventListener('click', () => this.toggleService());
@@ -88,22 +91,27 @@ export default class MonitoringModule {
 				this.pingSection = section;
 				this.target = c.target || this.target;
 				this.intervalSec = Number(c.interval) || this.intervalSec;
+				this.thresholdMs = Number(c.threshold) || this.thresholdMs;
 				this.outputFile = c.output_file || this.outputFile;
 			}
 		} catch {}
 
 		const targetInput = document.getElementById('monitoring-target');
 		const intervalInput = document.getElementById('monitoring-interval');
+		const thresholdInput = document.getElementById('monitoring-threshold');
 		if (targetInput) targetInput.value = this.target;
 		if (intervalInput) intervalInput.value = String(this.intervalSec);
+		if (thresholdInput) thresholdInput.value = String(this.thresholdMs);
 	}
 
 	async applySettings() {
 		const targetInput = document.getElementById('monitoring-target');
 		const intervalInput = document.getElementById('monitoring-interval');
+		const thresholdInput = document.getElementById('monitoring-threshold');
 
 		const target = (targetInput?.value || '').trim() || '1.1.1.1';
 		const interval = Number(intervalInput?.value || 60);
+		const threshold = Number(thresholdInput?.value || this.thresholdMs || 100);
 
 		if (!/^[a-zA-Z0-9.\-:]+$/.test(target)) {
 			this.core.showToast('Invalid target host/IP', 'error');
@@ -113,17 +121,23 @@ export default class MonitoringModule {
 			this.core.showToast('Interval must be between 5 and 3600 seconds', 'error');
 			return;
 		}
+		if (!Number.isFinite(threshold) || threshold < 1 || threshold > 10000) {
+			this.core.showToast('Threshold must be between 1 and 10000 ms', 'error');
+			return;
+		}
 
 		try {
 			const section = await this.resolvePingSection(true);
 			await this.core.uciSet('moci', section, {
 				target,
-				interval: String(interval)
+				interval: String(interval),
+				threshold: String(Math.round(threshold))
 			});
 			await this.core.uciCommit('moci');
 			this.pingSection = section;
 			this.target = target;
 			this.intervalSec = interval;
+			this.thresholdMs = Math.round(threshold);
 			let restartFailed = false;
 			try {
 				await this.exec('/etc/init.d/ping-monitor', ['restart']);
@@ -134,7 +148,7 @@ export default class MonitoringModule {
 			await this.refresh();
 			this.core.showToast(
 				restartFailed
-					? 'Settings saved. Service restart was blocked; new target applies on next monitor cycle.'
+					? 'Settings saved. Service restart was blocked; new settings apply on next monitor cycle.'
 					: 'Ping monitor settings applied',
 				restartFailed ? 'warning' : 'success'
 			);
@@ -237,7 +251,8 @@ export default class MonitoringModule {
 	getStatusFromLatency(latency) {
 		const value = parseFloat(latency);
 		if (Number.isNaN(value)) return 'error';
-		if (value >= 125) return 'warn';
+		if (value >= this.thresholdMs) return 'critical';
+		if (value >= Math.max(1, this.thresholdMs * 0.7)) return 'warn';
 		if (value >= 75) return 'good';
 		return 'ok';
 	}
@@ -313,6 +328,7 @@ export default class MonitoringModule {
 	getStatusBadge(status) {
 		if (status === 'ok') return this.core.renderBadge('success', 'excellent');
 		if (status === 'good') return this.core.renderBadge('info', 'good');
+		if (status === 'critical') return this.core.renderBadge('error', `over ${Math.round(this.thresholdMs)}ms`);
 		if (status === 'warn') return this.core.renderBadge('warning', 'high latency');
 		return this.core.renderBadge('error', 'outage');
 	}
@@ -345,6 +361,7 @@ export default class MonitoringModule {
 
 	getSegmentClass(segment) {
 		if (segment.status === 'error') return 'seg-error';
+		if (segment.status === 'critical') return 'seg-error';
 		if (segment.status === 'warn') return 'seg-warn';
 		if (segment.status === 'good') return 'seg-good';
 		return 'seg-ok';

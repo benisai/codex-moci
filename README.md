@@ -184,6 +184,7 @@ The frontend reads data via `ubus` (`file.read`, `file.exec`, `uci.get`) and doe
 - `option enabled '1'`
 - `option target '1.1.1.1'`
 - `option interval '60'`
+- `option threshold '100'`
 - `option timeout '2'`
 - `option output_file '/tmp/moci-ping-monitor.txt'`
 - `option max_lines '2000'`
