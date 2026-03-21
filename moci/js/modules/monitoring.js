@@ -8,6 +8,7 @@ export default class MonitoringModule {
 		this.intervalSec = 60;
 		this.outputFile = '/tmp/moci-ping-monitor.txt';
 		this.samples = [];
+		this.pingSection = 'ping_monitor';
 
 		this.core.registerRoute('/monitoring', async () => {
 			const pageElement = document.getElementById('monitoring-page');
@@ -80,9 +81,11 @@ export default class MonitoringModule {
 
 	async loadConfig() {
 		try {
-			const [status, result] = await this.core.uciGet('moci', 'ping_monitor');
+			const section = await this.resolvePingSection();
+			const [status, result] = await this.core.uciGet('moci', section);
 			if (status === 0 && result?.values) {
 				const c = result.values;
+				this.pingSection = section;
 				this.target = c.target || this.target;
 				this.intervalSec = Number(c.interval) || this.intervalSec;
 				this.outputFile = c.output_file || this.outputFile;
@@ -112,11 +115,13 @@ export default class MonitoringModule {
 		}
 
 		try {
-			await this.core.uciSet('moci', 'ping_monitor', {
+			const section = await this.resolvePingSection(true);
+			await this.core.uciSet('moci', section, {
 				target,
 				interval: String(interval)
 			});
 			await this.core.uciCommit('moci');
+			this.pingSection = section;
 			this.target = target;
 			this.intervalSec = interval;
 			await this.exec('/etc/init.d/ping-monitor', ['restart']);
@@ -124,8 +129,38 @@ export default class MonitoringModule {
 			this.core.showToast('Ping monitor settings applied', 'success');
 		} catch (err) {
 			console.error('Failed to apply ping monitor settings:', err);
-			this.core.showToast('Failed to apply settings', 'error');
+			this.core.showToast(`Failed to apply settings: ${err?.message || 'unknown error'}`, 'error');
 		}
+	}
+
+	async resolvePingSection(createIfMissing = false) {
+		if (this.pingSection) {
+			try {
+				const [status, result] = await this.core.uciGet('moci', this.pingSection);
+				if (status === 0 && result?.values) return this.pingSection;
+			} catch {}
+		}
+
+		try {
+			const [status, result] = await this.core.uciGet('moci');
+			if (status === 0 && result?.values) {
+				for (const [section, values] of Object.entries(result.values)) {
+					if (values?.['.type'] === 'ping') {
+						this.pingSection = section;
+						return section;
+					}
+				}
+			}
+		} catch {}
+
+		if (createIfMissing) {
+			const [, addResult] = await this.core.uciAdd('moci', 'ping', 'ping_monitor');
+			const section = addResult?.section || 'ping_monitor';
+			this.pingSection = section;
+			return section;
+		}
+
+		return 'ping_monitor';
 	}
 
 	startRefreshLoop() {
