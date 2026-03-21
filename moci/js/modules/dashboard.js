@@ -72,6 +72,7 @@ export default class DashboardModule {
 			await this.updateWANStatus();
 			await this.updateSystemLog();
 			await this.updateConnections();
+			await this.updateConntrackUsage();
 			this.initBandwidthGraph();
 			this.initTrafficControls();
 			this.initMonthlyGraph();
@@ -97,6 +98,7 @@ export default class DashboardModule {
 		await this.updateCpuUsage();
 		await this.updateNetworkStats();
 		await this.updateWANStatus();
+		await this.updateConntrackUsage();
 		await this.updateTrafficChart(false);
 	}
 
@@ -217,6 +219,56 @@ export default class DashboardModule {
 			this.lastNetStats = currentStats;
 		} catch (err) {
 			console.error('updateNetworkStats error:', err);
+		}
+	}
+
+	async fetchConntrackUsage() {
+		const countRes = await this.core.ubusCall('file', 'read', {
+			path: '/proc/sys/net/netfilter/nf_conntrack_count'
+		});
+		const maxRes = await this.core.ubusCall('file', 'read', {
+			path: '/proc/sys/net/netfilter/nf_conntrack_max'
+		});
+
+		const [countStatus, countResult] = countRes;
+		const [maxStatus, maxResult] = maxRes;
+		if (countStatus !== 0 || maxStatus !== 0) {
+			throw new Error('Failed to fetch conntrack values');
+		}
+
+		const count = Number(String(countResult?.data || '').trim()) || 0;
+		const max = Number(String(maxResult?.data || '').trim()) || 0;
+		if (max <= 0) {
+			throw new Error('Invalid nf_conntrack_max');
+		}
+
+		const pct = Math.min(100, Math.max(0, (count / max) * 100));
+		return { count, max, pct };
+	}
+
+	renderConntrackUsage(stats) {
+		const usageEl = document.getElementById('conntrack-usage');
+		const detailEl = document.getElementById('conntrack-detail');
+		const barEl = document.getElementById('conntrack-bar');
+
+		if (!stats) {
+			if (usageEl) usageEl.textContent = 'N/A';
+			if (detailEl) detailEl.textContent = 'Conntrack data unavailable';
+			if (barEl) barEl.style.width = '0%';
+			return;
+		}
+
+		if (usageEl) usageEl.textContent = `${stats.pct.toFixed(1)}%`;
+		if (detailEl) detailEl.textContent = `${stats.count.toLocaleString()} / ${stats.max.toLocaleString()} tracked`;
+		if (barEl) barEl.style.width = `${stats.pct.toFixed(2)}%`;
+	}
+
+	async updateConntrackUsage() {
+		try {
+			const stats = await this.fetchConntrackUsage();
+			this.renderConntrackUsage(stats);
+		} catch (err) {
+			this.renderConntrackUsage(null);
 		}
 	}
 

@@ -312,6 +312,10 @@ body {
 	transition: width 0.3s ease;
 }
 
+.conntrack-progress-fill {
+	background: linear-gradient(90deg, rgba(124, 198, 255, 0.9), rgba(124, 228, 255, 0.75));
+}
+
 .badge {
 	display: inline-block;
 	padding: 4px 8px;
