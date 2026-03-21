@@ -212,6 +212,50 @@ This lets you test UI behavior locally without running router services.
 
 ---
 
+## Traffic History (VNSTAT)
+
+The dashboard card **TRAFFIC HISTORY (VNSTAT)** is powered by `vnstat` JSON output.
+
+### How it works
+
+1. Dashboard module runs `file.exec` on:
+   - `/usr/bin/vnstat --json` (primary)
+   - `/usr/sbin/vnstat --json` (fallback)
+2. It parses `interfaces[].traffic` arrays from JSON.
+3. User chooses period from the card:
+   - `HOURLY` -> `traffic.hour` / `traffic.hours`
+   - `DAILY` -> `traffic.day` / `traffic.days`
+   - `MONTHLY` -> `traffic.month` / `traffic.months`
+4. UI keeps the **last 12** points for the selected period.
+5. It renders grouped bars on canvas:
+   - Download (`rx`)
+   - Upload (`tx`)
+6. Data refresh is throttled to about once per minute while on dashboard.
+
+### UI behavior
+
+- Default period is **HOURLY**.
+- Period buttons switch the chart immediately.
+- If `vnstat` is unavailable or no data exists, the chart shows a fallback message.
+- Card visibility is controlled by feature flag:
+  - `moci.features.traffic_history`
+
+### Requirements
+
+- `vnstat` installed and collecting traffic.
+- Optional LuCI integration package:
+  - `luci-app-vnstat` (or `luci-app-vnstat2` depending on repo).
+
+### Feature toggle
+
+```bash
+uci set moci.features.traffic_history='1'   # show
+uci set moci.features.traffic_history='0'   # hide
+uci commit moci
+```
+
+---
+
 ## Security
 
 Uses OpenWrt's native authentication system. Same security model as LuCI:
