@@ -3,7 +3,7 @@
 # MoCI Netify collector for OpenWrt.
 # Connects to a Netify JSONL stream and stores selected fields in SQLite.
 
-set -u
+set -e
 
 JSHN_LIB="/usr/share/libubox/jshn.sh"
 DEFAULT_HOST="127.0.0.1"
