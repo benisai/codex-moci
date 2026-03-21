@@ -375,6 +375,12 @@ body {
 	color: var(--starship-steel);
 }
 
+#devices-table th,
+#devices-table td {
+	padding-left: 12px;
+	padding-right: 12px;
+}
+
 .data-table tbody tr:hover {
 	background: rgba(255, 255, 255, 0.02);
 }
@@ -440,6 +446,29 @@ body {
 
 .action-btn-sm:active {
 	transform: scale(0.98);
+}
+
+.action-btn-sm.danger:hover {
+	border-color: var(--alert-red);
+	color: var(--alert-red);
+	box-shadow: 0 0 8px rgba(255, 51, 51, 0.15);
+}
+
+.action-btn-sm.danger {
+	border-color: rgba(255, 68, 68, 0.35);
+}
+
+.devices-action-btn {
+	-webkit-appearance: none;
+	appearance: none;
+	background: rgba(255, 255, 255, 0.05) !important;
+	border: 1px solid var(--glass-border) !important;
+	color: var(--starship-steel) !important;
+	font-family: var(--font-mono);
+	font-size: 9px;
+	line-height: 1.2;
+	padding: 6px 10px;
+	margin-right: 0;
 }
 
 .section-title {
@@ -683,6 +712,12 @@ body {
 	margin-right: 4px;
 }
 
+.data-table button.action-link {
+	background: rgba(255, 255, 255, 0.05);
+	font-family: var(--font-mono);
+	cursor: pointer;
+}
+
 .data-table .action-link:hover {
 	background: rgba(255, 255, 255, 0.05);
 	border-color: var(--starship-steel);
@@ -700,9 +735,53 @@ body {
 	margin-right: 4px;
 }
 
+.data-table button.action-link-danger {
+	background: rgba(255, 68, 68, 0.08);
+	font-family: var(--font-mono);
+	cursor: pointer;
+}
+
 .data-table .action-link-danger:hover {
 	background: rgba(255, 68, 68, 0.1);
 	border-color: #ff4444;
+}
+
+.action-buttons {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.btn-icon {
+	width: 28px;
+	height: 28px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid var(--glass-border);
+	border-radius: 4px;
+	background: rgba(255, 255, 255, 0.05);
+	color: var(--starship-steel);
+	cursor: pointer;
+	transition: all 0.2s;
+	padding: 0;
+}
+
+.btn-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.btn-icon:hover {
+	background: rgba(255, 255, 255, 0.1);
+	border-color: var(--starship-steel);
+	box-shadow: 0 0 8px rgba(226, 226, 229, 0.2);
+}
+
+.btn-icon.btn-delete:hover {
+	border-color: var(--alert-red);
+	color: var(--alert-red);
+	box-shadow: 0 0 8px rgba(255, 51, 51, 0.2);
 }
 
 .modal {
