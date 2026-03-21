@@ -7,6 +7,9 @@ export default class NetifyModule {
 		this.maxLines = 5000;
 		this.isRefreshing = false;
 		this.flows = [];
+		this.hostnameByMac = new Map();
+		this.hostnameByIp = new Map();
+		this.lastHostRefreshAt = 0;
 
 		this.core.registerRoute('/netify', async () => {
 			const pageElement = document.getElementById('netify-page');
@@ -135,6 +138,7 @@ export default class NetifyModule {
 		try {
 			await this.updateStatus();
 			await this.loadFlowFile();
+			await this.refreshHostnameMap();
 			this.renderOverview();
 			this.renderTopApps();
 			this.renderRecentFlows();
@@ -232,7 +236,7 @@ export default class NetifyModule {
 					'Unknown';
 
 				const proto = flow.detected_protocol_name || 'N/A';
-				const device = flow.local_mac || 'unknown';
+				const device = this.normalizeMac(flow.local_mac) || 'unknown';
 				const localIp = flow.local_ip || '-';
 				const destIp = flow.other_ip || '-';
 				const destPort = flow.other_port || 0;
@@ -256,6 +260,49 @@ export default class NetifyModule {
 			})
 			.filter(Boolean)
 			.slice(-this.maxLines);
+	}
+
+	async refreshHostnameMap() {
+		const now = Date.now();
+		if (now - this.lastHostRefreshAt < 15000 && this.hostnameByMac.size > 0) return;
+
+		const byMac = new Map();
+		const byIp = new Map();
+
+		try {
+			const [status, result] = await this.core.ubusCall('luci-rpc', 'getDHCPLeases', {});
+			if (status === 0 && Array.isArray(result?.dhcp_leases)) {
+				for (const lease of result.dhcp_leases) {
+					const hostname = String(lease.hostname || '').trim();
+					if (!hostname) continue;
+
+					const mac = this.normalizeMac(lease.macaddr);
+					const ip = String(lease.ipaddr || '').trim();
+
+					if (mac) byMac.set(mac, hostname);
+					if (ip) byIp.set(ip, hostname);
+				}
+			}
+		} catch {}
+
+		this.hostnameByMac = byMac;
+		this.hostnameByIp = byIp;
+		this.lastHostRefreshAt = now;
+	}
+
+	resolveDeviceLabel(flow) {
+		const mac = this.normalizeMac(flow.device);
+		const ip = String(flow.localIp || '').trim();
+		const host = (mac && this.hostnameByMac.get(mac)) || (ip && this.hostnameByIp.get(ip)) || '';
+		return host || flow.device || 'unknown';
+	}
+
+	normalizeMac(value) {
+		const raw = String(value || '')
+			.trim()
+			.toLowerCase();
+		if (!raw) return '';
+		return /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(raw) ? raw : '';
 	}
 
 	renderOverview() {
@@ -324,7 +371,7 @@ export default class NetifyModule {
 		tbody.innerHTML = rows
 			.map(row => `<tr>
 				<td>${this.core.escapeHtml(row.timeLabel)}</td>
-				<td>${this.core.escapeHtml(row.device)}</td>
+				<td>${this.core.escapeHtml(this.resolveDeviceLabel(row))}</td>
 				<td>${this.core.escapeHtml(row.localIp || '-')}</td>
 				<td>${this.core.escapeHtml(row.app)}</td>
 				<td>${this.core.escapeHtml(row.proto)}</td>
