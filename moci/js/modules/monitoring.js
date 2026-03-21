@@ -354,7 +354,7 @@ export default class MonitoringModule {
 		const tbody = document.querySelector('#monitoring-recent-table tbody');
 		if (!tbody) return;
 
-		const rows = this.samples.slice(-20).reverse();
+		const rows = this.samples.slice(-12).reverse();
 		if (rows.length === 0) {
 			this.core.renderEmptyTable(tbody, 4, 'No ping samples yet');
 			return;
