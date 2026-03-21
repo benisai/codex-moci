@@ -174,14 +174,29 @@ export default class NetifyModule {
 
 	async loadFlowFile() {
 		try {
-			const limit = Math.min(Math.max(Number(this.maxLines) || 5000, 50), 20000);
-			const cmd = `tail -n ${limit} ${this.shellQuote(this.outputPath)} 2>/dev/null || true`;
-			const result = await this.execShell(cmd);
-			const data = String(result?.stdout || '');
+			let data = '';
+
+			// Prefer file.read because it works with stricter rpcd ACL profiles.
+			try {
+				const [readStatus, readResult] = await this.core.ubusCall('file', 'read', { path: this.outputPath });
+				if (readStatus === 0 && readResult?.data) {
+					data = String(readResult.data || '');
+				}
+			} catch {}
+
+			// Fallback to tail for larger files or routers where file.read is restricted.
+			if (!data.trim()) {
+				const limit = Math.min(Math.max(Number(this.maxLines) || 5000, 50), 20000);
+				const cmd = `tail -n ${limit} ${this.shellQuote(this.outputPath)} 2>/dev/null || true`;
+				const result = await this.execShell(cmd);
+				data = String(result?.stdout || '');
+			}
+
 			if (!data.trim()) {
 				this.flows = [];
 				return;
 			}
+
 			this.flows = this.parseFlowJsonl(data);
 		} catch {
 			this.flows = [];
