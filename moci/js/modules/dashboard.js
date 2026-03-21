@@ -7,6 +7,9 @@ export default class DashboardModule {
 		this.lastCpuStats = null;
 		this.bandwidthCanvas = null;
 		this.bandwidthCtx = null;
+		this.bandwidthHoverIndex = -1;
+		this.bandwidthHoverBound = false;
+		this.bandwidthTooltip = null;
 		this.monthlyCanvas = null;
 		this.monthlyCtx = null;
 		this.monthlyPoints = [];
@@ -442,6 +445,91 @@ export default class DashboardModule {
 
 		canvas.width = canvas.offsetWidth;
 		canvas.height = 200;
+		this.bindBandwidthHover();
+		this.ensureBandwidthTooltip();
+	}
+
+	bindBandwidthHover() {
+		if (!this.bandwidthCanvas || this.bandwidthHoverBound) return;
+		this.bandwidthHoverBound = true;
+		this.bandwidthCanvas.addEventListener('mousemove', event => this.handleBandwidthHover(event));
+		this.bandwidthCanvas.addEventListener('mouseleave', () => {
+			this.bandwidthHoverIndex = -1;
+			this.hideBandwidthTooltip();
+			this.updateBandwidthGraph();
+		});
+	}
+
+	ensureBandwidthTooltip() {
+		if (this.bandwidthTooltip) return;
+		const container = this.bandwidthCanvas?.closest('.bandwidth-graph-container');
+		if (!container) return;
+
+		const tooltip = document.createElement('div');
+		tooltip.className = 'bandwidth-tooltip hidden';
+		container.appendChild(tooltip);
+		this.bandwidthTooltip = tooltip;
+	}
+
+	handleBandwidthHover(event) {
+		if (!this.bandwidthCanvas || !this.bandwidthHistory.down?.length) return;
+		const rect = this.bandwidthCanvas.getBoundingClientRect();
+		const scaleX = this.bandwidthCanvas.width / rect.width;
+		const localX = (event.clientX - rect.left) * scaleX;
+
+		const idx = this.resolveBandwidthIndex(localX);
+		if (idx !== this.bandwidthHoverIndex) {
+			this.bandwidthHoverIndex = idx;
+			this.updateBandwidthGraph();
+		}
+
+		if (idx < 0) {
+			this.hideBandwidthTooltip();
+			return;
+		}
+
+		this.showBandwidthTooltip(idx, event.clientX - rect.left, event.clientY - rect.top, rect.width);
+	}
+
+	resolveBandwidthIndex(localX) {
+		const count = this.bandwidthHistory.down.length;
+		if (count < 2 || !this.bandwidthCanvas) return -1;
+
+		const padding = 20;
+		const width = this.bandwidthCanvas.width;
+		const graphWidth = width - padding * 2;
+		if (localX < padding || localX > width - padding) return -1;
+
+		const ratio = (localX - padding) / graphWidth;
+		const idx = Math.round(ratio * (count - 1));
+		return Math.min(Math.max(idx, 0), count - 1);
+	}
+
+	showBandwidthTooltip(index, localX, localY, containerWidth) {
+		if (!this.bandwidthTooltip) return;
+
+		const down = Number(this.bandwidthHistory.down[index] || 0);
+		const up = Number(this.bandwidthHistory.up[index] || 0);
+		const secondsAgo = Math.max((this.bandwidthHistory.down.length - 1 - index) * 3, 0);
+		const when = secondsAgo === 0 ? 'Now' : `${secondsAgo}s ago`;
+
+		this.bandwidthTooltip.innerHTML = `
+			<div class="bandwidth-tooltip-title">${this.core.escapeHtml(when)}</div>
+			<div>Download: ${this.core.escapeHtml(this.core.formatSpeed(down))}</div>
+			<div>Upload: ${this.core.escapeHtml(this.core.formatSpeed(up))}</div>
+		`;
+
+		this.bandwidthTooltip.classList.remove('hidden');
+		const tooltipWidth = this.bandwidthTooltip.offsetWidth || 170;
+		const left = Math.min(Math.max(12, localX + 12), containerWidth - tooltipWidth - 12);
+		const top = Math.max(8, localY - 56);
+		this.bandwidthTooltip.style.left = `${left}px`;
+		this.bandwidthTooltip.style.top = `${top}px`;
+	}
+
+	hideBandwidthTooltip() {
+		if (!this.bandwidthTooltip) return;
+		this.bandwidthTooltip.classList.add('hidden');
 	}
 
 	updateBandwidthGraph() {
@@ -518,6 +606,29 @@ export default class DashboardModule {
 			else ctx.lineTo(x, y);
 		});
 		ctx.stroke();
+
+		if (this.bandwidthHoverIndex >= 0 && this.bandwidthHoverIndex < downData.length) {
+			const x = padding + this.bandwidthHoverIndex * stepX;
+			const downY = height - padding - (downData[this.bandwidthHoverIndex] / max) * (height - padding * 2);
+			const upY = height - padding - (upData[this.bandwidthHoverIndex] / max) * (height - padding * 2);
+
+			ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+			ctx.lineWidth = 1;
+			ctx.beginPath();
+			ctx.moveTo(x, padding);
+			ctx.lineTo(x, height - padding);
+			ctx.stroke();
+
+			ctx.fillStyle = 'rgba(226, 226, 229, 0.95)';
+			ctx.beginPath();
+			ctx.arc(x, downY, 3, 0, Math.PI * 2);
+			ctx.fill();
+
+			ctx.fillStyle = 'rgba(226, 226, 229, 0.72)';
+			ctx.beginPath();
+			ctx.arc(x, upY, 3, 0, Math.PI * 2);
+			ctx.fill();
+		}
 	}
 
 	initMonthlyGraph() {
