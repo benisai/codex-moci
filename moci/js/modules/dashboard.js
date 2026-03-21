@@ -9,6 +9,11 @@ export default class DashboardModule {
 		this.bandwidthCtx = null;
 		this.monthlyCanvas = null;
 		this.monthlyCtx = null;
+		this.monthlyPoints = [];
+		this.monthlyHitboxes = [];
+		this.monthlyHoverIndex = -1;
+		this.monthlyHoverBound = false;
+		this.monthlyTooltip = null;
 		this.lastMonthlyRefresh = 0;
 		this.trafficPeriod = 'hourly';
 		this.trafficControlsBound = false;
@@ -525,6 +530,33 @@ export default class DashboardModule {
 		this.monthlyCtx = canvas.getContext('2d');
 		canvas.width = canvas.offsetWidth || 800;
 		canvas.height = 220;
+		this.bindMonthlyGraphHover();
+		this.ensureMonthlyTooltip();
+	}
+
+	bindMonthlyGraphHover() {
+		if (!this.monthlyCanvas || this.monthlyHoverBound) return;
+		this.monthlyHoverBound = true;
+
+		this.monthlyCanvas.addEventListener('mousemove', event => {
+			this.handleMonthlyHover(event);
+		});
+		this.monthlyCanvas.addEventListener('mouseleave', () => {
+			this.monthlyHoverIndex = -1;
+			this.hideMonthlyTooltip();
+			this.renderMonthlyGraph(this.monthlyPoints);
+		});
+	}
+
+	ensureMonthlyTooltip() {
+		if (this.monthlyTooltip) return;
+		const container = this.monthlyCanvas?.closest('.monthly-traffic-graph-container');
+		if (!container) return;
+
+		const tooltip = document.createElement('div');
+		tooltip.className = 'monthly-traffic-tooltip hidden';
+		container.appendChild(tooltip);
+		this.monthlyTooltip = tooltip;
 	}
 
 	initTrafficControls() {
@@ -635,16 +667,7 @@ export default class DashboardModule {
 		const year = Number(date.year) || 0;
 		const month = Number(date.month) || 0;
 		const day = Number(date.day) || 1;
-		const hour = Number(date.hour) || 0;
-		let ts = 0;
-
-		if (year && month) {
-			if (period === 'hourly') ts = new Date(year, month - 1, day, hour).getTime();
-			else if (period === 'daily') ts = new Date(year, month - 1, day).getTime();
-			else ts = new Date(year, month - 1, 1).getTime();
-		} else if (Number(item?.time)) {
-			ts = Number(item.time) * 1000;
-		}
+		const ts = this.resolveVnstatTimestamp(item, period, year, month, day);
 		if (!ts) return null;
 
 		const rx = this.normalizeTrafficBytes(item?.rx ?? item?.rx_bytes ?? 0);
@@ -655,6 +678,32 @@ export default class DashboardModule {
 			tx,
 			label: this.formatTrafficLabel(ts, period)
 		};
+	}
+
+	resolveVnstatTimestamp(item, period, year, month, day) {
+		const timestamp = Number(item?.timestamp || item?.time) || 0;
+		if (timestamp > 0) {
+			return timestamp > 1e12 ? timestamp : timestamp * 1000;
+		}
+
+		if (!year || !month) return 0;
+
+		const timeObj = item?.time && typeof item.time === 'object' ? item.time : {};
+		const dateObj = item?.date && typeof item.date === 'object' ? item.date : {};
+		let hour = Number(timeObj.hour ?? dateObj.hour) || 0;
+		const minute = Number(timeObj.minute ?? timeObj.min ?? dateObj.minute) || 0;
+
+		// Some vnstat hourly rows use "id" as the hour bucket (0-23).
+		if (period === 'hourly' && !hour) {
+			const maybeHour = Number(item?.id);
+			if (Number.isFinite(maybeHour) && maybeHour >= 0 && maybeHour <= 23) {
+				hour = maybeHour;
+			}
+		}
+
+		if (period === 'hourly') return new Date(year, month - 1, day, hour, minute).getTime();
+		if (period === 'daily') return new Date(year, month - 1, day).getTime();
+		return new Date(year, month - 1, 1).getTime();
 	}
 
 	normalizeTrafficBytes(value) {
@@ -673,6 +722,8 @@ export default class DashboardModule {
 
 	renderMonthlyGraph(points) {
 		if (!this.monthlyCtx || !this.monthlyCanvas) return;
+		this.monthlyPoints = Array.isArray(points) ? points : [];
+		this.monthlyHitboxes = [];
 
 		const ctx = this.monthlyCtx;
 		const canvas = this.monthlyCanvas;
@@ -686,15 +737,20 @@ export default class DashboardModule {
 
 		ctx.clearRect(0, 0, width, height);
 
-		if (!points || points.length === 0) {
+		if (!this.monthlyPoints || this.monthlyPoints.length === 0) {
 			ctx.fillStyle = 'rgba(138, 138, 141, 0.9)';
 			ctx.font = '12px SF Mono, Monaco, Cascadia Code, monospace';
 			ctx.fillText('No vnstat traffic data', paddingX, height / 2);
+			this.hideMonthlyTooltip();
 			return;
 		}
 
-		const maxValue = Math.max(...points.map(m => Math.max(m.rx, m.tx)), 1);
-		const groups = points.length;
+		const maxValue = Math.max(...this.monthlyPoints.map(m => Math.max(m.rx, m.tx)), 1);
+		const groups = this.monthlyPoints.length;
+		if (this.monthlyHoverIndex >= groups) {
+			this.monthlyHoverIndex = -1;
+			this.hideMonthlyTooltip();
+		}
 		const groupWidth = chartWidth / groups;
 		const barWidth = Math.max(5, Math.min(18, groupWidth * 0.32));
 		const labelStep = groups > 8 ? 2 : 1;
@@ -709,7 +765,8 @@ export default class DashboardModule {
 			ctx.stroke();
 		}
 
-		points.forEach((m, idx) => {
+		this.monthlyPoints.forEach((m, idx) => {
+			const groupX = paddingX + idx * groupWidth;
 			const xCenter = paddingX + idx * groupWidth + groupWidth / 2;
 			const rxHeight = (m.rx / maxValue) * chartHeight;
 			const txHeight = (m.tx / maxValue) * chartHeight;
@@ -717,6 +774,16 @@ export default class DashboardModule {
 			const txX = xCenter + 2;
 			const rxY = paddingTop + chartHeight - rxHeight;
 			const txY = paddingTop + chartHeight - txHeight;
+			this.monthlyHitboxes.push({
+				index: idx,
+				xStart: groupX,
+				xEnd: groupX + groupWidth
+			});
+
+			if (idx === this.monthlyHoverIndex) {
+				ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+				ctx.fillRect(groupX, paddingTop, groupWidth, chartHeight);
+			}
 
 			ctx.fillStyle = 'rgba(226, 226, 229, 0.9)';
 			ctx.fillRect(rxX, rxY, barWidth, rxHeight);
@@ -733,9 +800,55 @@ export default class DashboardModule {
 		});
 	}
 
+	handleMonthlyHover(event) {
+		if (!this.monthlyCanvas || !this.monthlyPoints?.length) return;
+		const rect = this.monthlyCanvas.getBoundingClientRect();
+		const scaleX = this.monthlyCanvas.width / rect.width;
+		const x = (event.clientX - rect.left) * scaleX;
+
+		const hit = this.monthlyHitboxes.find(h => x >= h.xStart && x <= h.xEnd);
+		const nextIndex = hit ? hit.index : -1;
+		if (nextIndex !== this.monthlyHoverIndex) {
+			this.monthlyHoverIndex = nextIndex;
+			this.renderMonthlyGraph(this.monthlyPoints);
+		}
+
+		if (nextIndex < 0) {
+			this.hideMonthlyTooltip();
+			return;
+		}
+		this.showMonthlyTooltip(nextIndex, event.clientX - rect.left, event.clientY - rect.top, rect.width);
+	}
+
+	showMonthlyTooltip(index, localX, localY, containerWidth) {
+		if (!this.monthlyTooltip) return;
+		const point = this.monthlyPoints[index];
+		if (!point) return;
+
+		const total = point.rx + point.tx;
+		this.monthlyTooltip.innerHTML = `
+			<div class="monthly-traffic-tooltip-title">${this.core.escapeHtml(point.label)}</div>
+			<div>Download: ${this.core.escapeHtml(this.core.formatBytes(point.rx))}</div>
+			<div>Upload: ${this.core.escapeHtml(this.core.formatBytes(point.tx))}</div>
+			<div>Total: ${this.core.escapeHtml(this.core.formatBytes(total))}</div>
+		`;
+
+		this.monthlyTooltip.classList.remove('hidden');
+		const tooltipWidth = this.monthlyTooltip.offsetWidth || 180;
+		const left = Math.min(Math.max(12, localX + 12), containerWidth - tooltipWidth - 12);
+		const top = Math.max(8, localY - 64);
+		this.monthlyTooltip.style.left = `${left}px`;
+		this.monthlyTooltip.style.top = `${top}px`;
+	}
+
+	hideMonthlyTooltip() {
+		if (!this.monthlyTooltip) return;
+		this.monthlyTooltip.classList.add('hidden');
+	}
+
 	formatTrafficLabel(ts, period) {
 		const d = new Date(ts);
-		if (period === 'hourly') return d.toLocaleTimeString([], { hour: 'numeric' });
+		if (period === 'hourly') return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 		if (period === 'daily') return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 		return d.toLocaleDateString([], { month: 'short' });
 	}

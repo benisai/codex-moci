@@ -1289,6 +1289,29 @@ select.form-input {
 	height: 100%;
 }
 
+.monthly-traffic-tooltip {
+	position: absolute;
+	z-index: 4;
+	min-width: 170px;
+	max-width: 240px;
+	padding: 8px 10px;
+	border-radius: 8px;
+	border: 1px solid rgba(255, 255, 255, 0.14);
+	background: rgba(14, 14, 16, 0.95);
+	color: var(--steel-light);
+	font-family: var(--font-mono);
+	font-size: 11px;
+	line-height: 1.35;
+	pointer-events: none;
+	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.monthly-traffic-tooltip-title {
+	font-weight: 700;
+	color: var(--starship-steel);
+	margin-bottom: 4px;
+}
+
 .bandwidth-legend {
 	display: flex;
 	gap: 24px;
