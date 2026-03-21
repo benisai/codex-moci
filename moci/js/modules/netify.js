@@ -8,6 +8,8 @@ export default class NetifyModule {
 		this.isRefreshing = false;
 		this.flows = [];
 		this.flowSearchQuery = '';
+		this.flowsPage = 0;
+		this.flowsPageSize = 100;
 		this.hostnameByMac = new Map();
 		this.hostnameByIp = new Map();
 		this.lastHostRefreshAt = 0;
@@ -38,6 +40,15 @@ export default class NetifyModule {
 			this.flowSearchQuery = String(event?.target?.value || '')
 				.trim()
 				.toLowerCase();
+			this.flowsPage = 0;
+			this.renderRecentFlows();
+		});
+		document.getElementById('netify-flows-prev-btn')?.addEventListener('click', () => {
+			this.flowsPage = Math.max(0, this.flowsPage - 1);
+			this.renderRecentFlows();
+		});
+		document.getElementById('netify-flows-next-btn')?.addEventListener('click', () => {
+			this.flowsPage += 1;
 			this.renderRecentFlows();
 		});
 		document.getElementById('netify-action-type')?.addEventListener('change', () => this.syncActionTypeUi());
@@ -435,8 +446,7 @@ pgrep -fa moci-netify-collector || true
 		if (!tbody) return;
 
 		let rows = [...this.flows]
-			.sort((a, b) => b.ts - a.ts)
-			.slice(0, 50);
+			.sort((a, b) => b.ts - a.ts);
 
 		const q = this.flowSearchQuery;
 		if (q) {
@@ -458,14 +468,21 @@ pgrep -fa moci-netify-collector || true
 				return haystack.includes(q);
 			});
 		}
-		this.visibleFlows = rows;
+		const total = rows.length;
+		const maxPage = total > 0 ? Math.max(0, Math.ceil(total / this.flowsPageSize) - 1) : 0;
+		if (this.flowsPage > maxPage) this.flowsPage = maxPage;
+		const startIdx = this.flowsPage * this.flowsPageSize;
+		const endIdx = Math.min(total, startIdx + this.flowsPageSize);
+		const pageRows = rows.slice(startIdx, endIdx);
+		this.visibleFlows = pageRows;
+		this.updateFlowPagination(total, startIdx, endIdx, maxPage);
 
-		if (rows.length === 0) {
+		if (pageRows.length === 0) {
 			this.core.renderEmptyTable(tbody, 8, this.flowSearchQuery ? 'No matching flows found' : 'No Netify flow data yet');
 			return;
 		}
 
-		tbody.innerHTML = rows
+		tbody.innerHTML = pageRows
 			.map(
 				(row, idx) => `<tr class="netify-flow-row" data-flow-index="${idx}" style="cursor: pointer" title="Click for actions">
 				<td>${this.core.escapeHtml(row.timeLabel)}</td>
@@ -479,6 +496,19 @@ pgrep -fa moci-netify-collector || true
 			</tr>`
 			)
 			.join('');
+	}
+
+	updateFlowPagination(total, startIdx, endIdx, maxPage) {
+		const infoEl = document.getElementById('netify-flows-page-info');
+		const prevBtn = document.getElementById('netify-flows-prev-btn');
+		const nextBtn = document.getElementById('netify-flows-next-btn');
+
+		if (infoEl) {
+			if (total <= 0) infoEl.textContent = '0-0 of 0';
+			else infoEl.textContent = `${startIdx + 1}-${endIdx} of ${total}`;
+		}
+		if (prevBtn) prevBtn.disabled = this.flowsPage <= 0;
+		if (nextBtn) nextBtn.disabled = this.flowsPage >= maxPage || total === 0;
 	}
 
 	handleFlowRowClick(event) {
