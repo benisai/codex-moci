@@ -176,7 +176,7 @@ The frontend reads data via `ubus` (`file.read`, `file.exec`, `uci.get`) and doe
 **Data flow**
 1. Procd starts `moci-netify-collector` (if `moci.collector.enabled=1`).
 2. Collector reads UCI config (`moci.collector.*`).
-3. It connects to Netify stream via netcat (`nc host port`).
+3. It connects to Netify stream via netcat (`nc host port`) with inactivity timeout (`stream_timeout`) so stale sockets are reconnected automatically.
 4. `type:"flow"` events are written to a local JSONL file.
 5. Netify UI reads/parses that file via `file.read` and renders:
    - flow/app/device counters
@@ -194,6 +194,7 @@ The frontend reads data via `ubus` (`file.read`, `file.exec`, `uci.get`) and doe
 - `option port '7150'`
 - `option output_file '/tmp/moci-netify-flow.jsonl'`
 - `option max_lines '5000'`
+- `option stream_timeout '45'`
 
 **Service control**
 ```bash

@@ -9,12 +9,14 @@ DEFAULT_HOST="127.0.0.1"
 DEFAULT_PORT="7150"
 DEFAULT_OUTPUT="/tmp/moci-netify-flow.jsonl"
 DEFAULT_MAX_LINES="5000"
+DEFAULT_STREAM_TIMEOUT="45"
 RECONNECT_DELAY="3"
 
 NETIFY_HOST="$DEFAULT_HOST"
 NETIFY_PORT="$DEFAULT_PORT"
 NETIFY_OUTPUT="$DEFAULT_OUTPUT"
 MAX_LINES="$DEFAULT_MAX_LINES"
+STREAM_TIMEOUT="$DEFAULT_STREAM_TIMEOUT"
 
 log() {
 	logger -t moci-netify-collector "$*"
@@ -54,12 +56,22 @@ load_config() {
 		value="$(uci -q get moci.collector.max_lines 2>/dev/null || true)"
 		[ -n "$value" ] && MAX_LINES="$value"
 
+		value="$(uci -q get moci.collector.stream_timeout 2>/dev/null || true)"
+		[ -n "$value" ] && STREAM_TIMEOUT="$value"
+
 		# Backward compatibility with previous retention_rows key
 		value="$(uci -q get moci.collector.retention_rows 2>/dev/null || true)"
 		if [ -n "$value" ] && [ "$MAX_LINES" = "$DEFAULT_MAX_LINES" ]; then
 			MAX_LINES="$value"
 		fi
 	fi
+}
+
+refresh_runtime_config() {
+	load_config
+	MAX_LINES="$(sanitize_int "$MAX_LINES" "$DEFAULT_MAX_LINES")"
+	STREAM_TIMEOUT="$(sanitize_int "$STREAM_TIMEOUT" "$DEFAULT_STREAM_TIMEOUT")"
+	ensure_output_file
 }
 
 require_dependencies() {
@@ -96,7 +108,7 @@ consume_stream() {
 	local line counter
 	counter=0
 
-	nc "$NETIFY_HOST" "$NETIFY_PORT" | while IFS= read -r line; do
+	nc -w "$STREAM_TIMEOUT" "$NETIFY_HOST" "$NETIFY_PORT" | while IFS= read -r line; do
 		[ -n "$line" ] || continue
 		if ! is_flow_event "$line"; then
 			continue
@@ -111,8 +123,10 @@ consume_stream() {
 }
 
 run_forever() {
-	log "starting netify collector host=$NETIFY_HOST port=$NETIFY_PORT output=$NETIFY_OUTPUT"
+	refresh_runtime_config
+	log "starting netify collector host=$NETIFY_HOST port=$NETIFY_PORT output=$NETIFY_OUTPUT timeout=${STREAM_TIMEOUT}s"
 	while true; do
+		refresh_runtime_config
 		log "connecting to netify stream at $NETIFY_HOST:$NETIFY_PORT"
 		consume_stream || true
 		log "stream disconnected; retrying in ${RECONNECT_DELAY}s"
@@ -121,10 +135,8 @@ run_forever() {
 }
 
 main() {
-	load_config
 	require_dependencies
-	MAX_LINES="$(sanitize_int "$MAX_LINES" "$DEFAULT_MAX_LINES")"
-	ensure_output_file
+	refresh_runtime_config
 
 	case "${1:-}" in
 		--init-db | --init-file)
