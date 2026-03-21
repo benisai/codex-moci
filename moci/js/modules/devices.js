@@ -276,7 +276,7 @@ export default class DevicesModule {
 						: `<button class="action-btn-sm devices-action-btn" data-action="pin" data-id="${this.core.escapeHtml(row.mac)}" title="Device settings">ACTION</button>`;
 
 				const ipText = row.pinned
-					? `${this.core.escapeHtml(row.ip)} ${this.core.renderBadge('info', 'Pinned')}`
+					? `${this.core.escapeHtml(row.ip)} ${this.core.renderBadge('info', 'Static')}`
 					: this.core.escapeHtml(row.ip);
 
 				return `<tr>
@@ -338,30 +338,26 @@ export default class DevicesModule {
 		}
 
 		try {
-			let targetSection = section;
-			if (!targetSection) {
-				const [, addResult] = await this.core.uciAdd('dhcp', 'host');
-				targetSection = addResult?.section;
-				if (!targetSection) throw new Error('Failed to create DHCP host section');
-			}
-
 			const values = {
+				name: hostname && hostname !== 'Unknown' ? hostname : '',
 				mac,
 				ip
 			};
-			if (hostname && hostname !== 'Unknown') values.name = hostname;
-
-			await this.core.uciSet('dhcp', targetSection, values);
+			if (section) {
+				await this.core.uciSet('dhcp', section, values);
+			} else {
+				const [, addResult] = await this.core.uciAdd('dhcp', 'host');
+				const targetSection = addResult?.section;
+				if (!targetSection) throw new Error('Failed to create DHCP host section');
+				await this.core.uciSet('dhcp', targetSection, values);
+			}
 			await this.core.uciCommit('dhcp');
-			try {
-				await this.core.serviceReload('dnsmasq');
-			} catch {}
 
 			this.core.closeModal('devices-pin-modal');
-			this.core.showToast('Static IP pinned for device', 'success');
+			this.core.showToast('Static lease saved for device', 'success');
 			await this.loadDevices();
 		} catch (err) {
-			console.error('Failed to save pinned IP:', err);
+			console.error('Failed to save static lease:', err);
 			this.core.showToast('Failed to save static IP', 'error');
 		}
 	}
