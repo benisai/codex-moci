@@ -489,8 +489,8 @@ export default class NetifyModule {
 					this.core.showToast('No valid domain found for this flow', 'error');
 					return;
 				}
-				await this.blockDomainInHosts(domain);
-				this.core.showToast(`Blocked domain via hosts: ${domain}`, 'success');
+				await this.blockDomainInCustomDns(domain);
+				this.core.showToast(`Blocked domain via custom DNS: ${domain}`, 'success');
 			} else {
 				const scope = document.getElementById('netify-action-scope')?.value || 'all_sources';
 				await this.blockDestinationIp(flow, scope);
@@ -504,27 +504,34 @@ export default class NetifyModule {
 		}
 	}
 
-	async blockDomainInHosts(domain) {
-		const [status, result] = await this.core.ubusCall('file', 'read', { path: '/etc/hosts' });
-		if (status !== 0) throw new Error('Unable to read /etc/hosts');
+	async blockDomainInCustomDns(domain) {
+		let targetSection = '';
+		try {
+			const [status, result] = await this.core.uciGet('dhcp');
+			if (status === 0 && result?.values) {
+				for (const [section, cfg] of Object.entries(result.values)) {
+					if (cfg?.['.type'] !== 'domain') continue;
+					if (String(cfg.name || '').trim().toLowerCase() === domain) {
+						targetSection = section;
+						break;
+					}
+				}
+			}
+		} catch {}
 
-		const content = String(result?.data || '');
-		const lines = content.split('\n');
-		const exists = lines.some(line => {
-			const trimmed = line.trim();
-			if (!trimmed || trimmed.startsWith('#')) return false;
-			const parts = trimmed.split(/\s+/);
-			if (parts.length < 2) return false;
-			const ip = parts[0];
-			const names = parts.slice(1);
-			return ip === '127.0.0.1' && names.includes(domain);
-		});
-		if (exists) return;
-
-		if (lines.length && lines[lines.length - 1] === '') lines.pop();
-		lines.push(`127.0.0.1\t${domain}`);
-		const newContent = lines.join('\n') + '\n';
-		await this.core.ubusCall('file', 'write', { path: '/etc/hosts', data: newContent });
+		const values = {
+			name: domain,
+			ip: '127.0.0.1'
+		};
+		if (targetSection) {
+			await this.core.uciSet('dhcp', targetSection, values);
+		} else {
+			const [, res] = await this.core.uciAdd('dhcp', 'domain');
+			const section = res?.section;
+			if (!section) throw new Error('Failed to create custom DNS entry');
+			await this.core.uciSet('dhcp', section, values);
+		}
+		await this.core.uciCommit('dhcp');
 		try {
 			await this.exec('/etc/init.d/dnsmasq', ['restart']);
 		} catch {}
