@@ -28,6 +28,17 @@
 			"uci": ["moci"]
 		},
 		"write": {
+			"file": {
+				"/bin/sh": ["exec"],
+				"/bin/rm": ["exec"],
+				"/etc/init.d/netify-collector": ["exec"],
+				"/etc/init.d/ping-monitor": ["exec"],
+				"/etc/init.d/dnsmasq": ["exec"],
+				"/etc/init.d/firewall": ["exec"],
+				"/usr/bin/moci-netify-collector": ["exec"],
+				"/tmp/moci-netify-flow.jsonl": ["write"],
+				"/tmp/moci-ping-monitor.txt": ["write"]
+			},
 			"ubus": {
 				"uci": ["set", "add", "delete", "commit"],
 				"file": ["write", "exec"],
