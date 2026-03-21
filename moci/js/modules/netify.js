@@ -90,7 +90,14 @@ export default class NetifyModule {
 			const [status, result] = await this.core.uciGet('moci', 'collector');
 			if (status === 0 && result?.values) {
 				const c = result.values;
-				this.outputPath = c.output_file || c.db_path || this.outputPath;
+				const configuredOutput = String(c.output_file || '').trim();
+				const configuredDbPath = String(c.db_path || '').trim();
+				if (configuredOutput) {
+					this.outputPath = configuredOutput;
+				} else if (configuredDbPath && !/\.sqlite(?:3)?$/i.test(configuredDbPath)) {
+					// Keep backward compatibility only for file-based collectors.
+					this.outputPath = configuredDbPath;
+				}
 				this.maxLines = Number(c.max_lines || c.retention_rows) || this.maxLines;
 			}
 		} catch {}
@@ -167,12 +174,15 @@ export default class NetifyModule {
 
 	async loadFlowFile() {
 		try {
-			const [status, result] = await this.core.ubusCall('file', 'read', { path: this.outputPath });
-			if (status !== 0 || !result?.data) {
+			const limit = Math.min(Math.max(Number(this.maxLines) || 5000, 50), 20000);
+			const cmd = `tail -n ${limit} ${this.shellQuote(this.outputPath)} 2>/dev/null || true`;
+			const result = await this.execShell(cmd);
+			const data = String(result?.stdout || '');
+			if (!data.trim()) {
 				this.flows = [];
 				return;
 			}
-			this.flows = this.parseFlowJsonl(result.data);
+			this.flows = this.parseFlowJsonl(data);
 		} catch {
 			this.flows = [];
 		}
@@ -208,6 +218,7 @@ export default class NetifyModule {
 
 				const proto = flow.detected_protocol_name || 'N/A';
 				const device = flow.local_mac || 'unknown';
+				const localIp = flow.local_ip || '-';
 				const destIp = flow.other_ip || '-';
 				const destPort = flow.other_port || 0;
 				const bytes =
@@ -220,6 +231,7 @@ export default class NetifyModule {
 					ts,
 					timeLabel: this.formatTimestamp(ts),
 					device,
+					localIp,
 					app,
 					proto,
 					destIp,
@@ -290,7 +302,7 @@ export default class NetifyModule {
 			.slice(0, 50);
 
 		if (rows.length === 0) {
-			this.core.renderEmptyTable(tbody, 6, 'No Netify flow data yet');
+			this.core.renderEmptyTable(tbody, 7, 'No Netify flow data yet');
 			return;
 		}
 
@@ -298,6 +310,7 @@ export default class NetifyModule {
 			.map(row => `<tr>
 				<td>${this.core.escapeHtml(row.timeLabel)}</td>
 				<td>${this.core.escapeHtml(row.device)}</td>
+				<td>${this.core.escapeHtml(row.localIp || '-')}</td>
 				<td>${this.core.escapeHtml(row.app)}</td>
 				<td>${this.core.escapeHtml(row.proto)}</td>
 				<td>${this.core.escapeHtml(row.destIp)}</td>
