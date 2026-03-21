@@ -32,6 +32,7 @@ export default class NetifyModule {
 		document.getElementById('netify-stop-btn')?.addEventListener('click', () => this.runServiceAction('stop'));
 		document.getElementById('netify-restart-btn')?.addEventListener('click', () => this.runServiceAction('restart'));
 		document.getElementById('netify-init-db-btn')?.addEventListener('click', () => this.initCollectorOutput());
+		document.getElementById('netify-full-reset-btn')?.addEventListener('click', () => this.fullResetCollector());
 		document.getElementById('netify-collector-toggle-btn')?.addEventListener('click', () => this.toggleCollectorPanel());
 		document.getElementById('netify-flow-search')?.addEventListener('input', event => {
 			this.flowSearchQuery = String(event?.target?.value || '')
@@ -133,7 +134,7 @@ export default class NetifyModule {
 			setTimeout(() => this.refresh(false), 600);
 		} catch (err) {
 			console.error(`Failed to ${action} netify collector:`, err);
-			this.core.showToast(`Failed to ${action} collector`, 'error');
+			this.core.showToast(this.describeExecFailure(err, `Failed to ${action} collector`), 'error');
 		}
 	}
 
@@ -144,7 +145,30 @@ export default class NetifyModule {
 			await this.refresh(false);
 		} catch (err) {
 			console.error('Failed to initialize Netify output file:', err);
-			this.core.showToast('Failed to initialize output file', 'error');
+			this.core.showToast(this.describeExecFailure(err, 'Failed to initialize output file'), 'error');
+		}
+	}
+
+	async fullResetCollector() {
+		try {
+			const cmd = `
+/etc/init.d/netify-collector stop || true
+killall moci-netify-collector 2>/dev/null || true
+pkill -f "/usr/bin/moci-netify-collector" 2>/dev/null || true
+rm -f ${this.shellQuote(this.outputPath)}
+/etc/init.d/netify-collector start
+pgrep -fa moci-netify-collector || true
+`;
+			const result = await this.exec('/bin/sh', ['-c', cmd], { timeout: 30000 });
+			const running = String(result?.stdout || '')
+				.trim()
+				.split('\n')
+				.filter(Boolean).length;
+			this.core.showToast(`Netify full reset complete (${running} process entries)`, 'success');
+			await this.refresh(false);
+		} catch (err) {
+			console.error('Failed Netify full reset:', err);
+			this.core.showToast(this.describeExecFailure(err, 'Failed full reset'), 'error');
 		}
 	}
 
@@ -618,9 +642,29 @@ export default class NetifyModule {
 	async exec(command, params = [], options = {}) {
 		const [status, result] = await this.core.ubusCall('file', 'exec', { command, params }, options);
 		if (status !== 0) {
-			throw new Error(`${command} failed with status ${status}`);
+			const err = new Error(`${command} failed with status ${status}`);
+			err.ubusStatus = status;
+			throw err;
+		}
+		if (result && Number(result.code) !== 0) {
+			const stderr = String(result.stderr || '').trim();
+			const stdout = String(result.stdout || '').trim();
+			const details = stderr || stdout || `exit ${result.code}`;
+			const err = new Error(`${command} failed: ${details}`);
+			err.exitCode = Number(result.code);
+			err.stderr = stderr;
+			err.stdout = stdout;
+			throw err;
 		}
 		return result || {};
+	}
+
+	describeExecFailure(err, fallback) {
+		const msg = String(err?.message || '').trim();
+		if (String(err?.ubusStatus) === '6' || /status 6/.test(msg)) {
+			return `${fallback}: permission denied (ACL/session). Re-login and restart rpcd if needed.`;
+		}
+		return msg ? `${fallback}: ${msg}` : fallback;
 	}
 
 	shellQuote(value) {
