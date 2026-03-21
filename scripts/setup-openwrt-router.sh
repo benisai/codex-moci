@@ -18,6 +18,10 @@ have_command() {
 	command -v "$1" >/dev/null 2>&1
 }
 
+SCRIPT_PATH="$0"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" 2>/dev/null && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)"
+
 # -----------------------------------------------------------------------------
 # Set custom alias: cls -> clear
 # -----------------------------------------------------------------------------
@@ -52,7 +56,7 @@ opkg update
 # -----------------------------------------------------------------------------
 # Install required software if missing
 # -----------------------------------------------------------------------------
-software="nano vnstat2 vnstati2 luci-app-vnstat2 netifyd netdata nlbwmon luci-app-nlbwmon htop tcpdump-mini uhttpd-mod-ubus"
+software="nano vnstat2 vnstati2 luci-app-vnstat2 netifyd netdata nlbwmon luci-app-nlbwmon htop tcpdump-mini uhttpd-mod-ubus sqlite3-cli netcat"
 
 for s in $software; do
 	if opkg list-installed | grep -q "^$s -"; then
@@ -72,6 +76,28 @@ for s in $software; do
 		log "Failed to install $s"
 	fi
 done
+
+# -----------------------------------------------------------------------------
+# Install Netify collector files from repo into runtime paths
+# -----------------------------------------------------------------------------
+SRC_COLLECTOR="$REPO_DIR/files/moci-netify-collector.sh"
+SRC_INIT="$REPO_DIR/files/netify-collector.init"
+
+if [ -f "$SRC_COLLECTOR" ]; then
+	cp "$SRC_COLLECTOR" /usr/bin/moci-netify-collector
+	chmod +x /usr/bin/moci-netify-collector
+	log "Installed /usr/bin/moci-netify-collector"
+else
+	log "Missing file, skipping collector install: $SRC_COLLECTOR"
+fi
+
+if [ -f "$SRC_INIT" ]; then
+	cp "$SRC_INIT" /etc/init.d/netify-collector
+	chmod +x /etc/init.d/netify-collector
+	log "Installed /etc/init.d/netify-collector"
+else
+	log "Missing file, skipping init script install: $SRC_INIT"
+fi
 
 # -----------------------------------------------------------------------------
 # Update netifyd config listen address to LAN IP
@@ -134,6 +160,19 @@ for svc in nlbw-compare-rate-service.sh nlbwmon vnstat netifyd; do
 		fi
 	fi
 done
+
+if [ -x /usr/bin/moci-netify-collector ]; then
+	/usr/bin/moci-netify-collector --init-db || true
+	log "Ran Netify collector DB initialization"
+else
+	log "Skipping Netify DB init (collector binary missing)"
+fi
+
+if [ -x /etc/init.d/netify-collector ]; then
+	/etc/init.d/netify-collector enable || true
+	/etc/init.d/netify-collector start || true
+	log "Enabled and started netify-collector service"
+fi
 
 log "Setup complete. A router reboot is recommended."
 exit 0
