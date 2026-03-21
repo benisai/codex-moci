@@ -333,6 +333,24 @@ pgrep -fa moci-netify-collector || true
 			}
 		} catch {}
 
+		// Also resolve names from static DHCP host entries so user-defined names
+		// appear even when active lease hostname is empty.
+		try {
+			const [status, result] = await this.core.uciGet('dhcp');
+			if (status === 0 && result?.values) {
+				for (const [, cfg] of Object.entries(result.values)) {
+					if (cfg?.['.type'] !== 'host') continue;
+					const hostname = String(cfg.name || '').trim();
+					if (!hostname) continue;
+
+					const mac = this.normalizeMac(cfg.mac);
+					const ip = String(cfg.ip || '').trim();
+					if (mac && !byMac.has(mac)) byMac.set(mac, hostname);
+					if (ip && !byIp.has(ip)) byIp.set(ip, hostname);
+				}
+			}
+		} catch {}
+
 		this.hostnameByMac = byMac;
 		this.hostnameByIp = byIp;
 		this.lastHostRefreshAt = now;
@@ -346,11 +364,20 @@ pgrep -fa moci-netify-collector || true
 	}
 
 	normalizeMac(value) {
+		if (Array.isArray(value)) {
+			for (const item of value) {
+				const parsed = this.normalizeMac(item);
+				if (parsed) return parsed;
+			}
+			return '';
+		}
+
 		const raw = String(value || '')
 			.trim()
 			.toLowerCase();
 		if (!raw) return '';
-		return /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(raw) ? raw : '';
+		const first = raw.split(/[\s,]+/)[0];
+		return /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(first) ? first : '';
 	}
 
 	renderOverview() {
