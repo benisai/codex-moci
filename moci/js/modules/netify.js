@@ -7,6 +7,7 @@ export default class NetifyModule {
 		this.maxLines = 5000;
 		this.isRefreshing = false;
 		this.flows = [];
+		this.flowSearchQuery = '';
 		this.hostnameByMac = new Map();
 		this.hostnameByIp = new Map();
 		this.lastHostRefreshAt = 0;
@@ -31,6 +32,12 @@ export default class NetifyModule {
 		document.getElementById('netify-restart-btn')?.addEventListener('click', () => this.runServiceAction('restart'));
 		document.getElementById('netify-init-db-btn')?.addEventListener('click', () => this.initCollectorOutput());
 		document.getElementById('netify-collector-toggle-btn')?.addEventListener('click', () => this.toggleCollectorPanel());
+		document.getElementById('netify-flow-search')?.addEventListener('input', event => {
+			this.flowSearchQuery = String(event?.target?.value || '')
+				.trim()
+				.toLowerCase();
+			this.renderRecentFlows();
+		});
 		this.syncCollectorPanel();
 	}
 
@@ -359,12 +366,32 @@ export default class NetifyModule {
 		const tbody = document.querySelector('#netify-flows-table tbody');
 		if (!tbody) return;
 
-		const rows = [...this.flows]
+		let rows = [...this.flows]
 			.sort((a, b) => b.ts - a.ts)
 			.slice(0, 50);
 
+		const q = this.flowSearchQuery;
+		if (q) {
+			rows = rows.filter(row => {
+				const deviceLabel = this.resolveDeviceLabel(row);
+				const haystack = [
+					row.timeLabel,
+					deviceLabel,
+					row.device,
+					row.localIp,
+					row.app,
+					row.proto,
+					row.destIp,
+					String(row.destPort || '')
+				]
+					.join(' ')
+					.toLowerCase();
+				return haystack.includes(q);
+			});
+		}
+
 		if (rows.length === 0) {
-			this.core.renderEmptyTable(tbody, 7, 'No Netify flow data yet');
+			this.core.renderEmptyTable(tbody, 7, this.flowSearchQuery ? 'No matching flows found' : 'No Netify flow data yet');
 			return;
 		}
 
