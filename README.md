@@ -143,9 +143,9 @@ The frontend reads data via `ubus` (`file.read`, `file.exec`, `uci.get`) and doe
 1. Procd starts `moci-ping-monitor` (if `moci.ping_monitor.enabled=1`).
 2. Script loads config from UCI (`moci.ping_monitor.*`).
 3. It pings target (default `1.1.1.1`) on interval and appends rows to flat file.
-4. Rows are stored in `output_file` (default `/tmp/pingTest.txt`) as:
+4. Rows are stored in `output_file` (default `/tmp/moci-ping-monitor.txt`) as:
    - `timestamp|target|status|latency|message`
-5. Monitoring UI reads `/tmp/pingTest.txt` and renders:
+5. Monitoring UI reads `/tmp/moci-ping-monitor.txt` and renders:
    - status cards
    - timeline
    - recent samples table
@@ -156,7 +156,7 @@ The frontend reads data via `ubus` (`file.read`, `file.exec`, `uci.get`) and doe
 - `option target '1.1.1.1'`
 - `option interval '60'`
 - `option timeout '2'`
-- `option output_file '/tmp/pingTest.txt'`
+- `option output_file '/tmp/moci-ping-monitor.txt'`
 - `option max_lines '2000'`
 
 **Service control**

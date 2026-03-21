@@ -6,7 +6,7 @@ export default class MonitoringModule {
 		this.serviceRunning = false;
 		this.target = '1.1.1.1';
 		this.intervalSec = 60;
-		this.outputFile = '/tmp/pingTest.txt';
+		this.outputFile = '/tmp/moci-ping-monitor.txt';
 		this.samples = [];
 
 		this.core.registerRoute('/monitoring', async () => {

@@ -1,14 +1,14 @@
 #!/bin/sh
 
 # MoCI Ping Monitor
-# Runs continuously on OpenWrt and writes ping samples to /tmp/pingTest.txt
+# Runs continuously on OpenWrt and writes ping samples to /tmp/moci-ping-monitor.txt
 
 set -u
 
 DEFAULT_TARGET="1.1.1.1"
 DEFAULT_INTERVAL="60"
 DEFAULT_TIMEOUT="2"
-DEFAULT_OUTPUT="/tmp/pingTest.txt"
+DEFAULT_OUTPUT="/tmp/moci-ping-monitor.txt"
 DEFAULT_MAX_LINES="2000"
 
 PING_TARGET="$DEFAULT_TARGET"
