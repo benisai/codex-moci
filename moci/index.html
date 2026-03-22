@@ -1426,16 +1426,18 @@
 							<div class="stat-card" style="margin-top: 24px">
 								<div class="section-title">WAKE-ON-LAN</div>
 								<div class="diagnostic-form">
-									<select id="wol-device" class="diag-input">
-										<option value="">Select device from DHCP leases (optional)</option>
-									</select>
 									<input
 										type="text"
 										id="wol-mac"
 										placeholder="Enter MAC address (aa:bb:cc:dd:ee:ff)"
 										class="diag-input"
+										list="wol-device-list"
 									/>
+									<datalist id="wol-device-list"></datalist>
 									<button class="action-btn" id="wol-btn">SEND WOL PACKET</button>
+								</div>
+								<div id="wol-hint" style="margin-top: 8px; color: var(--steel-muted); font-size: 12px">
+									Start typing to pick a DHCP lease, or enter a MAC manually.
 								</div>
 								<div class="log-viewer" id="wol-output" style="min-height: 100px">
 									<div class="log-line" style="color: var(--steel-muted)">

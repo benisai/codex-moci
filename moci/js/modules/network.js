@@ -156,11 +156,6 @@ export default class NetworkModule {
 		document.getElementById('ping-btn')?.addEventListener('click', () => this.runDiagnostic('ping'));
 		document.getElementById('traceroute-btn')?.addEventListener('click', () => this.runDiagnostic('traceroute'));
 		document.getElementById('wol-btn')?.addEventListener('click', () => this.runWoL());
-		document.getElementById('wol-device')?.addEventListener('change', e => {
-			const selectedMac = e.target.value || '';
-			const macInput = document.getElementById('wol-mac');
-			if (macInput) macInput.value = selectedMac;
-		});
 	}
 
 	cleanup() {
@@ -1201,10 +1196,10 @@ export default class NetworkModule {
 	}
 
 	async loadWoLDeviceOptions() {
-		const select = document.getElementById('wol-device');
-		if (!select) return;
+		const list = document.getElementById('wol-device-list');
+		const hint = document.getElementById('wol-hint');
+		if (!list) return;
 
-		const current = select.value;
 		let leases = [];
 		try {
 			const [status, result] = await this.core.ubusCall('luci-rpc', 'getDHCPLeases', {});
@@ -1221,21 +1216,25 @@ export default class NetworkModule {
 				const macaddr = String(lease.macaddr || '').toLowerCase();
 				return {
 					value: macaddr,
-					label: `${hostname} (${ipaddr}) - ${macaddr}`
+					label: `${hostname} (${ipaddr})`
 				};
 			})
 			.sort((a, b) => a.label.localeCompare(b.label));
 
-		select.innerHTML = '<option value="">Select device from DHCP leases (optional)</option>';
+		list.innerHTML = '';
 		for (const option of options) {
 			const el = document.createElement('option');
 			el.value = option.value;
-			el.textContent = option.label;
-			select.appendChild(el);
+			el.label = option.label;
+			list.appendChild(el);
 		}
 
-		if (current && options.some(o => o.value === current)) {
-			select.value = current;
+		if (hint) {
+			if (options.length > 0) {
+				hint.textContent = `Loaded ${options.length} DHCP lease device(s). Pick from suggestions or enter a MAC manually.`;
+			} else {
+				hint.textContent = 'No DHCP lease devices found. Enter a MAC address manually.';
+			}
 		}
 	}
 
