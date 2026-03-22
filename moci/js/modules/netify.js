@@ -240,20 +240,43 @@ pgrep -fa moci-netify-collector || true
 
 	async loadFlowFile() {
 		try {
-			const limit = Math.min(Math.max(Number(this.maxLines) || 5000, 50), 20000);
-			const sql = `SELECT json FROM flow_raw ORDER BY id DESC LIMIT ${limit};`;
-			const out = await this.querySql(sql);
-			const data = String(out || '').trim();
-			if (!data) {
-				this.flows = [];
-				if (this.lastFlowCount !== 0) this.logDebug('SQL query returned 0 rows');
-				this.lastFlowCount = 0;
-				return;
+			const configuredLimit = Math.min(Math.max(Number(this.maxLines) || 5000, 50), 20000);
+			const safeMax = Math.min(configuredLimit, 500);
+			const tried = new Set();
+			const limits = [safeMax, 300, 200, 120, 80].filter(n => {
+				if (n < 20 || tried.has(n)) return false;
+				tried.add(n);
+				return true;
+			});
+
+			let loaded = false;
+			let lastErr = null;
+			for (const limit of limits) {
+				try {
+					const sql = `SELECT json FROM flow_raw ORDER BY id DESC LIMIT ${limit};`;
+					const out = await this.querySql(sql);
+					const data = String(out || '').trim();
+					if (!data) {
+						this.flows = [];
+						if (this.lastFlowCount !== 0) this.logDebug('SQL query returned 0 rows');
+						this.lastFlowCount = 0;
+						return;
+					}
+					this.flows = this.parseFlowJsonl(data);
+					if (this.flows.length !== this.lastFlowCount) {
+						this.logDebug(`Loaded ${this.flows.length} flow row(s) from sqlite (limit=${limit})`);
+						this.lastFlowCount = this.flows.length;
+					}
+					loaded = true;
+					break;
+				} catch (err) {
+					lastErr = err;
+					this.logDebug(`Flow load failed at limit=${limit}, trying smaller batch`);
+				}
 			}
-			this.flows = this.parseFlowJsonl(data);
-			if (this.flows.length !== this.lastFlowCount) {
-				this.logDebug(`Loaded ${this.flows.length} flow row(s) from sqlite`);
-				this.lastFlowCount = this.flows.length;
+
+			if (!loaded) {
+				throw lastErr || new Error('all loadFlowFile attempts failed');
 			}
 		} catch {
 			this.flows = [];
