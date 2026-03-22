@@ -491,6 +491,7 @@ export default class NetworkModule {
 			document.getElementById('edit-fw-rule-proto').value = c.proto || '';
 			document.getElementById('edit-fw-rule-dest-port').value = c.dest_port || '';
 			document.getElementById('edit-fw-rule-src-ip').value = c.src_ip || '';
+			document.getElementById('edit-fw-rule-dest-ip').value = c.dest_ip || '';
 			this.core.openModal('fw-rule-modal');
 		} catch {
 			this.core.showToast('Failed to load rule', 'error');
@@ -506,7 +507,8 @@ export default class NetworkModule {
 			dest: document.getElementById('edit-fw-rule-dest').value,
 			proto: document.getElementById('edit-fw-rule-proto').value,
 			dest_port: document.getElementById('edit-fw-rule-dest-port').value,
-			src_ip: document.getElementById('edit-fw-rule-src-ip').value
+			src_ip: document.getElementById('edit-fw-rule-src-ip').value,
+			dest_ip: document.getElementById('edit-fw-rule-dest-ip').value
 		};
 		try {
 			if (section) {
