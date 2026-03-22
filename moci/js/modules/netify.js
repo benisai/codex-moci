@@ -254,10 +254,13 @@ pgrep -fa moci-netify-collector || true
 	async loadFlowTotalCount() {
 		try {
 			const out = await this.querySql('SELECT COUNT(*) FROM flow_raw;');
-			const firstLine = String(out || '')
+			const lines = String(out || '')
 				.trim()
-				.split('\n')[0];
-			const count = Number(firstLine);
+				.split('\n')
+				.map(line => line.trim())
+				.filter(Boolean);
+			const numericLine = [...lines].reverse().find(line => /^\d+$/.test(line)) || '0';
+			const count = Number(numericLine);
 			this.totalFlowCount = Number.isFinite(count) && count >= 0 ? count : 0;
 		} catch (err) {
 			this.totalFlowCount = Number(this.flows.length) || 0;
