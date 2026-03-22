@@ -569,7 +569,6 @@ export default class DashboardModule {
 			<div class="bandwidth-tooltip-title">${this.core.escapeHtml(when)}</div>
 			<div>Download: ${this.core.escapeHtml(this.core.formatRate(down))}</div>
 			<div>Upload: ${this.core.escapeHtml(this.core.formatRate(up))}</div>
-			<div>Sample: ${index + 1}/${this.bandwidthHistory.down.length}</div>
 		`;
 
 		this.bandwidthTooltip.classList.remove('hidden');
