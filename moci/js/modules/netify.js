@@ -17,7 +17,7 @@ export default class NetifyModule {
 		this.debugLog = [];
 		this.debugMax = 120;
 		this.lastFlowCount = -1;
-		this.loadChunkSize = 200;
+		this.loadChunkSize = 300;
 		this.lastLoadedLimit = 0;
 		this.loadedOffset = 0;
 		this.hasMoreFlows = true;
