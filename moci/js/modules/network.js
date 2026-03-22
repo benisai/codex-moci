@@ -156,6 +156,11 @@ export default class NetworkModule {
 		document.getElementById('ping-btn')?.addEventListener('click', () => this.runDiagnostic('ping'));
 		document.getElementById('traceroute-btn')?.addEventListener('click', () => this.runDiagnostic('traceroute'));
 		document.getElementById('wol-btn')?.addEventListener('click', () => this.runWoL());
+		document.getElementById('wol-device')?.addEventListener('change', e => {
+			const selectedMac = e.target.value || '';
+			const macInput = document.getElementById('wol-mac');
+			if (macInput) macInput.value = selectedMac;
+		});
 	}
 
 	cleanup() {
@@ -1192,6 +1197,46 @@ export default class NetworkModule {
 
 	async loadDiagnostics() {
 		if (!this.core.isFeatureEnabled('diagnostics')) return;
+		await this.loadWoLDeviceOptions();
+	}
+
+	async loadWoLDeviceOptions() {
+		const select = document.getElementById('wol-device');
+		if (!select) return;
+
+		const current = select.value;
+		let leases = [];
+		try {
+			const [status, result] = await this.core.ubusCall('luci-rpc', 'getDHCPLeases', {});
+			if (status === 0 && Array.isArray(result?.dhcp_leases)) {
+				leases = result.dhcp_leases;
+			}
+		} catch {}
+
+		const options = leases
+			.filter(lease => lease?.macaddr)
+			.map(lease => {
+				const hostname = String(lease.hostname || 'Unknown');
+				const ipaddr = String(lease.ipaddr || 'N/A');
+				const macaddr = String(lease.macaddr || '').toLowerCase();
+				return {
+					value: macaddr,
+					label: `${hostname} (${ipaddr}) - ${macaddr}`
+				};
+			})
+			.sort((a, b) => a.label.localeCompare(b.label));
+
+		select.innerHTML = '<option value="">Select device from DHCP leases (optional)</option>';
+		for (const option of options) {
+			const el = document.createElement('option');
+			el.value = option.value;
+			el.textContent = option.label;
+			select.appendChild(el);
+		}
+
+		if (current && options.some(o => o.value === current)) {
+			select.value = current;
+		}
 	}
 
 	async loadConnections() {
