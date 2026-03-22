@@ -570,9 +570,11 @@ pgrep -fa moci-netify-collector || true
 	}
 
 	async saveFlowAction() {
+		this.setFlowActionBusy(true);
 		const index = Number(document.getElementById('netify-action-flow-index')?.value || -1);
 		if (!Number.isInteger(index) || index < 0 || index >= this.visibleFlows.length) {
 			this.core.showToast('Flow not found', 'error');
+			this.setFlowActionBusy(false);
 			return;
 		}
 		const flow = this.visibleFlows[index];
@@ -604,7 +606,18 @@ pgrep -fa moci-netify-collector || true
 		} catch (err) {
 			console.error('Failed to save Netify flow action:', err);
 			this.core.showToast(`Failed to save action: ${err?.message || 'unknown error'}`, 'error');
+		} finally {
+			this.setFlowActionBusy(false);
 		}
+	}
+
+	setFlowActionBusy(busy) {
+		const btn = document.getElementById('save-netify-flow-action-btn');
+		if (!btn) return;
+		btn.disabled = Boolean(busy);
+		btn.style.opacity = busy ? '0.55' : '1';
+		btn.style.cursor = busy ? 'not-allowed' : '';
+		btn.textContent = busy ? 'SAVING...' : 'SAVE ACTION';
 	}
 
 	async blockDomainInCustomDns(domain) {
