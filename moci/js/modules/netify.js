@@ -263,20 +263,20 @@ pgrep -fa moci-netify-collector || true
 	}
 
 	async querySql(sql) {
-		const commands = ['/usr/bin/sqlite3', '/usr/bin/sqlite3-cli'];
 		const statement = `PRAGMA busy_timeout=3000; ${sql}`;
+		const db = this.shellQuote(this.outputPath);
+		const sqlQuoted = this.shellQuote(statement);
+		const shellCmd = `if command -v sqlite3 >/dev/null 2>&1; then sqlite3 ${db} ${sqlQuoted}; elif command -v sqlite3-cli >/dev/null 2>&1; then sqlite3-cli ${db} ${sqlQuoted}; else echo "sqlite3 not installed" >&2; exit 127; fi`;
 		let lastErr = null;
-		for (const command of commands) {
-			for (let attempt = 0; attempt < 2; attempt++) {
-				try {
-					const result = await this.exec(command, [this.outputPath, statement], { timeout: 12000 });
-					return String(result?.stdout || '');
-				} catch (err) {
-					lastErr = err;
-					this.logDebug(`SQLite query attempt failed (${command}): ${err?.message || 'unknown error'}`);
-					if (attempt === 0) {
-						await new Promise(resolve => setTimeout(resolve, 250));
-					}
+		for (let attempt = 0; attempt < 2; attempt++) {
+			try {
+				const result = await this.exec('/bin/sh', ['-c', shellCmd], { timeout: 12000 });
+				return String(result?.stdout || '');
+			} catch (err) {
+				lastErr = err;
+				this.logDebug(`SQLite query attempt failed (shell): ${err?.message || 'unknown error'}`);
+				if (attempt === 0) {
+					await new Promise(resolve => setTimeout(resolve, 250));
 				}
 			}
 		}
