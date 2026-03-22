@@ -14,6 +14,9 @@ export default class NetifyModule {
 		this.hostnameByIp = new Map();
 		this.lastHostRefreshAt = 0;
 		this.visibleFlows = [];
+		this.debugLog = [];
+		this.debugMax = 120;
+		this.lastFlowCount = -1;
 
 		this.core.registerRoute('/netify', async () => {
 			const pageElement = document.getElementById('netify-page');
@@ -35,6 +38,7 @@ export default class NetifyModule {
 		document.getElementById('netify-restart-btn')?.addEventListener('click', () => this.runServiceAction('restart'));
 		document.getElementById('netify-init-db-btn')?.addEventListener('click', () => this.initCollectorOutput());
 		document.getElementById('netify-full-reset-btn')?.addEventListener('click', () => this.fullResetCollector());
+		document.getElementById('netify-debug-clear-btn')?.addEventListener('click', () => this.clearDebugLog());
 		document.getElementById('netify-collector-toggle-btn')?.addEventListener('click', () => this.toggleCollectorPanel());
 		document.getElementById('netify-flow-search')?.addEventListener('input', event => {
 			this.flowSearchQuery = String(event?.target?.value || '')
@@ -61,6 +65,7 @@ export default class NetifyModule {
 			?.addEventListener('click', () => this.core.closeModal('netify-flow-action-modal'));
 		document.querySelector('#netify-flows-table tbody')?.addEventListener('click', event => this.handleFlowRowClick(event));
 		this.syncCollectorPanel();
+		this.renderDebugLog();
 	}
 
 	toggleCollectorPanel() {
@@ -102,6 +107,7 @@ export default class NetifyModule {
 	}
 
 	async load() {
+		this.logDebug(`Netify page load; db=${this.outputPath}`);
 		await this.loadConfig();
 		this.syncCollectorPanel();
 		this.startPolling();
@@ -135,6 +141,7 @@ export default class NetifyModule {
 
 		const pathEl = document.getElementById('netify-db-path');
 		if (pathEl) pathEl.textContent = this.outputPath;
+		this.logDebug(`Config loaded; db=${this.outputPath} retention=${this.maxLines}`);
 	}
 
 	async runServiceAction(action) {
@@ -144,6 +151,7 @@ export default class NetifyModule {
 			setTimeout(() => this.refresh(false), 600);
 		} catch (err) {
 			console.error(`Failed to ${action} netify collector:`, err);
+			this.logDebug(`Collector ${action} failed: ${err?.message || 'unknown error'}`);
 			this.core.showToast(this.describeExecFailure(err, `Failed to ${action} collector`), 'error');
 		}
 	}
@@ -155,6 +163,7 @@ export default class NetifyModule {
 			await this.refresh(false);
 		} catch (err) {
 			console.error('Failed to initialize Netify output file:', err);
+			this.logDebug(`Init DB failed: ${err?.message || 'unknown error'}`);
 			this.core.showToast(this.describeExecFailure(err, 'Failed to initialize database'), 'error');
 		}
 	}
@@ -178,6 +187,7 @@ pgrep -fa moci-netify-collector || true
 			await this.refresh(false);
 		} catch (err) {
 			console.error('Failed Netify full reset:', err);
+			this.logDebug(`Full reset failed: ${err?.message || 'unknown error'}`);
 			this.core.showToast(this.describeExecFailure(err, 'Failed full reset'), 'error');
 		}
 	}
@@ -195,6 +205,7 @@ pgrep -fa moci-netify-collector || true
 			this.renderRecentFlows();
 		} catch (err) {
 			console.error('Failed to refresh Netify view:', err);
+			this.logDebug(`Refresh failed: ${err?.message || 'unknown error'}`);
 			if (showErrorToast) this.core.showToast('Failed to refresh Netify data', 'error');
 		} finally {
 			this.isRefreshing = false;
@@ -235,11 +246,19 @@ pgrep -fa moci-netify-collector || true
 			const data = String(out || '').trim();
 			if (!data) {
 				this.flows = [];
+				if (this.lastFlowCount !== 0) this.logDebug('SQL query returned 0 rows');
+				this.lastFlowCount = 0;
 				return;
 			}
 			this.flows = this.parseFlowJsonl(data);
+			if (this.flows.length !== this.lastFlowCount) {
+				this.logDebug(`Loaded ${this.flows.length} flow row(s) from sqlite`);
+				this.lastFlowCount = this.flows.length;
+			}
 		} catch {
 			this.flows = [];
+			this.lastFlowCount = 0;
+			this.logDebug('Failed to load flow rows from sqlite');
 		}
 	}
 
@@ -254,6 +273,7 @@ pgrep -fa moci-netify-collector || true
 					return String(result?.stdout || '');
 				} catch (err) {
 					lastErr = err;
+					this.logDebug(`SQLite query attempt failed (${command}): ${err?.message || 'unknown error'}`);
 					if (attempt === 0) {
 						await new Promise(resolve => setTimeout(resolve, 250));
 					}
@@ -261,6 +281,33 @@ pgrep -fa moci-netify-collector || true
 			}
 		}
 		throw lastErr || new Error('sqlite command failed');
+	}
+
+	logDebug(message) {
+		const ts = new Date().toLocaleTimeString([], { hour12: false });
+		const entry = `[${ts}] ${String(message || '')}`;
+		this.debugLog.push(entry);
+		if (this.debugLog.length > this.debugMax) {
+			this.debugLog = this.debugLog.slice(-this.debugMax);
+		}
+		this.renderDebugLog();
+	}
+
+	clearDebugLog() {
+		this.debugLog = [];
+		this.renderDebugLog();
+		this.logDebug('Debug log cleared');
+	}
+
+	renderDebugLog() {
+		const el = document.getElementById('netify-debug-log');
+		if (!el) return;
+		if (this.debugLog.length === 0) {
+			el.textContent = 'No events yet.';
+			return;
+		}
+		el.textContent = this.debugLog.join('\n');
+		el.scrollTop = el.scrollHeight;
 	}
 
 	parseFlowJsonl(content) {
