@@ -210,8 +210,8 @@ pgrep -fa moci-netify-collector || true
 
 		try {
 			await this.updateStatus();
-			await this.loadFlowTotalCount();
 			await this.loadFlowFile(true);
+			await this.loadFlowTotalCount();
 			await this.refreshHostnameMap();
 			this.renderOverview();
 			this.renderTopApps();
@@ -260,7 +260,7 @@ pgrep -fa moci-netify-collector || true
 			const count = Number(firstLine);
 			this.totalFlowCount = Number.isFinite(count) && count >= 0 ? count : 0;
 		} catch (err) {
-			this.totalFlowCount = this.flows.length || 0;
+			this.totalFlowCount = Number(this.flows.length) || 0;
 			this.logDebug(`Failed to load total flow count: ${err?.message || 'unknown error'}`);
 		}
 	}
