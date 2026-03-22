@@ -296,10 +296,8 @@ pgrep -fa moci-netify-collector || true
 			let lastErr = null;
 			for (const limit of limits) {
 				try {
-					const sql = `SELECT json FROM flow_raw ORDER BY id DESC LIMIT ${limit} OFFSET ${this.loadedOffset};`;
-					const out = await this.querySql(sql);
-					const data = String(out || '').trim();
-					if (!data) {
+					const chunk = await this.fetchFlowChunkWindow(limit, this.loadedOffset);
+					if (chunk.length === 0) {
 						this.hasMoreFlows = false;
 						if (this.flows.length === 0) {
 							if (this.lastFlowCount !== 0) this.logDebug('SQL query returned 0 rows');
@@ -307,17 +305,12 @@ pgrep -fa moci-netify-collector || true
 						}
 						return false;
 					}
-					const chunk = this.parseFlowJsonl(data);
-					if (chunk.length === 0) {
-						this.hasMoreFlows = false;
-						return false;
-					}
 					this.flows = this.flows.concat(chunk);
 					this.loadedOffset += chunk.length;
-					this.lastLoadedLimit = limit;
+					this.lastLoadedLimit = chunk.length;
 					if (this.flows.length !== this.lastFlowCount) {
 						this.logDebug(
-							`Loaded ${chunk.length} more row(s), total loaded=${this.flows.length} (limit=${limit}, offset=${this.loadedOffset})`
+							`Loaded ${chunk.length} more row(s), total loaded=${this.flows.length} (requested=${limit}, offset=${this.loadedOffset})`
 						);
 						this.lastFlowCount = this.flows.length;
 					}
@@ -345,6 +338,33 @@ pgrep -fa moci-netify-collector || true
 			this.logDebug('Failed to load flow rows from sqlite');
 			return false;
 		}
+	}
+
+	async fetchFlowChunkWindow(limit, startOffset) {
+		const maxStep = 120;
+		let remaining = Math.max(0, Number(limit) || 0);
+		let offset = Math.max(0, Number(startOffset) || 0);
+		let combined = [];
+
+		while (remaining > 0) {
+			const step = Math.min(maxStep, remaining);
+			const sql = `SELECT json FROM flow_raw ORDER BY id DESC LIMIT ${step} OFFSET ${offset};`;
+			const out = await this.querySql(sql);
+			const data = String(out || '').trim();
+			if (!data) break;
+
+			const parsed = this.parseFlowJsonl(data);
+			if (parsed.length === 0) break;
+
+			combined = combined.concat(parsed);
+			offset += parsed.length;
+			remaining -= parsed.length;
+
+			// Reached end of available rows for this window.
+			if (parsed.length < step) break;
+		}
+
+		return combined;
 	}
 
 	async loadMoreFlows() {
