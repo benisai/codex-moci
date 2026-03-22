@@ -1217,7 +1217,7 @@ export default class NetworkModule {
 						? expires > 0
 							? `${expires}s`
 							: 'Permanent'
-						: 'Active';
+						: lease.state || 'Active';
 					return `<tr>
 				<td>${this.core.escapeHtml(ip)}</td>
 				<td>${this.core.escapeHtml(mac)}</td>
@@ -1263,20 +1263,48 @@ export default class NetworkModule {
 		try {
 			const [status, result] = await this.core.ubusCall('file', 'read', { path: '/proc/net/arp' });
 			if (status !== 0 || !result?.data) return [];
-			return String(result.data)
+			const arpRows = String(result.data)
 				.split('\n')
 				.slice(1)
 				.map(line => line.trim())
 				.filter(Boolean)
 				.map(line => line.split(/\s+/))
 				.filter(parts => parts.length >= 6)
-				.filter(parts => parts[2] && parts[2] !== '0x0')
+				.filter(parts => parts[3] && parts[3] !== '00:00:00:00:00:00')
 				.map(parts => ({
 					ipaddr: parts[0] || 'N/A',
 					macaddr: parts[3] || 'N/A',
 					hostname: 'Unknown',
 					expires: NaN
 				}));
+			if (arpRows.length > 0) return arpRows;
+		} catch {
+			// Continue into ip-neigh fallback.
+		}
+
+		// Final fallback: neighbor table (IPv4+IPv6), useful when ARP is sparse.
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', '/sbin/ip neigh show 2>/dev/null || ip neigh show 2>/dev/null']
+			});
+			if (status !== 0 || !result?.stdout) return [];
+			return String(result.stdout)
+				.split('\n')
+				.map(line => line.trim())
+				.filter(Boolean)
+				.map(line => {
+					const ipMatch = line.match(/^(\S+)/);
+					const macMatch = line.match(/\blladdr\s+([0-9a-f:]{17})\b/i);
+					const stateMatch = line.match(/\b(REACHABLE|STALE|DELAY|PROBE|PERMANENT|FAILED|INCOMPLETE)\b/i);
+					return {
+						ipaddr: ipMatch ? ipMatch[1] : 'N/A',
+						macaddr: macMatch ? macMatch[1] : 'N/A',
+						hostname: 'Unknown',
+						expires: NaN,
+						state: stateMatch ? stateMatch[1].toUpperCase() : 'Active'
+					};
+				});
 		} catch {
 			return [];
 		}
