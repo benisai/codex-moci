@@ -74,6 +74,7 @@ for pkg in \
 	tcpdump-mini \
 	uhttpd-mod-ubus \
 	netcat \
+	sqlite3-cli \
 	netifyd \
 	vnstat2 \
 	vnstati2 \
@@ -111,8 +112,8 @@ log "Applying MoCI runtime defaults"
 set_uci moci.collector.enabled "'1'"
 set_uci moci.collector.host "'127.0.0.1'"
 set_uci moci.collector.port "'7150'"
-set_uci moci.collector.output_file "'/tmp/moci-netify-flow.jsonl'"
-set_uci moci.collector.max_lines "'5000'"
+set_uci moci.collector.db_path "'/tmp/moci-netify.sqlite'"
+set_uci moci.collector.retention_rows "'5000'"
 set_uci moci.collector.stream_timeout "'45'"
 set_uci moci.ping_monitor.enabled "'1'"
 set_uci moci.ping_monitor.target "'1.1.1.1'"
@@ -143,7 +144,7 @@ if [ -f "$NLBW_CONF" ]; then
 fi
 
 log "Initializing data files"
-/usr/bin/moci-netify-collector --init-file || true
+/usr/bin/moci-netify-collector --init-db || true
 /usr/bin/moci-ping-monitor --once || true
 
 log "Enabling and restarting services"

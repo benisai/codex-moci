@@ -3,7 +3,7 @@ export default class NetifyModule {
 		this.core = core;
 		this.initialized = false;
 		this.pollInterval = null;
-		this.outputPath = '/tmp/moci-netify-flow.jsonl';
+		this.outputPath = '/tmp/moci-netify.sqlite';
 		this.maxLines = 5000;
 		this.isRefreshing = false;
 		this.flows = [];
@@ -122,15 +122,14 @@ export default class NetifyModule {
 			const [status, result] = await this.core.uciGet('moci', 'collector');
 			if (status === 0 && result?.values) {
 				const c = result.values;
-				const configuredOutput = String(c.output_file || '').trim();
 				const configuredDbPath = String(c.db_path || '').trim();
-				if (configuredOutput) {
-					this.outputPath = configuredOutput;
-				} else if (configuredDbPath && !/\.sqlite(?:3)?$/i.test(configuredDbPath)) {
-					// Keep backward compatibility only for file-based collectors.
+				const configuredOutput = String(c.output_file || '').trim();
+				if (configuredDbPath) {
 					this.outputPath = configuredDbPath;
+				} else if (configuredOutput && /\.sqlite(?:3)?$/i.test(configuredOutput)) {
+					this.outputPath = configuredOutput;
 				}
-				this.maxLines = Number(c.max_lines || c.retention_rows) || this.maxLines;
+				this.maxLines = Number(c.retention_rows || c.max_lines) || this.maxLines;
 			}
 		} catch {}
 
@@ -151,12 +150,12 @@ export default class NetifyModule {
 
 	async initCollectorOutput() {
 		try {
-			await this.exec('/usr/bin/moci-netify-collector', ['--init-file']);
-			this.core.showToast('Netify output file initialized', 'success');
+			await this.exec('/usr/bin/moci-netify-collector', ['--init-db']);
+			this.core.showToast('Netify database initialized', 'success');
 			await this.refresh(false);
 		} catch (err) {
 			console.error('Failed to initialize Netify output file:', err);
-			this.core.showToast(this.describeExecFailure(err, 'Failed to initialize output file'), 'error');
+			this.core.showToast(this.describeExecFailure(err, 'Failed to initialize database'), 'error');
 		}
 	}
 
@@ -230,35 +229,32 @@ pgrep -fa moci-netify-collector || true
 
 	async loadFlowFile() {
 		try {
-			// Prefer reading the tail window first. This avoids stale/corrupt
-			// prefixes and file.read truncation on larger JSONL files.
 			const limit = Math.min(Math.max(Number(this.maxLines) || 5000, 50), 20000);
-			const tailCmd = `tail -n ${limit} ${this.shellQuote(this.outputPath)} 2>/dev/null || true`;
-			const tailResult = await this.execShell(tailCmd).catch(() => ({}));
-			const tailData = String(tailResult?.stdout || '');
-			const tailFlows = this.parseFlowJsonl(tailData);
-			if (tailFlows.length > 0) {
-				this.flows = tailFlows;
-				return;
-			}
-
-			// Fallback: full file read via ubus ACL path.
-			let readData = '';
-			try {
-				const [readStatus, readResult] = await this.core.ubusCall('file', 'read', { path: this.outputPath });
-				if (readStatus === 0 && readResult?.data) {
-					readData = String(readResult.data || '');
-				}
-			} catch {}
-
-			if (!readData.trim()) {
+			const sql = `SELECT json FROM flow_raw ORDER BY id DESC LIMIT ${limit};`;
+			const out = await this.querySql(sql);
+			const data = String(out || '').trim();
+			if (!data) {
 				this.flows = [];
 				return;
 			}
-			this.flows = this.parseFlowJsonl(readData);
+			this.flows = this.parseFlowJsonl(data);
 		} catch {
 			this.flows = [];
 		}
+	}
+
+	async querySql(sql) {
+		const commands = ['/usr/bin/sqlite3', '/usr/bin/sqlite3-cli'];
+		let lastErr = null;
+		for (const command of commands) {
+			try {
+				const result = await this.exec(command, [this.outputPath, sql], { timeout: 12000 });
+				return String(result?.stdout || '');
+			} catch (err) {
+				lastErr = err;
+			}
+		}
+		throw lastErr || new Error('sqlite command failed');
 	}
 
 	parseFlowJsonl(content) {

@@ -1,22 +1,23 @@
 #!/bin/sh
 
 # MoCI Netify collector for OpenWrt.
-# Captures Netify flow JSON events and stores them as JSONL in a local file.
+# Captures Netify flow JSON events and stores them in a local SQLite database.
 
 set -e
 
 DEFAULT_HOST="127.0.0.1"
 DEFAULT_PORT="7150"
-DEFAULT_OUTPUT="/tmp/moci-netify-flow.jsonl"
-DEFAULT_MAX_LINES="5000"
+DEFAULT_DB="/tmp/moci-netify.sqlite"
+DEFAULT_RETENTION_ROWS="5000"
 DEFAULT_STREAM_TIMEOUT="45"
 RECONNECT_DELAY="3"
 
 NETIFY_HOST="$DEFAULT_HOST"
 NETIFY_PORT="$DEFAULT_PORT"
-NETIFY_OUTPUT="$DEFAULT_OUTPUT"
-MAX_LINES="$DEFAULT_MAX_LINES"
+NETIFY_DB="$DEFAULT_DB"
+RETENTION_ROWS="$DEFAULT_RETENTION_ROWS"
 STREAM_TIMEOUT="$DEFAULT_STREAM_TIMEOUT"
+SQLITE_BIN=""
 
 log() {
 	logger -t moci-netify-collector "$*"
@@ -33,6 +34,22 @@ sanitize_int() {
 	esac
 }
 
+find_sqlite_bin() {
+	if command -v sqlite3 >/dev/null 2>&1; then
+		SQLITE_BIN="$(command -v sqlite3)"
+		return 0
+	fi
+	if command -v sqlite3-cli >/dev/null 2>&1; then
+		SQLITE_BIN="$(command -v sqlite3-cli)"
+		return 0
+	fi
+	return 1
+}
+
+sql_exec() {
+	"$SQLITE_BIN" "$NETIFY_DB" "$1"
+}
+
 load_config() {
 	if command -v uci >/dev/null 2>&1; then
 		local value
@@ -43,35 +60,38 @@ load_config() {
 		value="$(uci -q get moci.collector.port 2>/dev/null || true)"
 		[ -n "$value" ] && NETIFY_PORT="$value"
 
-		# New config key
-		value="$(uci -q get moci.collector.output_file 2>/dev/null || true)"
-		[ -n "$value" ] && NETIFY_OUTPUT="$value"
-
-		# Backward compatibility with previous db_path key
 		value="$(uci -q get moci.collector.db_path 2>/dev/null || true)"
-		if [ -n "$value" ] && [ "$NETIFY_OUTPUT" = "$DEFAULT_OUTPUT" ]; then
-			NETIFY_OUTPUT="$value"
+		[ -n "$value" ] && NETIFY_DB="$value"
+
+		# Backward compatibility with older key.
+		value="$(uci -q get moci.collector.output_file 2>/dev/null || true)"
+		if [ -n "$value" ] && [ "$NETIFY_DB" = "$DEFAULT_DB" ]; then
+			case "$value" in
+				*.sqlite | *.sqlite3)
+					NETIFY_DB="$value"
+					;;
+			esac
 		fi
 
+		value="$(uci -q get moci.collector.retention_rows 2>/dev/null || true)"
+		[ -n "$value" ] && RETENTION_ROWS="$value"
+
+		# Backward compatibility with older key.
 		value="$(uci -q get moci.collector.max_lines 2>/dev/null || true)"
-		[ -n "$value" ] && MAX_LINES="$value"
+		if [ -n "$value" ] && [ "$RETENTION_ROWS" = "$DEFAULT_RETENTION_ROWS" ]; then
+			RETENTION_ROWS="$value"
+		fi
 
 		value="$(uci -q get moci.collector.stream_timeout 2>/dev/null || true)"
 		[ -n "$value" ] && STREAM_TIMEOUT="$value"
-
-		# Backward compatibility with previous retention_rows key
-		value="$(uci -q get moci.collector.retention_rows 2>/dev/null || true)"
-		if [ -n "$value" ] && [ "$MAX_LINES" = "$DEFAULT_MAX_LINES" ]; then
-			MAX_LINES="$value"
-		fi
 	fi
 }
 
 refresh_runtime_config() {
 	load_config
-	MAX_LINES="$(sanitize_int "$MAX_LINES" "$DEFAULT_MAX_LINES")"
+	RETENTION_ROWS="$(sanitize_int "$RETENTION_ROWS" "$DEFAULT_RETENTION_ROWS")"
 	STREAM_TIMEOUT="$(sanitize_int "$STREAM_TIMEOUT" "$DEFAULT_STREAM_TIMEOUT")"
-	ensure_output_file
+	ensure_db_file
 }
 
 require_dependencies() {
@@ -79,29 +99,55 @@ require_dependencies() {
 		log "nc not found; install netcat"
 		exit 1
 	}
+	find_sqlite_bin || {
+		log "sqlite3 not found; install sqlite3-cli"
+		exit 1
+	}
 }
 
-ensure_output_file() {
+ensure_db_file() {
 	local dir
-	dir="$(dirname "$NETIFY_OUTPUT")"
+	dir="$(dirname "$NETIFY_DB")"
 	mkdir -p "$dir"
-	[ -f "$NETIFY_OUTPUT" ] || : >"$NETIFY_OUTPUT"
+	[ -f "$NETIFY_DB" ] || : >"$NETIFY_DB"
+	init_db
 }
 
-prune_file() {
-	local max_lines current
-	max_lines="$(sanitize_int "$MAX_LINES" "$DEFAULT_MAX_LINES")"
-	current="$(wc -l <"$NETIFY_OUTPUT" 2>/dev/null || echo 0)"
-	current="$(sanitize_int "$current" 0)"
+init_db() {
+	sql_exec "PRAGMA journal_mode=WAL;"
+	sql_exec "CREATE TABLE IF NOT EXISTS flow_raw (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		timeinsert INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+		json TEXT NOT NULL
+	);"
+	sql_exec "CREATE INDEX IF NOT EXISTS idx_flow_raw_time ON flow_raw(timeinsert);"
+}
 
-	if [ "$current" -gt "$max_lines" ]; then
-		tail -n "$max_lines" "$NETIFY_OUTPUT" >"${NETIFY_OUTPUT}.tmp" && mv "${NETIFY_OUTPUT}.tmp" "$NETIFY_OUTPUT"
-	fi
+prune_db() {
+	local keep
+	keep="$(sanitize_int "$RETENTION_ROWS" "$DEFAULT_RETENTION_ROWS")"
+	sql_exec "DELETE FROM flow_raw
+		WHERE id <= (
+			SELECT CASE
+				WHEN MAX(id) > $keep THEN MAX(id) - $keep
+				ELSE 0
+			END
+			FROM flow_raw
+		);"
 }
 
 is_flow_event() {
-	# Accept both compact and spaced JSON formats.
 	echo "$1" | grep -Eq '"type"[[:space:]]*:[[:space:]]*"flow"'
+}
+
+sql_escape() {
+	printf "%s" "$1" | sed "s/'/''/g"
+}
+
+insert_flow() {
+	local escaped
+	escaped="$(sql_escape "$1")"
+	sql_exec "INSERT INTO flow_raw(timeinsert, json) VALUES (strftime('%s','now'), '$escaped');"
 }
 
 consume_stream() {
@@ -114,17 +160,17 @@ consume_stream() {
 			continue
 		fi
 
-		printf "%s\n" "$line" >>"$NETIFY_OUTPUT"
+		insert_flow "$line"
 		counter=$((counter + 1))
 		if [ $((counter % 200)) -eq 0 ]; then
-			prune_file
+			prune_db
 		fi
 	done
 }
 
 run_forever() {
 	refresh_runtime_config
-	log "starting netify collector host=$NETIFY_HOST port=$NETIFY_PORT output=$NETIFY_OUTPUT timeout=${STREAM_TIMEOUT}s"
+	log "starting netify collector host=$NETIFY_HOST port=$NETIFY_PORT db=$NETIFY_DB timeout=${STREAM_TIMEOUT}s"
 	while true; do
 		refresh_runtime_config
 		log "connecting to netify stream at $NETIFY_HOST:$NETIFY_PORT"
@@ -140,7 +186,7 @@ main() {
 
 	case "${1:-}" in
 		--init-db | --init-file)
-			log "output file initialized at $NETIFY_OUTPUT"
+			log "netify sqlite database initialized at $NETIFY_DB"
 			exit 0
 			;;
 	esac
