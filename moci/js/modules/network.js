@@ -1329,12 +1329,27 @@ export default class NetworkModule {
 		output.innerHTML = '<div class="log-line">Running...</div>';
 
 		const commands = {
-			ping: { command: '/bin/ping', params: ['-c', '5', '-W', '3', host] },
-			traceroute: { command: '/usr/bin/traceroute', params: ['-w', '3', '-m', '15', host] }
+			ping: { command: '/bin/ping', params: ['-c', '5', '-W', '3', host], timeout: 30000 },
+			traceroute: {
+				command: '/bin/sh',
+				params: [
+					'-c',
+					'if command -v traceroute >/dev/null 2>&1; then traceroute -w 2 -m 15 "$1"; ' +
+						'elif command -v traceroute-nanog >/dev/null 2>&1; then traceroute-nanog -w 2 -m 15 "$1"; ' +
+						'elif command -v busybox >/dev/null 2>&1; then busybox traceroute -w 2 -m 15 "$1"; ' +
+						'else echo "traceroute command not found"; exit 127; fi',
+					'sh',
+					host
+				],
+				timeout: 45000
+			}
 		};
 
 		try {
-			const [s, r] = await this.core.ubusCall('file', 'exec', commands[type], { timeout: 30000 });
+			const cmd = commands[type];
+			const [s, r] = await this.core.ubusCall('file', 'exec', { command: cmd.command, params: cmd.params }, {
+				timeout: cmd.timeout || 30000
+			});
 			if (s !== 0) throw new Error('Command failed');
 			const text = (r.stdout || '') + (r.stderr || '');
 			output.innerHTML = text
