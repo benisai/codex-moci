@@ -17,6 +17,7 @@ export default class NetifyModule {
 		this.debugLog = [];
 		this.debugMax = 120;
 		this.lastFlowCount = -1;
+		this.lastLoadedLimit = 0;
 
 		this.core.registerRoute('/netify', async () => {
 			const pageElement = document.getElementById('netify-page');
@@ -258,11 +259,13 @@ pgrep -fa moci-netify-collector || true
 					const data = String(out || '').trim();
 					if (!data) {
 						this.flows = [];
+						this.lastLoadedLimit = limit;
 						if (this.lastFlowCount !== 0) this.logDebug('SQL query returned 0 rows');
 						this.lastFlowCount = 0;
 						return;
 					}
 					this.flows = this.parseFlowJsonl(data);
+					this.lastLoadedLimit = limit;
 					if (this.flows.length !== this.lastFlowCount) {
 						this.logDebug(`Loaded ${this.flows.length} flow row(s) from sqlite (limit=${limit})`);
 						this.lastFlowCount = this.flows.length;
@@ -281,6 +284,7 @@ pgrep -fa moci-netify-collector || true
 		} catch {
 			this.flows = [];
 			this.lastFlowCount = 0;
+			this.lastLoadedLimit = 0;
 			this.logDebug('Failed to load flow rows from sqlite');
 		}
 	}
@@ -574,12 +578,18 @@ pgrep -fa moci-netify-collector || true
 
 	updateFlowPagination(total, startIdx, endIdx, maxPage) {
 		const infoEl = document.getElementById('netify-flows-page-info');
+		const loadedEl = document.getElementById('netify-flows-loaded-info');
 		const prevBtn = document.getElementById('netify-flows-prev-btn');
 		const nextBtn = document.getElementById('netify-flows-next-btn');
 
 		if (infoEl) {
 			if (total <= 0) infoEl.textContent = '0-0 of 0';
 			else infoEl.textContent = `${startIdx + 1}-${endIdx} of ${total}`;
+		}
+		if (loadedEl) {
+			const loaded = this.flows.length;
+			const limit = this.lastLoadedLimit || loaded;
+			loadedEl.textContent = `Loaded: ${loaded} rows (batch ${limit})`;
 		}
 		if (prevBtn) prevBtn.disabled = this.flowsPage <= 0;
 		if (nextBtn) nextBtn.disabled = this.flowsPage >= maxPage || total === 0;
