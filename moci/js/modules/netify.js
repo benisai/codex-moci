@@ -17,7 +17,13 @@ export default class NetifyModule {
 		this.debugLog = [];
 		this.debugMax = 120;
 		this.lastFlowCount = -1;
+		this.loadChunkSize = 200;
 		this.lastLoadedLimit = 0;
+		this.loadedOffset = 0;
+		this.hasMoreFlows = true;
+		this.isLoadingMore = false;
+		this.totalFlowCount = 0;
+		this.currentMaxPage = 0;
 
 		this.core.registerRoute('/netify', async () => {
 			const pageElement = document.getElementById('netify-page');
@@ -52,8 +58,13 @@ export default class NetifyModule {
 			this.flowsPage = Math.max(0, this.flowsPage - 1);
 			this.renderRecentFlows();
 		});
-		document.getElementById('netify-flows-next-btn')?.addEventListener('click', () => {
-			this.flowsPage += 1;
+		document.getElementById('netify-flows-next-btn')?.addEventListener('click', async () => {
+			if (this.flowsPage >= this.currentMaxPage) {
+				const loaded = await this.loadMoreFlows();
+				if (loaded) this.flowsPage += 1;
+			} else {
+				this.flowsPage += 1;
+			}
 			this.renderRecentFlows();
 		});
 		document.getElementById('netify-action-type')?.addEventListener('change', () => this.syncActionTypeUi());
@@ -199,7 +210,8 @@ pgrep -fa moci-netify-collector || true
 
 		try {
 			await this.updateStatus();
-			await this.loadFlowFile();
+			await this.loadFlowTotalCount();
+			await this.loadFlowFile(true);
 			await this.refreshHostnameMap();
 			this.renderOverview();
 			this.renderTopApps();
@@ -239,12 +251,39 @@ pgrep -fa moci-netify-collector || true
 		}
 	}
 
-	async loadFlowFile() {
+	async loadFlowTotalCount() {
 		try {
+			const out = await this.querySql('SELECT COUNT(*) FROM flow_raw;');
+			const firstLine = String(out || '')
+				.trim()
+				.split('\n')[0];
+			const count = Number(firstLine);
+			this.totalFlowCount = Number.isFinite(count) && count >= 0 ? count : 0;
+		} catch (err) {
+			this.totalFlowCount = this.flows.length || 0;
+			this.logDebug(`Failed to load total flow count: ${err?.message || 'unknown error'}`);
+		}
+	}
+
+	async loadFlowFile(reset = false) {
+		try {
+			if (reset) {
+				this.flows = [];
+				this.loadedOffset = 0;
+				this.hasMoreFlows = true;
+			}
+			if (!this.hasMoreFlows) return false;
+
 			const configuredLimit = Math.min(Math.max(Number(this.maxLines) || 5000, 50), 20000);
-			const safeMax = Math.min(configuredLimit, 500);
+			if (this.loadedOffset >= configuredLimit) {
+				this.hasMoreFlows = false;
+				return false;
+			}
+
+			const remainingCap = configuredLimit - this.loadedOffset;
+			const requested = Math.max(20, Math.min(this.loadChunkSize, remainingCap));
 			const tried = new Set();
-			const limits = [safeMax, 300, 200, 120, 80].filter(n => {
+			const limits = [requested, 150, 100, 80, 60].filter(n => {
 				if (n < 20 || tried.has(n)) return false;
 				tried.add(n);
 				return true;
@@ -254,22 +293,33 @@ pgrep -fa moci-netify-collector || true
 			let lastErr = null;
 			for (const limit of limits) {
 				try {
-					const sql = `SELECT json FROM flow_raw ORDER BY id DESC LIMIT ${limit};`;
+					const sql = `SELECT json FROM flow_raw ORDER BY id DESC LIMIT ${limit} OFFSET ${this.loadedOffset};`;
 					const out = await this.querySql(sql);
 					const data = String(out || '').trim();
 					if (!data) {
-						this.flows = [];
-						this.lastLoadedLimit = limit;
-						if (this.lastFlowCount !== 0) this.logDebug('SQL query returned 0 rows');
-						this.lastFlowCount = 0;
-						return;
+						this.hasMoreFlows = false;
+						if (this.flows.length === 0) {
+							if (this.lastFlowCount !== 0) this.logDebug('SQL query returned 0 rows');
+							this.lastFlowCount = 0;
+						}
+						return false;
 					}
-					this.flows = this.parseFlowJsonl(data);
+					const chunk = this.parseFlowJsonl(data);
+					if (chunk.length === 0) {
+						this.hasMoreFlows = false;
+						return false;
+					}
+					this.flows = this.flows.concat(chunk);
+					this.loadedOffset += chunk.length;
 					this.lastLoadedLimit = limit;
 					if (this.flows.length !== this.lastFlowCount) {
-						this.logDebug(`Loaded ${this.flows.length} flow row(s) from sqlite (limit=${limit})`);
+						this.logDebug(
+							`Loaded ${chunk.length} more row(s), total loaded=${this.flows.length} (limit=${limit}, offset=${this.loadedOffset})`
+						);
 						this.lastFlowCount = this.flows.length;
 					}
+					const knownTotal = Number(this.totalFlowCount) || 0;
+					this.hasMoreFlows = knownTotal > this.loadedOffset && this.loadedOffset < configuredLimit;
 					loaded = true;
 					break;
 				} catch (err) {
@@ -281,11 +331,27 @@ pgrep -fa moci-netify-collector || true
 			if (!loaded) {
 				throw lastErr || new Error('all loadFlowFile attempts failed');
 			}
+			return true;
 		} catch {
-			this.flows = [];
-			this.lastFlowCount = 0;
-			this.lastLoadedLimit = 0;
+			if (reset) {
+				this.flows = [];
+				this.lastFlowCount = 0;
+				this.lastLoadedLimit = 0;
+				this.loadedOffset = 0;
+			}
 			this.logDebug('Failed to load flow rows from sqlite');
+			return false;
+		}
+	}
+
+	async loadMoreFlows() {
+		if (this.isLoadingMore) return false;
+		if (!this.hasMoreFlows) return false;
+		this.isLoadingMore = true;
+		try {
+			return await this.loadFlowFile(false);
+		} finally {
+			this.isLoadingMore = false;
 		}
 	}
 
@@ -470,7 +536,7 @@ pgrep -fa moci-netify-collector || true
 	}
 
 	renderOverview() {
-		const flowCount = this.flows.length;
+		const flowCount = Number(this.totalFlowCount) > 0 ? this.totalFlowCount : this.flows.length;
 		const devices = new Set(this.flows.map(f => f.device).filter(v => v && v !== 'unknown'));
 		const apps = new Set(this.flows.map(f => f.app).filter(Boolean));
 		const totalBytes = this.flows.reduce((sum, f) => sum + (f.bytes || 0), 0);
@@ -581,6 +647,7 @@ pgrep -fa moci-netify-collector || true
 		const loadedEl = document.getElementById('netify-flows-loaded-info');
 		const prevBtn = document.getElementById('netify-flows-prev-btn');
 		const nextBtn = document.getElementById('netify-flows-next-btn');
+		this.currentMaxPage = maxPage;
 
 		if (infoEl) {
 			if (total <= 0) infoEl.textContent = '0-0 of 0';
@@ -589,7 +656,8 @@ pgrep -fa moci-netify-collector || true
 		if (loadedEl) {
 			const loaded = this.flows.length;
 			const limit = this.lastLoadedLimit || loaded;
-			loadedEl.textContent = `Loaded: ${loaded} rows (batch ${limit})`;
+			const totalCount = Number(this.totalFlowCount) || loaded;
+			loadedEl.textContent = `Loaded: ${loaded}/${totalCount} rows (batch ${limit})`;
 		}
 		if (prevBtn) prevBtn.disabled = this.flowsPage <= 0;
 		if (nextBtn) nextBtn.disabled = this.flowsPage >= maxPage || total === 0;
