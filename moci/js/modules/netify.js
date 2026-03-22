@@ -245,13 +245,19 @@ pgrep -fa moci-netify-collector || true
 
 	async querySql(sql) {
 		const commands = ['/usr/bin/sqlite3', '/usr/bin/sqlite3-cli'];
+		const statement = `PRAGMA busy_timeout=3000; ${sql}`;
 		let lastErr = null;
 		for (const command of commands) {
-			try {
-				const result = await this.exec(command, [this.outputPath, sql], { timeout: 12000 });
-				return String(result?.stdout || '');
-			} catch (err) {
-				lastErr = err;
+			for (let attempt = 0; attempt < 2; attempt++) {
+				try {
+					const result = await this.exec(command, [this.outputPath, statement], { timeout: 12000 });
+					return String(result?.stdout || '');
+				} catch (err) {
+					lastErr = err;
+					if (attempt === 0) {
+						await new Promise(resolve => setTimeout(resolve, 250));
+					}
+				}
 			}
 		}
 		throw lastErr || new Error('sqlite command failed');
