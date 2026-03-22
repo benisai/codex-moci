@@ -17,7 +17,9 @@ export default class NetifyModule {
 		this.debugLog = [];
 		this.debugMax = 120;
 		this.lastFlowCount = -1;
-		this.loadChunkSize = 300;
+		this.loadChunkSize = 3000;
+		this.sqlChunkSize = 200;
+		this.sqlChunkCalls = 15;
 		this.lastLoadedLimit = 0;
 		this.loadedOffset = 0;
 		this.hasMoreFlows = true;
@@ -341,12 +343,14 @@ pgrep -fa moci-netify-collector || true
 	}
 
 	async fetchFlowChunkWindow(limit, startOffset) {
-		const maxStep = 120;
+		const maxStep = Math.max(20, Number(this.sqlChunkSize) || 200);
+		const maxCalls = Math.max(1, Number(this.sqlChunkCalls) || 15);
 		let remaining = Math.max(0, Number(limit) || 0);
 		let offset = Math.max(0, Number(startOffset) || 0);
 		let combined = [];
+		let calls = 0;
 
-		while (remaining > 0) {
+		while (remaining > 0 && calls < maxCalls) {
 			const step = Math.min(maxStep, remaining);
 			const sql = `SELECT json FROM flow_raw ORDER BY id DESC LIMIT ${step} OFFSET ${offset};`;
 			const out = await this.querySql(sql);
@@ -359,6 +363,7 @@ pgrep -fa moci-netify-collector || true
 			combined = combined.concat(parsed);
 			offset += parsed.length;
 			remaining -= parsed.length;
+			calls += 1;
 
 			// Reached end of available rows for this window.
 			if (parsed.length < step) break;
