@@ -19,6 +19,7 @@ export default class NetworkModule {
 					ddns: () => this.loadDDNS(),
 					qos: () => this.loadQoS(),
 					vpn: () => this.loadVPN(),
+					'active-connections': () => this.loadActiveConnections(),
 					diagnostics: () => this.loadDiagnostics()
 				});
 				this.subTabs.attachListeners();
@@ -1191,30 +1192,73 @@ export default class NetworkModule {
 
 	async loadDiagnostics() {
 		if (!this.core.isFeatureEnabled('diagnostics')) return;
-		await this.core.loadResource('dhcp-clients-table', 4, null, async () => {
-			let leases = [];
-			try {
-				const [s, r] = await this.core.ubusCall('luci-rpc', 'getDHCPLeases', {});
-				if (s === 0 && r?.dhcp_leases) leases = r.dhcp_leases;
-			} catch {}
+	}
 
-			const tbody = document.querySelector('#dhcp-clients-table tbody');
+	async loadActiveConnections() {
+		await this.core.loadResource('network-active-connections-table', 4, null, async () => {
+			const tbody = document.querySelector('#network-active-connections-table tbody');
 			if (!tbody) return;
+
+			let leases = await this.fetchActiveLeases();
+			if (!Array.isArray(leases)) leases = [];
+
 			if (leases.length === 0) {
-				this.core.renderEmptyTable(tbody, 4, 'No DHCP clients');
+				this.core.renderEmptyTable(tbody, 4, 'No active connections');
 				return;
 			}
+
 			tbody.innerHTML = leases
-				.map(
-					l => `<tr>
-				<td>${this.core.escapeHtml(l.ipaddr || 'N/A')}</td>
-				<td>${this.core.escapeHtml(l.macaddr || 'N/A')}</td>
-				<td>${this.core.escapeHtml(l.hostname || 'Unknown')}</td>
-				<td>${l.expires > 0 ? l.expires + 's' : 'Permanent'}</td>
-			</tr>`
-				)
+				.map(lease => {
+					const ip = lease.ipaddr || lease.ip || 'N/A';
+					const mac = lease.macaddr || lease.mac || 'N/A';
+					const hostname = lease.hostname || lease.name || 'Unknown';
+					const expires = Number(lease.expires);
+					const status = Number.isFinite(expires)
+						? expires > 0
+							? `${expires}s`
+							: 'Permanent'
+						: 'Active';
+					return `<tr>
+				<td>${this.core.escapeHtml(ip)}</td>
+				<td>${this.core.escapeHtml(mac)}</td>
+				<td>${this.core.escapeHtml(hostname)}</td>
+				<td>${this.core.escapeHtml(status)}</td>
+			</tr>`;
+				})
 				.join('');
 		});
+	}
+
+	async fetchActiveLeases() {
+		try {
+			const [status, result] = await this.core.ubusCall('luci-rpc', 'getDHCPLeases', {});
+			if (status === 0 && Array.isArray(result?.dhcp_leases) && result.dhcp_leases.length > 0) {
+				return result.dhcp_leases;
+			}
+		} catch {}
+
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'read', { path: '/tmp/dhcp.leases' });
+			if (status !== 0 || !result?.data) return [];
+			return String(result.data)
+				.split('\n')
+				.map(line => line.trim())
+				.filter(Boolean)
+				.map(line => {
+					const parts = line.split(/\s+/);
+					const expiryEpoch = Number(parts[0]);
+					const mac = parts[1] || '';
+					const ip = parts[2] || '';
+					const hostname = parts[3] && parts[3] !== '*' ? parts[3] : 'Unknown';
+					let expires = 0;
+					if (Number.isFinite(expiryEpoch) && expiryEpoch > 0) {
+						expires = Math.max(0, Math.floor(expiryEpoch - Date.now() / 1000));
+					}
+					return { ipaddr: ip, macaddr: mac, hostname, expires };
+				});
+		} catch {
+			return [];
+		}
 	}
 
 	async runDiagnostic(type) {
