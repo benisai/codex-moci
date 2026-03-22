@@ -642,6 +642,10 @@ export default class DashboardModule {
 
 		const downData = this.bandwidthHistory.down;
 		const upData = this.bandwidthHistory.up;
+		const downloadStroke = 'rgba(132, 210, 255, 0.95)';
+		const downloadFill = 'rgba(132, 210, 255, 0.18)';
+		const uploadStroke = 'rgba(255, 193, 122, 0.92)';
+		const uploadFill = 'rgba(255, 193, 122, 0.14)';
 
 		if (downData.length < 2) return;
 
@@ -661,16 +665,16 @@ export default class DashboardModule {
 			ctx.stroke();
 		}
 
-		this.fillSmoothArea(ctx, downPoints, baselineY, 'rgba(226, 226, 229, 0.15)');
+		this.fillSmoothArea(ctx, downPoints, baselineY, downloadFill);
 
-		ctx.strokeStyle = 'rgba(226, 226, 229, 0.9)';
+		ctx.strokeStyle = downloadStroke;
 		ctx.lineWidth = 2;
 		this.traceSmoothLine(ctx, downPoints);
 		ctx.stroke();
 
-		this.fillSmoothArea(ctx, upPoints, baselineY, 'rgba(226, 226, 229, 0.08)');
+		this.fillSmoothArea(ctx, upPoints, baselineY, uploadFill);
 
-		ctx.strokeStyle = 'rgba(226, 226, 229, 0.5)';
+		ctx.strokeStyle = uploadStroke;
 		ctx.lineWidth = 2;
 		this.traceSmoothLine(ctx, upPoints);
 		ctx.stroke();
@@ -687,12 +691,12 @@ export default class DashboardModule {
 			ctx.lineTo(x, height - padding);
 			ctx.stroke();
 
-			ctx.fillStyle = 'rgba(226, 226, 229, 0.95)';
+			ctx.fillStyle = downloadStroke;
 			ctx.beginPath();
 			ctx.arc(x, downY, 3, 0, Math.PI * 2);
 			ctx.fill();
 
-			ctx.fillStyle = 'rgba(226, 226, 229, 0.72)';
+			ctx.fillStyle = uploadStroke;
 			ctx.beginPath();
 			ctx.arc(x, upY, 3, 0, Math.PI * 2);
 			ctx.fill();
@@ -913,6 +917,8 @@ export default class DashboardModule {
 		const paddingX = 20;
 		const chartHeight = height - paddingTop - paddingBottom;
 		const chartWidth = width - paddingX * 2;
+		const downloadBarColor = 'rgba(132, 210, 255, 0.92)';
+		const uploadBarColor = 'rgba(255, 193, 122, 0.9)';
 
 		ctx.clearRect(0, 0, width, height);
 
@@ -964,10 +970,10 @@ export default class DashboardModule {
 				ctx.fillRect(groupX, paddingTop, groupWidth, chartHeight);
 			}
 
-			ctx.fillStyle = 'rgba(226, 226, 229, 0.9)';
+			ctx.fillStyle = downloadBarColor;
 			ctx.fillRect(rxX, rxY, barWidth, rxHeight);
 
-			ctx.fillStyle = 'rgba(226, 226, 229, 0.5)';
+			ctx.fillStyle = uploadBarColor;
 			ctx.fillRect(txX, txY, barWidth, txHeight);
 
 			if (idx % labelStep === 0) {
