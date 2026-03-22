@@ -44,6 +44,20 @@ export default class DashboardModule {
 		return (((memory.total - memory.free) / memory.total) * 100).toFixed(0);
 	}
 
+	getUsageColor(percent) {
+		const value = Number(percent);
+		if (!Number.isFinite(value)) return '';
+		if (value > 92) return 'rgba(255, 170, 170, 0.98)';
+		if (value > 80) return 'rgba(255, 193, 122, 0.98)';
+		return '';
+	}
+
+	applyUsageStyling(valueEl, barEl, percent) {
+		const color = this.getUsageColor(percent);
+		if (valueEl) valueEl.style.color = color || '';
+		if (barEl) barEl.style.background = color || '';
+	}
+
 	renderSystemInfo(boardInfo, systemInfo) {
 		const hostnameEl = document.getElementById('hostname');
 		const uptimeEl = document.getElementById('uptime');
@@ -56,6 +70,7 @@ export default class DashboardModule {
 		const memPercent = this.parseMemoryPercent(systemInfo.memory);
 		if (memoryEl) memoryEl.textContent = this.core.formatMemory(systemInfo.memory);
 		if (memoryBarEl) memoryBarEl.style.width = memPercent + '%';
+		this.applyUsageStyling(memoryEl, memoryBarEl, memPercent);
 	}
 
 	async load() {
@@ -134,8 +149,10 @@ export default class DashboardModule {
 		if (usage !== null) {
 			if (cpuEl) cpuEl.textContent = usage + '%';
 			if (cpuBarEl) cpuBarEl.style.width = usage + '%';
+			this.applyUsageStyling(cpuEl, cpuBarEl, usage);
 		} else {
 			if (cpuEl) cpuEl.textContent = 'N/A';
+			this.applyUsageStyling(cpuEl, cpuBarEl, null);
 		}
 	}
 
