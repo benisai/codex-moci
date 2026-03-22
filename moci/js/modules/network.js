@@ -397,13 +397,14 @@ export default class NetworkModule {
 			const rulesTbody = document.querySelector('#fw-rules-table tbody');
 			if (rulesTbody) {
 				if (rules.length === 0) {
-					this.core.renderEmptyTable(rulesTbody, 7, 'No firewall rules');
+					this.core.renderEmptyTable(rulesTbody, 8, 'No firewall rules');
 				} else {
 					rulesTbody.innerHTML = rules
 						.map(
 							r => `<tr>
 						<td>${this.core.escapeHtml(r.name || r.section)}</td>
 						<td>${this.core.escapeHtml(r.src || 'Any')}</td>
+						<td>${this.core.escapeHtml(r.src_ip || 'Any')}</td>
 						<td>${this.core.escapeHtml(r.dest || 'Any')}</td>
 						<td>${this.core.escapeHtml(r.proto || 'Any')}</td>
 						<td>${this.core.escapeHtml(r.dest_port || 'Any')}</td>
