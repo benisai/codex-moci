@@ -110,7 +110,8 @@ export default class DashboardModule {
 		const memPercent = this.parseMemoryPercent(systemInfo.memory);
 		if (memoryEl) memoryEl.textContent = this.core.formatMemory(systemInfo.memory);
 		if (memoryBarEl) memoryBarEl.style.width = memPercent + '%';
-		this.applyUsageStyling(memoryEl, memoryBarEl, memPercent);
+		if (memoryEl) memoryEl.style.color = '';
+		this.applyUsageStyling(null, memoryBarEl, memPercent);
 	}
 
 	async load() {
