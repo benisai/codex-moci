@@ -44,7 +44,47 @@ export default class DashboardModule {
 		return (((memory.total - memory.free) / memory.total) * 100).toFixed(0);
 	}
 
+	isColorfulGraphsEnabled() {
+		return this.core.isFeatureEnabled('colorful_graphs');
+	}
+
+	getGraphPalette() {
+		if (this.isColorfulGraphsEnabled()) {
+			return {
+				downloadStroke: 'rgba(132, 210, 255, 0.95)',
+				downloadFill: 'rgba(132, 210, 255, 0.18)',
+				uploadStroke: 'rgba(255, 193, 122, 0.92)',
+				uploadFill: 'rgba(255, 193, 122, 0.14)'
+			};
+		}
+
+		return {
+			downloadStroke: 'rgba(226, 226, 229, 0.9)',
+			downloadFill: 'rgba(226, 226, 229, 0.15)',
+			uploadStroke: 'rgba(226, 226, 229, 0.5)',
+			uploadFill: 'rgba(226, 226, 229, 0.08)'
+		};
+	}
+
+	applyDashboardColorTheme() {
+		const colorful = this.isColorfulGraphsEnabled();
+		const downEl = document.getElementById('bandwidth-down');
+		const upEl = document.getElementById('bandwidth-up');
+		if (downEl) downEl.style.color = colorful ? 'rgba(132, 210, 255, 0.98)' : '';
+		if (upEl) upEl.style.color = colorful ? 'rgba(255, 193, 122, 0.98)' : '';
+
+		const downloadLegend = colorful ? 'rgba(132, 210, 255, 0.95)' : 'rgba(226, 226, 229, 0.9)';
+		const uploadLegend = colorful ? 'rgba(255, 193, 122, 0.92)' : 'rgba(226, 226, 229, 0.5)';
+		document.querySelectorAll('.legend-color.legend-download').forEach(el => {
+			el.style.background = downloadLegend;
+		});
+		document.querySelectorAll('.legend-color.legend-upload').forEach(el => {
+			el.style.background = uploadLegend;
+		});
+	}
+
 	getUsageColor(percent) {
+		if (!this.isColorfulGraphsEnabled()) return '';
 		const value = Number(percent);
 		if (!Number.isFinite(value)) return '';
 		if (value > 92) return 'rgba(255, 170, 170, 0.98)';
@@ -77,6 +117,7 @@ export default class DashboardModule {
 		const pageElement = document.getElementById('dashboard-page');
 		if (pageElement) pageElement.classList.remove('hidden');
 		this.applyLanVisibility();
+		this.applyDashboardColorTheme();
 		try {
 			const systemInfo = await this.fetchSystemInfo();
 			const boardInfo = await this.fetchBoardInfo();
@@ -654,16 +695,12 @@ export default class DashboardModule {
 		const width = canvas.width;
 		const height = canvas.height;
 		const padding = 20;
+		const palette = this.getGraphPalette();
 
 		ctx.clearRect(0, 0, width, height);
 
 		const downData = this.bandwidthHistory.down;
 		const upData = this.bandwidthHistory.up;
-		const downloadStroke = 'rgba(132, 210, 255, 0.95)';
-		const downloadFill = 'rgba(132, 210, 255, 0.18)';
-		const uploadStroke = 'rgba(255, 193, 122, 0.92)';
-		const uploadFill = 'rgba(255, 193, 122, 0.14)';
-
 		if (downData.length < 2) return;
 
 		const max = Math.max(...downData, ...upData, 100);
@@ -682,16 +719,16 @@ export default class DashboardModule {
 			ctx.stroke();
 		}
 
-		this.fillSmoothArea(ctx, downPoints, baselineY, downloadFill);
+		this.fillSmoothArea(ctx, downPoints, baselineY, palette.downloadFill);
 
-		ctx.strokeStyle = downloadStroke;
+		ctx.strokeStyle = palette.downloadStroke;
 		ctx.lineWidth = 2;
 		this.traceSmoothLine(ctx, downPoints);
 		ctx.stroke();
 
-		this.fillSmoothArea(ctx, upPoints, baselineY, uploadFill);
+		this.fillSmoothArea(ctx, upPoints, baselineY, palette.uploadFill);
 
-		ctx.strokeStyle = uploadStroke;
+		ctx.strokeStyle = palette.uploadStroke;
 		ctx.lineWidth = 2;
 		this.traceSmoothLine(ctx, upPoints);
 		ctx.stroke();
@@ -708,12 +745,12 @@ export default class DashboardModule {
 			ctx.lineTo(x, height - padding);
 			ctx.stroke();
 
-			ctx.fillStyle = downloadStroke;
+			ctx.fillStyle = palette.downloadStroke;
 			ctx.beginPath();
 			ctx.arc(x, downY, 3, 0, Math.PI * 2);
 			ctx.fill();
 
-			ctx.fillStyle = uploadStroke;
+			ctx.fillStyle = palette.uploadStroke;
 			ctx.beginPath();
 			ctx.arc(x, upY, 3, 0, Math.PI * 2);
 			ctx.fill();
@@ -934,8 +971,7 @@ export default class DashboardModule {
 		const paddingX = 20;
 		const chartHeight = height - paddingTop - paddingBottom;
 		const chartWidth = width - paddingX * 2;
-		const downloadBarColor = 'rgba(132, 210, 255, 0.92)';
-		const uploadBarColor = 'rgba(255, 193, 122, 0.9)';
+		const palette = this.getGraphPalette();
 
 		ctx.clearRect(0, 0, width, height);
 
@@ -987,10 +1023,10 @@ export default class DashboardModule {
 				ctx.fillRect(groupX, paddingTop, groupWidth, chartHeight);
 			}
 
-			ctx.fillStyle = downloadBarColor;
+			ctx.fillStyle = palette.downloadStroke;
 			ctx.fillRect(rxX, rxY, barWidth, rxHeight);
 
-			ctx.fillStyle = uploadBarColor;
+			ctx.fillStyle = palette.uploadStroke;
 			ctx.fillRect(txX, txY, barWidth, txHeight);
 
 			if (idx % labelStep === 0) {

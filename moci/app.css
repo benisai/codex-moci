@@ -1362,12 +1362,12 @@ select.form-input {
 	border-radius: 2px;
 }
 
-#bandwidth-down {
-	color: rgba(132, 210, 255, 0.98);
+.legend-download {
+	background: rgba(226, 226, 229, 0.9);
 }
 
-#bandwidth-up {
-	color: rgba(255, 193, 122, 0.98);
+.legend-upload {
+	background: rgba(226, 226, 229, 0.5);
 }
 
 .loading-skeleton {

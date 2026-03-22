@@ -127,6 +127,7 @@ export class OpenWrtCore {
 			monitoring: '1',
 			netify: '1',
 			show_lan_ip: '0',
+			colorful_graphs: '0',
 			wireless: '1',
 			firewall: '1',
 			dhcp: '1',
