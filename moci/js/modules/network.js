@@ -19,7 +19,7 @@ export default class NetworkModule {
 					ddns: () => this.loadDDNS(),
 					qos: () => this.loadQoS(),
 					vpn: () => this.loadVPN(),
-					'active-connections': () => this.loadActiveConnections(),
+					connections: () => this.loadConnections(),
 					diagnostics: () => this.loadDiagnostics()
 				});
 				this.subTabs.attachListeners();
@@ -1194,12 +1194,12 @@ export default class NetworkModule {
 		if (!this.core.isFeatureEnabled('diagnostics')) return;
 	}
 
-	async loadActiveConnections() {
+	async loadConnections() {
 		await this.core.loadResource('network-active-connections-table', 4, null, async () => {
 			const tbody = document.querySelector('#network-active-connections-table tbody');
 			if (!tbody) return;
 
-			let leases = await this.fetchActiveLeases();
+			let leases = await this.fetchConnections();
 			if (!Array.isArray(leases)) leases = [];
 
 			if (leases.length === 0) {
@@ -1229,7 +1229,7 @@ export default class NetworkModule {
 		});
 	}
 
-	async fetchActiveLeases() {
+	async fetchConnections() {
 		try {
 			const [status, result] = await this.core.ubusCall('luci-rpc', 'getDHCPLeases', {});
 			if (status === 0 && Array.isArray(result?.dhcp_leases) && result.dhcp_leases.length > 0) {
@@ -1256,6 +1256,27 @@ export default class NetworkModule {
 					}
 					return { ipaddr: ip, macaddr: mac, hostname, expires };
 				});
+		} catch {
+			// Continue into ARP fallback.
+		}
+
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'read', { path: '/proc/net/arp' });
+			if (status !== 0 || !result?.data) return [];
+			return String(result.data)
+				.split('\n')
+				.slice(1)
+				.map(line => line.trim())
+				.filter(Boolean)
+				.map(line => line.split(/\s+/))
+				.filter(parts => parts.length >= 6)
+				.filter(parts => parts[2] && parts[2] !== '0x0')
+				.map(parts => ({
+					ipaddr: parts[0] || 'N/A',
+					macaddr: parts[3] || 'N/A',
+					hostname: 'Unknown',
+					expires: NaN
+				}));
 		} catch {
 			return [];
 		}
