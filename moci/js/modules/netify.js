@@ -230,30 +230,32 @@ pgrep -fa moci-netify-collector || true
 
 	async loadFlowFile() {
 		try {
-			let data = '';
-
-			// Prefer file.read because it works with stricter rpcd ACL profiles.
-			try {
-				const [readStatus, readResult] = await this.core.ubusCall('file', 'read', { path: this.outputPath });
-				if (readStatus === 0 && readResult?.data) {
-					data = String(readResult.data || '');
-				}
-			} catch {}
-
-			// Fallback to tail for larger files or routers where file.read is restricted.
-			if (!data.trim()) {
-				const limit = Math.min(Math.max(Number(this.maxLines) || 5000, 50), 20000);
-				const cmd = `tail -n ${limit} ${this.shellQuote(this.outputPath)} 2>/dev/null || true`;
-				const result = await this.execShell(cmd);
-				data = String(result?.stdout || '');
-			}
-
-			if (!data.trim()) {
-				this.flows = [];
+			// Prefer reading the tail window first. This avoids stale/corrupt
+			// prefixes and file.read truncation on larger JSONL files.
+			const limit = Math.min(Math.max(Number(this.maxLines) || 5000, 50), 20000);
+			const tailCmd = `tail -n ${limit} ${this.shellQuote(this.outputPath)} 2>/dev/null || true`;
+			const tailResult = await this.execShell(tailCmd).catch(() => ({}));
+			const tailData = String(tailResult?.stdout || '');
+			const tailFlows = this.parseFlowJsonl(tailData);
+			if (tailFlows.length > 0) {
+				this.flows = tailFlows;
 				return;
 			}
 
-			this.flows = this.parseFlowJsonl(data);
+			// Fallback: full file read via ubus ACL path.
+			let readData = '';
+			try {
+				const [readStatus, readResult] = await this.core.ubusCall('file', 'read', { path: this.outputPath });
+				if (readStatus === 0 && readResult?.data) {
+					readData = String(readResult.data || '');
+				}
+			} catch {}
+
+			if (!readData.trim()) {
+				this.flows = [];
+				return;
+			}
+			this.flows = this.parseFlowJsonl(readData);
 		} catch {
 			this.flows = [];
 		}
