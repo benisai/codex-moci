@@ -252,7 +252,6 @@ pgrep -fa moci-netify-collector || true
 	async refresh(showErrorToast = true, refreshTopApps = true) {
 		if (this.isRefreshing) return;
 		this.isRefreshing = true;
-		this.renderOverviewLoading();
 
 		try {
 			await this.updateStatus();
@@ -272,17 +271,6 @@ pgrep -fa moci-netify-collector || true
 		} finally {
 			this.isRefreshing = false;
 		}
-	}
-
-	renderOverviewLoading() {
-		const flowEl = document.getElementById('netify-flow-count');
-		const deviceEl = document.getElementById('netify-device-count');
-		const appEl = document.getElementById('netify-app-count');
-		const bytesEl = document.getElementById('netify-total-bytes');
-		if (flowEl) flowEl.textContent = 'Loading...';
-		if (deviceEl) deviceEl.textContent = 'Loading...';
-		if (appEl) appEl.textContent = 'Loading...';
-		if (bytesEl) bytesEl.textContent = 'Loading...';
 	}
 
 	async updateStatus() {
