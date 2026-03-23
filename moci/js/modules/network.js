@@ -838,6 +838,9 @@ export default class NetworkModule {
 				const [status, result] = await this.core.uciGet('adblock');
 				if (status === 0 && result?.values) config = result.values;
 			} catch {}
+			if (!config) {
+				config = await this.readAdblockViaCli();
+			}
 
 			if (!config) {
 				document.getElementById('adblock-enabled').checked = false;
@@ -850,21 +853,24 @@ export default class NetworkModule {
 			const sources = [];
 			for (const [section, cfg] of Object.entries(config)) {
 				const type = String(cfg?.['.type'] || '');
-				if (type === 'adblock' && !globalSection) {
+				if ((type === 'adblock' || section === 'global') && !globalSection) {
 					globalSection = { id: section, values: cfg };
 				} else if (type === 'source') {
 					sources.push({
 						section,
 						name: String(cfg.adb_srcdesc || cfg.name || section),
 						url: String(cfg.adb_src || cfg.url || ''),
-						enabled: String(cfg.enabled || '0') === '1'
+						enabled: this.isEnabledValue(cfg.enabled)
 					});
 				}
 			}
 
-			document.getElementById('adblock-enabled').checked = String(globalSection?.values?.adb_enabled || '0') === '1';
-			document.getElementById('adblock-safesearch').checked =
-				String(globalSection?.values?.adb_safesearch || '0') === '1';
+			document.getElementById('adblock-enabled').checked = this.isEnabledValue(
+				globalSection?.values?.adb_enabled ?? globalSection?.values?.enabled ?? '0'
+			);
+			document.getElementById('adblock-safesearch').checked = this.isEnabledValue(
+				globalSection?.values?.adb_safesearch ?? globalSection?.values?.safesearch ?? '0'
+			);
 
 			if (sources.length === 0) {
 				this.core.renderEmptyTable(tbody, 4, 'No target lists configured');
@@ -882,6 +888,55 @@ export default class NetworkModule {
 				)
 				.join('');
 		});
+	}
+
+	async readAdblockViaCli() {
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', 'uci -q show adblock 2>/dev/null || true']
+			});
+			if (status !== 0 || !result?.stdout) return null;
+			return this.parseUciShowToConfig(String(result.stdout || ''));
+		} catch {
+			return null;
+		}
+	}
+
+	parseUciShowToConfig(output) {
+		const cfg = {};
+		const lines = String(output || '')
+			.split('\n')
+			.map(line => line.trim())
+			.filter(Boolean);
+
+		for (const line of lines) {
+			const m = line.match(/^adblock\.([^.]+)\.([^=]+)=(.*)$/);
+			if (!m) continue;
+			const section = m[1];
+			const key = m[2];
+			const value = this.stripOuterQuotes(m[3]);
+			if (!cfg[section]) cfg[section] = {};
+			if (key === '') continue;
+			cfg[section][key] = value;
+		}
+		return Object.keys(cfg).length > 0 ? cfg : null;
+	}
+
+	stripOuterQuotes(value) {
+		const raw = String(value ?? '').trim();
+		if (
+			(raw.startsWith("'") && raw.endsWith("'")) ||
+			(raw.startsWith('"') && raw.endsWith('"'))
+		) {
+			return raw.slice(1, -1);
+		}
+		return raw;
+	}
+
+	isEnabledValue(value) {
+		const v = this.stripOuterQuotes(value).toLowerCase();
+		return v === '1' || v === 'true' || v === 'on' || v === 'enabled' || v === 'yes';
 	}
 
 	async saveAdblockSettings() {
