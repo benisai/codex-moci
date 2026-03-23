@@ -141,6 +141,8 @@ export default class NetifyModule {
 
 	async load() {
 		this.logDebug(`Netify page load; db=${this.outputPath}`);
+		this.userPausedAutoRefresh = true;
+		this.updateAutoRefreshToggleUi();
 		await this.loadConfig();
 		this.syncCollectorPanel();
 		this.startPolling();
