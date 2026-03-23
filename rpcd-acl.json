@@ -14,6 +14,7 @@
 				"/etc/dropbear/authorized_keys": ["read"],
 				"/etc/hosts": ["read"],
 				"/tmp/moci-ping-monitor.txt": ["read"],
+				"/tmp/moci-speedtest-monitor.txt": ["read"],
 				"/tmp/moci-netify.sqlite": ["read"],
 				"/tmp/firmware.bin": ["read"],
 				"/tmp/backup.tar.gz": ["read"]
@@ -38,10 +39,13 @@
 				"/etc/init.d/dnsmasq": ["exec"],
 				"/etc/init.d/firewall": ["exec"],
 				"/usr/bin/moci-netify-collector": ["exec"],
+				"/usr/bin/moci-speedtest-monitor": ["exec"],
 				"/usr/bin/sqlite3": ["exec"],
 				"/usr/bin/sqlite3-cli": ["exec"],
+				"/etc/crontabs/root": ["write"],
 				"/tmp/moci-netify.sqlite": ["write"],
-				"/tmp/moci-ping-monitor.txt": ["write"]
+				"/tmp/moci-ping-monitor.txt": ["write"],
+				"/tmp/moci-speedtest-monitor.txt": ["write"]
 			},
 			"ubus": {
 				"uci": ["set", "add", "delete", "commit"],

@@ -1423,6 +1423,11 @@ select.form-input {
 	margin-top: 24px;
 }
 
+.monitoring-speedtest-metrics-grid {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	margin-top: 14px;
+}
+
 .monitoring-timeline-wrap {
 	margin-top: 12px;
 }
@@ -1479,6 +1484,66 @@ select.form-input {
 	color: var(--steel-muted);
 }
 
+.monitoring-speedtest-controls {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+}
+
+.monitoring-speedtest-chart-wrap {
+	margin-top: 14px;
+}
+
+.monitoring-speedtest-chart {
+	display: block;
+	width: 100%;
+	height: 240px;
+	border-radius: 10px;
+	background: rgba(255, 255, 255, 0.03);
+	border: 1px solid var(--glass-border);
+}
+
+.monitoring-speedtest-grid {
+	stroke: rgba(255, 255, 255, 0.1);
+	stroke-width: 1;
+}
+
+.monitoring-speedtest-line-download {
+	fill: none;
+	stroke: rgba(56, 189, 248, 0.95);
+	stroke-width: 2.5;
+}
+
+.monitoring-speedtest-line-upload {
+	fill: none;
+	stroke: rgba(248, 153, 56, 0.95);
+	stroke-width: 2.5;
+}
+
+.monitoring-speedtest-point-download {
+	fill: rgba(56, 189, 248, 1);
+}
+
+.monitoring-speedtest-point-upload {
+	fill: rgba(248, 153, 56, 1);
+}
+
+.monitoring-speedtest-legend {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	fill: var(--steel-muted);
+}
+
+.monitoring-speedtest-labels {
+	display: flex;
+	justify-content: space-between;
+	gap: 4px;
+	margin-top: 8px;
+	font-family: var(--font-mono);
+	font-size: 10px;
+	color: var(--steel-muted);
+}
+
 .netify-collapsible-header {
 	display: flex;
 	align-items: center;
@@ -1509,8 +1574,16 @@ select.form-input {
 		grid-template-columns: 1fr;
 	}
 
+	.monitoring-speedtest-controls {
+		grid-template-columns: 1fr;
+	}
+
 	.monitoring-metrics-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.monitoring-speedtest-metrics-grid {
+		grid-template-columns: 1fr;
 	}
 
 	.dashboard-status-slim {

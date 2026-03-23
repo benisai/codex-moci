@@ -116,12 +116,13 @@ Access at `http://192.168.1.1/moci/` and login with your root credentials.
 
 
 What does the shell script do?:
-- installs required packages (`netifyd`, `netcat`, `vnstat`, `nlbwmon`, etc.)
+- installs required packages (`netifyd`, `netcat`, `vnstat`, `nlbwmon`, `speedtestcpp`, etc.)
 - deploys web UI to `/www/moci`
 - installs/updates `rpcd` ACL (`/usr/share/rpcd/acl.d/moci.json`)
 - installs backend workers + init scripts:
   - `/usr/bin/moci-netify-collector`
   - `/usr/bin/moci-ping-monitor`
+  - `/usr/bin/moci-speedtest-monitor`
   - `/etc/init.d/netify-collector`
   - `/etc/init.d/ping-monitor`
 - installs `/etc/config/moci` defaults for Monitoring + Netify
@@ -175,6 +176,34 @@ The frontend reads data via `ubus` (`file.read`, `file.exec`, `uci.get`) and doe
 /etc/init.d/ping-monitor restart
 ```
 
+### Monitoring backend (Daily speedtest service via cron)
+
+**Worker script**
+- Worker: `files/moci-speedtest-monitor.sh`
+- Runtime command: `/usr/bin/moci-speedtest-monitor`
+
+**Data flow**
+1. UI stores daily schedule in UCI (`moci.speedtest_monitor.*`).
+2. UI applies/removes a managed root cron entry (`# MOCI_SPEEDTEST_MONITOR`).
+3. Cron runs `/usr/bin/moci-speedtest-monitor --once` once per day.
+4. Script runs `speedtestcpp`, parses download/upload, and appends rows to:
+   - `/tmp/moci-speedtest-monitor.txt`
+5. Monitoring UI reads this file and renders:
+   - last download/upload cards
+   - daily up/down line graph
+   - recent speedtest sample table
+
+**Row format**
+- `timestamp|status|download_mbps|upload_mbps|server|message`
+
+**Config keys (`/etc/config/moci`)**
+- `config speedtest 'speedtest_monitor'`
+- `option enabled '1'`
+- `option run_hour '3'`
+- `option run_minute '15'`
+- `option output_file '/tmp/moci-speedtest-monitor.txt'`
+- `option max_lines '365'`
+
 ### Netify backend (Collector + SQLite flow store)
 
 **Service and scripts**
@@ -202,7 +231,7 @@ The frontend reads data via `ubus` (`file.read`, `file.exec`, `uci.get`) and doe
 - `option host '127.0.0.1'`
 - `option port '7150'`
 - `option db_path '/tmp/moci-netify.sqlite'`
-- `option retention_rows '5000'`
+- `option retention_rows '500000'`
 - `option stream_timeout '45'`
 
 **Service control**

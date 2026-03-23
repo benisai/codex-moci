@@ -100,6 +100,7 @@ set_uci() {
 
 require_file "$REPO_DIR/files/moci-netify-collector.sh"
 require_file "$REPO_DIR/files/moci-ping-monitor.sh"
+require_file "$REPO_DIR/files/moci-speedtest-monitor.sh"
 require_file "$REPO_DIR/files/netify-collector.init"
 require_file "$REPO_DIR/files/ping-monitor.init"
 require_file "$REPO_DIR/files/moci.config"
@@ -133,7 +134,8 @@ for pkg in \
 	nlbwmon \
 	luci-app-nlbwmon \
 	adblock-fast \
-	luci-app-adblock-fast
+	luci-app-adblock-fast \
+	speedtestcpp
 do
 	install_pkg_if_available "$pkg"
 done
@@ -152,6 +154,7 @@ install_file "$REPO_DIR/rpcd-acl.json" /usr/share/rpcd/acl.d/moci.json 0644
 log "Installing backend workers and init scripts"
 install_file "$REPO_DIR/files/moci-netify-collector.sh" /usr/bin/moci-netify-collector 0755
 install_file "$REPO_DIR/files/moci-ping-monitor.sh" /usr/bin/moci-ping-monitor 0755
+install_file "$REPO_DIR/files/moci-speedtest-monitor.sh" /usr/bin/moci-speedtest-monitor 0755
 install_file "$REPO_DIR/files/netify-collector.init" /etc/init.d/netify-collector 0755
 install_file "$REPO_DIR/files/ping-monitor.init" /etc/init.d/ping-monitor 0755
 
@@ -179,6 +182,11 @@ set_uci moci.ping_monitor.threshold "100"
 set_uci moci.ping_monitor.timeout "2"
 set_uci moci.ping_monitor.output_file "/tmp/moci-ping-monitor.txt"
 set_uci moci.ping_monitor.max_lines "2000"
+set_uci moci.speedtest_monitor.enabled "1"
+set_uci moci.speedtest_monitor.run_hour "3"
+set_uci moci.speedtest_monitor.run_minute "15"
+set_uci moci.speedtest_monitor.output_file "/tmp/moci-speedtest-monitor.txt"
+set_uci moci.speedtest_monitor.max_lines "365"
 uci commit moci
 
 NETIFYD_CONF="/etc/netifyd.conf"
@@ -202,6 +210,7 @@ fi
 log "Initializing data files"
 /usr/bin/moci-netify-collector --init-db || true
 /usr/bin/moci-ping-monitor --once || true
+/usr/bin/moci-speedtest-monitor --init-file || true
 
 if ! have_cmd nc; then
 	log "WARNING: nc command not found; netify collector will not ingest flows."
@@ -213,6 +222,29 @@ fi
 log "Enabling and restarting services"
 /etc/init.d/rpcd restart || true
 /etc/init.d/uhttpd restart || true
+
+log "Applying daily speedtest cron schedule"
+SPEEDTEST_MARKER="# MOCI_SPEEDTEST_MONITOR"
+CRON_PATH="/etc/crontabs/root"
+TMP_CRON="/tmp/.moci_cron.$$"
+HOUR="$(uci -q get moci.speedtest_monitor.run_hour 2>/dev/null || echo 3)"
+MINUTE="$(uci -q get moci.speedtest_monitor.run_minute 2>/dev/null || echo 15)"
+ENABLED="$(uci -q get moci.speedtest_monitor.enabled 2>/dev/null || echo 1)"
+case "$HOUR" in ''|*[!0-9]*) HOUR=3 ;; esac
+case "$MINUTE" in ''|*[!0-9]*) MINUTE=15 ;; esac
+if [ "$HOUR" -gt 23 ]; then HOUR=3; fi
+if [ "$MINUTE" -gt 59 ]; then MINUTE=15; fi
+if [ -f "$CRON_PATH" ]; then
+	grep -v "$SPEEDTEST_MARKER" "$CRON_PATH" >"$TMP_CRON" 2>/dev/null || : >"$TMP_CRON"
+else
+	: >"$TMP_CRON"
+fi
+if [ "$ENABLED" = "1" ]; then
+	echo "$MINUTE $HOUR * * * /usr/bin/moci-speedtest-monitor --once >/tmp/moci-speedtest-monitor.last.log 2>&1 $SPEEDTEST_MARKER" >>"$TMP_CRON"
+fi
+cp "$TMP_CRON" "$CRON_PATH"
+rm -f "$TMP_CRON"
+/bin/sh -c '/etc/init.d/cron reload 2>/dev/null || /etc/init.d/cron restart 2>/dev/null || /etc/init.d/crond reload 2>/dev/null || /etc/init.d/crond restart 2>/dev/null || killall -HUP crond 2>/dev/null || true'
 
 for svc in vnstat nlbwmon netifyd netify-collector ping-monitor; do
 	if [ -x "/etc/init.d/$svc" ]; then

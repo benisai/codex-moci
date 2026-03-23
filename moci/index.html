@@ -1604,16 +1604,54 @@
 								</table>
 							</div>
 
+							<div class="stat-card" style="margin-top: 24px">
+								<div class="section-title">DAILY SPEEDTEST (SPEEDTESTCPP)</div>
+								<div class="stats-grid monitoring-speedtest-metrics-grid">
+									<div class="stat-card">
+										<div class="stat-label">LAST DOWNLOAD</div>
+										<div class="stat-value" id="monitoring-speedtest-download">N/A</div>
+									</div>
+									<div class="stat-card">
+										<div class="stat-label">LAST UPLOAD</div>
+										<div class="stat-value" id="monitoring-speedtest-upload">N/A</div>
+									</div>
+									<div class="stat-card">
+										<div class="stat-label">LAST RUN</div>
+										<div class="stat-value" id="monitoring-speedtest-last-run">Never</div>
+									</div>
+								</div>
+								<div class="monitoring-speedtest-chart-wrap">
+									<svg id="monitoring-speedtest-chart" class="monitoring-speedtest-chart" viewBox="0 0 860 240" preserveAspectRatio="none"></svg>
+									<div class="monitoring-speedtest-labels" id="monitoring-speedtest-labels"></div>
+								</div>
+								<table class="data-table" id="monitoring-speedtest-table" style="margin-top: 16px">
+									<thead>
+										<tr>
+											<th>DATE</th>
+											<th>DOWNLOAD</th>
+											<th>UPLOAD</th>
+											<th>STATUS</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td colspan="4" style="text-align: center; color: var(--steel-muted)">No speedtest samples yet</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+
 							<div class="stat-card netify-collapsible-card" style="margin-top: 24px">
 								<div class="netify-collapsible-header">
 									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">
-										PING SETTINGS
+										MONITORING SETTINGS
 									</div>
 									<button class="netify-toggle-btn" id="monitoring-settings-toggle-btn" type="button" aria-expanded="false">
 										<span id="monitoring-settings-toggle-icon">▸</span>
 									</button>
 								</div>
 								<div id="monitoring-settings-body" style="margin-top: 16px; display: none">
+									<div class="section-title" style="margin-top: 0">PING SETTINGS</div>
 									<div class="monitoring-controls">
 										<div class="form-group">
 											<label class="form-label">TARGET HOST / IP</label>
@@ -1647,6 +1685,25 @@
 										<button class="action-btn" id="monitoring-toggle-btn">START SERVICE</button>
 										<button class="action-btn" id="monitoring-run-now-btn">RUN ONCE</button>
 										<button class="action-btn" id="monitoring-clear-btn">CLEAR HISTORY</button>
+									</div>
+									<div class="section-title" style="margin-top: 18px">DAILY SPEEDTEST SETTINGS</div>
+									<div class="monitoring-speedtest-controls">
+										<div class="form-group">
+											<label class="form-label">ENABLED</label>
+											<label style="display: inline-flex; align-items: center; gap: 8px; margin-top: 8px">
+												<input type="checkbox" id="monitoring-speedtest-enabled" checked />
+												<span class="form-label" style="margin: 0">RUN DAILY SPEEDTEST</span>
+											</label>
+										</div>
+										<div class="form-group">
+											<label class="form-label">DAILY RUN TIME</label>
+											<input type="time" id="monitoring-speedtest-time" class="form-input" value="03:15" />
+										</div>
+									</div>
+									<div class="quick-actions">
+										<button class="action-btn" id="monitoring-speedtest-apply-btn">APPLY SPEEDTEST SCHEDULE</button>
+										<button class="action-btn" id="monitoring-speedtest-run-now-btn">RUN SPEEDTEST NOW</button>
+										<button class="action-btn" id="monitoring-speedtest-clear-btn">CLEAR SPEEDTEST HISTORY</button>
 									</div>
 								</div>
 							</div>

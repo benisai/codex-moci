@@ -52,7 +52,7 @@ const aclWatcher = chokidar.watch('rpcd-acl.json', {
 	}
 });
 
-const serviceWatcher = chokidar.watch(['files/moci-ping-monitor.sh', 'files/ping-monitor.init'], {
+const serviceWatcher = chokidar.watch(['files/moci-ping-monitor.sh', 'files/ping-monitor.init', 'files/moci-speedtest-monitor.sh'], {
 	persistent: true,
 	ignoreInitial: true,
 	awaitWriteFinish: {
@@ -142,6 +142,9 @@ function deployPingService() {
 			stdio: 'pipe'
 		});
 		execSync(`cat files/ping-monitor.init | ${SSH} "cat > /etc/init.d/ping-monitor && chmod +x /etc/init.d/ping-monitor"`, {
+			stdio: 'pipe'
+		});
+		execSync(`cat files/moci-speedtest-monitor.sh | ${SSH} "cat > /usr/bin/moci-speedtest-monitor && chmod +x /usr/bin/moci-speedtest-monitor"`, {
 			stdio: 'pipe'
 		});
 		execSync(`${SSH} "/etc/init.d/ping-monitor enable || true; /etc/init.d/ping-monitor restart"`, { stdio: 'pipe' });
