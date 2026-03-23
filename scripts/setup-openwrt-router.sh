@@ -48,9 +48,11 @@ install_pkg_if_available() {
 		fi
 		if ! opkg list | grep -q "^$pkg -"; then
 			log "Package unavailable in current feed, skipping: $pkg"
-			return 0
+			return 1
 		fi
-		opkg install "$pkg" && log "Installed package: $pkg" || log "Failed to install package: $pkg"
+		opkg install "$pkg" && log "Installed package: $pkg" && return 0
+		log "Failed to install package: $pkg"
+		return 1
 		;;
 	apk)
 		if apk info -e "$pkg" >/dev/null 2>&1; then
@@ -59,14 +61,31 @@ install_pkg_if_available() {
 		fi
 		if ! apk search -x "$pkg" >/dev/null 2>&1; then
 			log "Package unavailable in current feed, skipping: $pkg"
-			return 0
+			return 1
 		fi
-		apk add "$pkg" && log "Installed package: $pkg" || log "Failed to install package: $pkg"
+		apk add "$pkg" && log "Installed package: $pkg" && return 0
+		log "Failed to install package: $pkg"
+		return 1
 		;;
 	*)
 		log "No supported package manager available; skipping package: $pkg"
+		return 1
 		;;
 	esac
+}
+
+install_first_available_pkg() {
+	label="$1"
+	shift
+	for candidate in "$@"; do
+		[ -n "$candidate" ] || continue
+		if install_pkg_if_available "$candidate"; then
+			log "Using package for $label: $candidate"
+			return 0
+		fi
+	done
+	log "No installable package found for $label"
+	return 1
 }
 
 set_uci() {
@@ -95,12 +114,10 @@ else
 	log "No supported package manager found (opkg/apk). Package install steps will be skipped."
 fi
 
-	for pkg in \
+for pkg in \
 	nano \
 	htop \
 	uhttpd-mod-ubus \
-	netcat \
-	sqlite3-cli \
 	netifyd \
 	vnstat2 \
 	vnstati2 \
@@ -110,6 +127,10 @@ fi
 do
 	install_pkg_if_available "$pkg"
 done
+
+# Dependency package names can vary between opkg and apk feeds.
+install_first_available_pkg "netcat" netcat netcat-openbsd
+install_first_available_pkg "sqlite-cli" sqlite3-cli sqlite3
 
 log "Deploying MoCI web app"
 mkdir -p /www/moci
@@ -139,7 +160,7 @@ set_uci moci.collector.enabled "'1'"
 set_uci moci.collector.host "'127.0.0.1'"
 set_uci moci.collector.port "'7150'"
 set_uci moci.collector.db_path "'/tmp/moci-netify.sqlite'"
-set_uci moci.collector.retention_rows "'5000'"
+set_uci moci.collector.retention_rows "'9999999'"
 set_uci moci.collector.stream_timeout "'45'"
 set_uci moci.ping_monitor.enabled "'1'"
 set_uci moci.ping_monitor.target "'1.1.1.1'"
@@ -171,6 +192,13 @@ fi
 log "Initializing data files"
 /usr/bin/moci-netify-collector --init-db || true
 /usr/bin/moci-ping-monitor --once || true
+
+if ! have_cmd nc; then
+	log "WARNING: nc command not found; netify collector will not ingest flows."
+fi
+if ! have_cmd sqlite3 && ! have_cmd sqlite3-cli; then
+	log "WARNING: sqlite3/sqlite3-cli not found; netify collector and UI sqlite queries will fail."
+fi
 
 log "Enabling and restarting services"
 /etc/init.d/rpcd restart || true
