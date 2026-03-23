@@ -11,6 +11,7 @@ DEFAULT_DB="/tmp/moci-netify.sqlite"
 DEFAULT_RETENTION_ROWS="500000"
 DEFAULT_STREAM_TIMEOUT="45"
 RECONNECT_DELAY="3"
+LOG_FILE="/tmp/moci-netify-collector.log"
 
 NETIFY_HOST="$DEFAULT_HOST"
 NETIFY_PORT="$DEFAULT_PORT"
@@ -21,7 +22,15 @@ SQLITE_BIN=""
 NETIFY_FEATURE_ENABLED="1"
 
 log() {
-	logger -t moci-netify-collector "$*"
+	printf "%s %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
+}
+
+init_logging() {
+	local dir
+	dir="$(dirname "$LOG_FILE")"
+	mkdir -p "$dir"
+	touch "$LOG_FILE"
+	exec >>"$LOG_FILE" 2>&1
 }
 
 sanitize_text() {
@@ -58,7 +67,15 @@ find_sqlite_bin() {
 }
 
 sql_exec() {
-	"$SQLITE_BIN" "$NETIFY_DB" "$1"
+	local query output rc
+	query="$1"
+	output="$("$SQLITE_BIN" "$NETIFY_DB" "PRAGMA busy_timeout=3000; $query" 2>&1)"
+	rc=$?
+	if [ "$rc" -ne 0 ]; then
+		log "sqlite error: $output"
+		return "$rc"
+	fi
+	return 0
 }
 
 load_config() {
@@ -182,10 +199,10 @@ consume_stream() {
 			continue
 		fi
 
-		insert_flow "$line"
+		insert_flow "$line" || continue
 		counter=$((counter + 1))
 		if [ $((counter % 200)) -eq 0 ]; then
-			prune_db
+			prune_db || true
 		fi
 	done
 }
@@ -211,6 +228,7 @@ run_forever() {
 }
 
 main() {
+	init_logging
 	require_dependencies
 	refresh_runtime_config
 
