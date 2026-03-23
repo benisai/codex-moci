@@ -1695,21 +1695,30 @@
 									</table>
 								</div>
 
-								<div class="stat-card" style="margin-top: 24px">
-									<div class="section-title">DAILY SPEEDTEST SETTINGS</div>
-									<div class="monitoring-speedtest-controls">
-										<div class="form-group">
-											<label class="form-label">DAILY RUN TIME</label>
-											<input type="time" id="monitoring-speedtest-time" class="form-input" value="03:15" />
+								<div class="stat-card netify-collapsible-card" style="margin-top: 24px">
+									<div class="netify-collapsible-header">
+										<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">
+											DAILY SPEEDTEST SETTINGS
 										</div>
-										<div class="quick-actions monitoring-speedtest-toggle-actions">
-											<button class="action-btn-sm success" id="monitoring-speedtest-enable-btn">ENABLE</button>
-											<button class="action-btn-sm danger" id="monitoring-speedtest-disable-btn">DISABLE</button>
-										</div>
+										<button class="netify-toggle-btn" id="monitoring-speedtest-settings-toggle-btn" type="button" aria-expanded="false">
+											<span id="monitoring-speedtest-settings-toggle-icon">▸</span>
+										</button>
 									</div>
-									<div class="quick-actions">
-										<button class="action-btn" id="monitoring-speedtest-run-now-btn">RUN SPEEDTEST NOW</button>
-										<button class="action-btn" id="monitoring-speedtest-clear-btn">CLEAR SPEEDTEST HISTORY</button>
+									<div id="monitoring-speedtest-settings-body" style="margin-top: 16px; display: none">
+										<div class="monitoring-speedtest-controls">
+											<div class="form-group">
+												<label class="form-label">DAILY RUN TIME</label>
+												<input type="time" id="monitoring-speedtest-time" class="form-input" value="03:15" />
+											</div>
+											<div class="quick-actions monitoring-speedtest-toggle-actions">
+												<button class="action-btn-sm success" id="monitoring-speedtest-enable-btn">ENABLE</button>
+												<button class="action-btn-sm danger" id="monitoring-speedtest-disable-btn">DISABLE</button>
+											</div>
+										</div>
+										<div class="quick-actions">
+											<button class="action-btn" id="monitoring-speedtest-run-now-btn">RUN SPEEDTEST NOW</button>
+											<button class="action-btn" id="monitoring-speedtest-clear-btn">CLEAR SPEEDTEST HISTORY</button>
+										</div>
 									</div>
 								</div>
 							</div>

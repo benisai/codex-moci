@@ -69,11 +69,15 @@ export default class MonitoringModule {
 		document
 			.getElementById('monitoring-settings-toggle-btn')
 			?.addEventListener('click', () => this.toggleSettingsPanel());
+		document
+			.getElementById('monitoring-speedtest-settings-toggle-btn')
+			?.addEventListener('click', () => this.toggleSpeedtestSettingsPanel());
 		document.getElementById('monitoring-speedtest-time')?.addEventListener('change', () => {
 			if (this.speedtestEnabled) this.applySpeedtestSettings(true);
 		});
 		this.updateSpeedtestToggleButtons();
 		this.syncSettingsPanel();
+		this.syncSpeedtestSettingsPanel();
 	}
 
 	toggleSettingsPanel() {
@@ -103,6 +107,44 @@ export default class MonitoringModule {
 		if (!body || !icon || !btn) return;
 
 		const expanded = localStorage.getItem('monitoring_settings_expanded') === '1';
+		if (expanded) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+		}
+	}
+
+	toggleSpeedtestSettingsPanel() {
+		const body = document.getElementById('monitoring-speedtest-settings-body');
+		const icon = document.getElementById('monitoring-speedtest-settings-toggle-icon');
+		const btn = document.getElementById('monitoring-speedtest-settings-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const isHidden = body.style.display === 'none' || body.style.display === '';
+		if (isHidden) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+			localStorage.setItem('monitoring_speedtest_settings_expanded', '1');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+			localStorage.setItem('monitoring_speedtest_settings_expanded', '0');
+		}
+	}
+
+	syncSpeedtestSettingsPanel() {
+		const body = document.getElementById('monitoring-speedtest-settings-body');
+		const icon = document.getElementById('monitoring-speedtest-settings-toggle-icon');
+		const btn = document.getElementById('monitoring-speedtest-settings-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const expanded = localStorage.getItem('monitoring_speedtest_settings_expanded') === '1';
 		if (expanded) {
 			body.style.display = 'block';
 			icon.textContent = '▾';
