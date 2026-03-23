@@ -26,6 +26,7 @@ export default class NetifyModule {
 		this.isLoadingMore = false;
 		this.totalFlowCount = 0;
 		this.currentMaxPage = 0;
+		this.pauseAutoRefresh = false;
 
 		this.core.registerRoute('/netify', async () => {
 			const pageElement = document.getElementById('netify-page');
@@ -54,10 +55,12 @@ export default class NetifyModule {
 				.trim()
 				.toLowerCase();
 			this.flowsPage = 0;
+			this.pauseAutoRefresh = false;
 			this.renderRecentFlows();
 		});
 		document.getElementById('netify-flows-prev-btn')?.addEventListener('click', () => {
 			this.flowsPage = Math.max(0, this.flowsPage - 1);
+			this.pauseAutoRefresh = this.flowsPage > 0;
 			this.renderRecentFlows();
 		});
 		document.getElementById('netify-flows-next-btn')?.addEventListener('click', async () => {
@@ -67,6 +70,7 @@ export default class NetifyModule {
 			} else {
 				this.flowsPage += 1;
 			}
+			this.pauseAutoRefresh = this.flowsPage > 0;
 			this.renderRecentFlows();
 		});
 		document.getElementById('netify-action-type')?.addEventListener('change', () => this.syncActionTypeUi());
@@ -133,7 +137,12 @@ export default class NetifyModule {
 		this.pollInterval = setInterval(() => {
 			// Preserve user position while paging historical rows.
 			// Auto-refresh only when on page 1 (index 0).
-			if (this.core.currentRoute && this.core.currentRoute.startsWith('/netify') && this.flowsPage === 0) {
+			if (
+				this.core.currentRoute &&
+				this.core.currentRoute.startsWith('/netify') &&
+				this.flowsPage === 0 &&
+				!this.pauseAutoRefresh
+			) {
 				this.refresh(false);
 			}
 		}, 10000);
@@ -645,6 +654,7 @@ pgrep -fa moci-netify-collector || true
 		const total = rows.length;
 		const maxPage = total > 0 ? Math.max(0, Math.ceil(total / this.flowsPageSize) - 1) : 0;
 		if (this.flowsPage > maxPage) this.flowsPage = maxPage;
+		this.pauseAutoRefresh = this.flowsPage > 0;
 		const startIdx = this.flowsPage * this.flowsPageSize;
 		const endIdx = Math.min(total, startIdx + this.flowsPageSize);
 		const pageRows = rows.slice(startIdx, endIdx);
@@ -674,7 +684,6 @@ pgrep -fa moci-netify-collector || true
 
 	updateFlowPagination(total, startIdx, endIdx, maxPage) {
 		const infoEl = document.getElementById('netify-flows-page-info');
-		const loadedEl = document.getElementById('netify-flows-loaded-info');
 		const prevBtn = document.getElementById('netify-flows-prev-btn');
 		const nextBtn = document.getElementById('netify-flows-next-btn');
 		this.currentMaxPage = maxPage;
@@ -682,12 +691,6 @@ pgrep -fa moci-netify-collector || true
 		if (infoEl) {
 			if (total <= 0) infoEl.textContent = '0-0 of 0';
 			else infoEl.textContent = `${startIdx + 1}-${endIdx} of ${total}`;
-		}
-		if (loadedEl) {
-			const loaded = this.flows.length;
-			const limit = this.lastLoadedLimit || loaded;
-			const totalCount = Number(this.totalFlowCount) || loaded;
-			loadedEl.textContent = `Loaded: ${loaded}/${totalCount} rows (batch ${limit})`;
 		}
 		if (prevBtn) prevBtn.disabled = this.flowsPage <= 0;
 		if (nextBtn) nextBtn.disabled = this.flowsPage >= maxPage || total === 0;
