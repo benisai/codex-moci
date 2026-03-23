@@ -4,7 +4,7 @@ export default class NetifyModule {
 		this.initialized = false;
 		this.pollInterval = null;
 		this.outputPath = '/tmp/moci-netify.sqlite';
-		this.maxLines = 5000;
+		this.maxLines = 500000;
 		this.isRefreshing = false;
 		this.flows = [];
 		this.flowSearchQuery = '';
