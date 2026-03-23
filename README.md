@@ -10,18 +10,24 @@
 
 </div>
 
+### MoCI Dashboard
+
 ![MoCI Dashboard](https://github.com/benisai/codex-moci/blob/main/screenshots/moci-dashboard.png)
-</br>
-</br>
+
+### MoCI Devices
+
 ![MoCI Devices](https://github.com/benisai/codex-moci/blob/main/screenshots/moci-devices.png)
-</br>
-</br>
+
+### MoCI Netify
+
 ![MoCI Netify](https://github.com/benisai/codex-moci/blob/main/screenshots/moci-netify.png)
-</br>
-</br>
+
+### MoCI Monitoring
+
 ![MoCI Monitoring](https://github.com/benisai/codex-moci/blob/main/screenshots/moci-monitoring.png)
-</br>
-</br>
+
+### MoCI Settings
+
 ![MoCI Settings](https://github.com/benisai/codex-moci/blob/main/screenshots/moci-settings.png)
 </br>
 </br>
