@@ -2,6 +2,7 @@ export default class MonitoringModule {
 	constructor(core) {
 		this.core = core;
 		this.initialized = false;
+		this.subTabs = null;
 		this.refreshTimer = null;
 		this.serviceRunning = false;
 		this.target = '1.1.1.1';
@@ -19,7 +20,7 @@ export default class MonitoringModule {
 		this.speedtestMaxLines = 365;
 		this.speedtestSamples = [];
 
-		this.core.registerRoute('/monitoring', async () => {
+		this.core.registerRoute('/monitoring', async (path, subPaths) => {
 			const pageElement = document.getElementById('monitoring-page');
 			if (pageElement) pageElement.classList.remove('hidden');
 
@@ -28,10 +29,23 @@ export default class MonitoringModule {
 				this.initialized = true;
 			}
 
-			await this.loadConfig();
-			await this.refresh();
-			this.startRefreshLoop();
+			if (!this.subTabs) {
+				this.subTabs = this.core.setupSubTabs('monitoring-page', {
+					ping: () => this.loadMonitoring(),
+					speedtest: () => this.loadMonitoring()
+				});
+				this.subTabs.attachListeners();
+			}
+
+			const tab = subPaths?.[0] || 'ping';
+			this.subTabs.showSubTab(tab);
 		});
+	}
+
+	async loadMonitoring() {
+		await this.loadConfig();
+		await this.refresh();
+		this.startRefreshLoop();
 	}
 
 	setupHandlers() {
