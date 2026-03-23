@@ -8,6 +8,7 @@ export default class NetifyModule {
 		this.isRefreshing = false;
 		this.flows = [];
 		this.flowSearchQuery = '';
+		this.flowProtocolFilters = [];
 		this.flowsPage = 0;
 		this.flowsPageSize = 50;
 		this.hostnameByMac = new Map();
@@ -65,6 +66,12 @@ export default class NetifyModule {
 			this.flowSearchQuery = String(event?.target?.value || '')
 				.trim()
 				.toLowerCase();
+			this.flowsPage = 0;
+			this.pauseAutoRefresh = false;
+			this.renderRecentFlows();
+		});
+		document.getElementById('netify-flow-protocol-filter')?.addEventListener('input', event => {
+			this.flowProtocolFilters = this.parseProtocolFilters(event?.target?.value || '');
 			this.flowsPage = 0;
 			this.pauseAutoRefresh = false;
 			this.renderRecentFlows();
@@ -776,6 +783,15 @@ pgrep -fa moci-netify-collector || true
 				return haystack.includes(q);
 			});
 		}
+		const protocolFilters = Array.isArray(this.flowProtocolFilters) ? this.flowProtocolFilters : [];
+		if (protocolFilters.length > 0) {
+			rows = rows.filter(row => {
+				const protocol = String(row.proto || '')
+					.trim()
+					.toLowerCase();
+				return protocolFilters.some(filter => protocol === filter || protocol.includes(filter));
+			});
+		}
 		const total = rows.length;
 		const maxPage = total > 0 ? Math.max(0, Math.ceil(total / this.flowsPageSize) - 1) : 0;
 		if (this.flowsPage > maxPage) this.flowsPage = maxPage;
@@ -805,6 +821,14 @@ pgrep -fa moci-netify-collector || true
 			</tr>`
 			)
 			.join('');
+	}
+
+	parseProtocolFilters(value) {
+		return String(value || '')
+			.split(',')
+			.map(item => item.trim().toLowerCase())
+			.filter(Boolean)
+			.filter((item, index, arr) => arr.indexOf(item) === index);
 	}
 
 	updateFlowPagination(total, startIdx, endIdx, maxPage) {
