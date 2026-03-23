@@ -185,6 +185,14 @@ for svc in vnstat nlbwmon netifyd netify-collector ping-monitor; do
 	fi
 done
 
+log "Finalizing ACL and web server settings"
+cp "$REPO_DIR/rpcd-acl.json" /usr/share/rpcd/acl.d/moci.json
+/etc/init.d/rpcd restart || true
+/etc/init.d/uhttpd restart || true
+uci set uhttpd.main.home='/www'
+uci commit uhttpd
+/etc/init.d/uhttpd restart || true
+
 log "Setup complete."
 log "Open: http://$(uci -q get network.lan.ipaddr 2>/dev/null || echo 192.168.1.1)/moci/"
 log "Log out/in after ACL changes to refresh ubus session permissions."
