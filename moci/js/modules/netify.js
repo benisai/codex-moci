@@ -14,6 +14,9 @@ export default class NetifyModule {
 		this.hostnameByIp = new Map();
 		this.lastHostRefreshAt = 0;
 		this.visibleFlows = [];
+		this.topAppsPage = 0;
+		this.topAppsPageSize = 5;
+		this.topAppsRows = [];
 		this.debugLog = [];
 		this.debugMax = 120;
 		this.lastFlowCount = -1;
@@ -77,6 +80,14 @@ export default class NetifyModule {
 			this.renderRecentFlows();
 		});
 		document.getElementById('netify-action-type')?.addEventListener('change', () => this.syncActionTypeUi());
+		document.getElementById('netify-top-apps-prev-btn')?.addEventListener('click', () => {
+			this.topAppsPage = Math.max(0, this.topAppsPage - 1);
+			this.renderTopApps();
+		});
+		document.getElementById('netify-top-apps-next-btn')?.addEventListener('click', () => {
+			this.topAppsPage += 1;
+			this.renderTopApps();
+		});
 		document.getElementById('save-netify-flow-action-btn')?.addEventListener('click', () => this.saveFlowAction());
 		document.getElementById('cancel-netify-flow-action-btn')?.addEventListener('click', () =>
 			this.core.closeModal('netify-flow-action-modal')
@@ -623,19 +634,29 @@ pgrep -fa moci-netify-collector || true
 
 		const rows = Array.from(map.values())
 			.sort((a, b) => b.flows - a.flows)
-			.slice(0, 10)
+			.slice(0, 50)
 			.map(item => ({
 				app: item.app,
 				flows: String(item.flows),
 				lastSeen: item.lastTs ? this.formatTimestamp(item.lastTs) : '-'
 			}));
+		this.topAppsRows = rows;
 
 		if (rows.length === 0) {
 			this.core.renderEmptyTable(tbody, 3, 'No Netify flow data yet');
+			this.updateTopAppsPagination(0, 0, 0, 0);
 			return;
 		}
 
-		tbody.innerHTML = rows
+		const total = rows.length;
+		const maxPage = total > 0 ? Math.max(0, Math.ceil(total / this.topAppsPageSize) - 1) : 0;
+		if (this.topAppsPage > maxPage) this.topAppsPage = maxPage;
+		const startIdx = this.topAppsPage * this.topAppsPageSize;
+		const endIdx = Math.min(total, startIdx + this.topAppsPageSize);
+		const pageRows = rows.slice(startIdx, endIdx);
+		this.updateTopAppsPagination(total, startIdx, endIdx, maxPage);
+
+		tbody.innerHTML = pageRows
 			.map(
 				row => `<tr>
 				<td>${this.core.escapeHtml(row.app)}</td>
@@ -644,6 +665,19 @@ pgrep -fa moci-netify-collector || true
 			</tr>`
 			)
 			.join('');
+	}
+
+	updateTopAppsPagination(total, startIdx, endIdx, maxPage) {
+		const infoEl = document.getElementById('netify-top-apps-page-info');
+		const prevBtn = document.getElementById('netify-top-apps-prev-btn');
+		const nextBtn = document.getElementById('netify-top-apps-next-btn');
+
+		if (infoEl) {
+			if (total <= 0) infoEl.textContent = '0-0 of 0';
+			else infoEl.textContent = `${startIdx + 1}-${endIdx} of ${total}`;
+		}
+		if (prevBtn) prevBtn.disabled = this.topAppsPage <= 0;
+		if (nextBtn) nextBtn.disabled = this.topAppsPage >= maxPage || total === 0;
 	}
 
 	renderRecentFlows() {
