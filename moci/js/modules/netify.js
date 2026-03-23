@@ -17,7 +17,6 @@ export default class NetifyModule {
 		this.debugLog = [];
 		this.debugMax = 120;
 		this.lastFlowCount = -1;
-		this.loadChunkSize = 3000;
 		this.sqlChunkSize = 200;
 		this.sqlChunkCalls = 100;
 		this.lastLoadedLimit = 0;
@@ -297,7 +296,8 @@ pgrep -fa moci-netify-collector || true
 			}
 
 			const remainingCap = configuredLimit - this.loadedOffset;
-			const requested = Math.max(20, Math.min(this.loadChunkSize, remainingCap));
+			const maxWindowRows = Math.max(20, this.sqlChunkSize * this.sqlChunkCalls);
+			const requested = Math.max(20, Math.min(maxWindowRows, remainingCap));
 			const tried = new Set();
 			const limits = [requested, 150, 100, 80, 60].filter(n => {
 				if (n < 20 || tried.has(n)) return false;
