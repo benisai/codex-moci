@@ -1486,8 +1486,14 @@ select.form-input {
 
 .monitoring-speedtest-controls {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
+	grid-template-columns: minmax(240px, 320px) 1fr;
 	gap: 16px;
+	align-items: end;
+}
+
+.monitoring-speedtest-toggle-actions {
+	justify-content: flex-end;
+	margin-bottom: 2px;
 }
 
 .monitoring-speedtest-chart-wrap {
@@ -1576,6 +1582,10 @@ select.form-input {
 
 	.monitoring-speedtest-controls {
 		grid-template-columns: 1fr;
+	}
+
+	.monitoring-speedtest-toggle-actions {
+		justify-content: flex-start;
 	}
 
 	.monitoring-metrics-grid {

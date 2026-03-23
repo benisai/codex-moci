@@ -38,24 +38,27 @@ export default class MonitoringModule {
 		const targetInput = document.getElementById('monitoring-target');
 		const intervalInput = document.getElementById('monitoring-interval');
 		const thresholdInput = document.getElementById('monitoring-threshold');
-		const speedtestEnabledInput = document.getElementById('monitoring-speedtest-enabled');
 		const speedtestTimeInput = document.getElementById('monitoring-speedtest-time');
 		if (targetInput) targetInput.value = this.target;
 		if (intervalInput) intervalInput.value = String(this.intervalSec);
 		if (thresholdInput) thresholdInput.value = String(this.thresholdMs);
-		if (speedtestEnabledInput) speedtestEnabledInput.checked = this.speedtestEnabled;
 		if (speedtestTimeInput) speedtestTimeInput.value = this.formatTimeValue(this.speedtestHour, this.speedtestMinute);
 
 		document.getElementById('monitoring-apply-btn')?.addEventListener('click', () => this.applySettings());
 		document.getElementById('monitoring-toggle-btn')?.addEventListener('click', () => this.toggleService());
 		document.getElementById('monitoring-run-now-btn')?.addEventListener('click', () => this.runOnce());
 		document.getElementById('monitoring-clear-btn')?.addEventListener('click', () => this.clearHistory());
-		document.getElementById('monitoring-speedtest-apply-btn')?.addEventListener('click', () => this.applySpeedtestSettings());
+		document.getElementById('monitoring-speedtest-enable-btn')?.addEventListener('click', () => this.applySpeedtestSettings(true));
+		document.getElementById('monitoring-speedtest-disable-btn')?.addEventListener('click', () => this.applySpeedtestSettings(false));
 		document.getElementById('monitoring-speedtest-run-now-btn')?.addEventListener('click', () => this.runSpeedtestNow());
 		document.getElementById('monitoring-speedtest-clear-btn')?.addEventListener('click', () => this.clearSpeedtestHistory());
 		document
 			.getElementById('monitoring-settings-toggle-btn')
 			?.addEventListener('click', () => this.toggleSettingsPanel());
+		document.getElementById('monitoring-speedtest-time')?.addEventListener('change', () => {
+			if (this.speedtestEnabled) this.applySpeedtestSettings(true);
+		});
+		this.updateSpeedtestToggleButtons();
 		this.syncSettingsPanel();
 	}
 
@@ -128,13 +131,12 @@ export default class MonitoringModule {
 		const targetInput = document.getElementById('monitoring-target');
 		const intervalInput = document.getElementById('monitoring-interval');
 		const thresholdInput = document.getElementById('monitoring-threshold');
-		const speedtestEnabledInput = document.getElementById('monitoring-speedtest-enabled');
 		const speedtestTimeInput = document.getElementById('monitoring-speedtest-time');
 		if (targetInput) targetInput.value = this.target;
 		if (intervalInput) intervalInput.value = String(this.intervalSec);
 		if (thresholdInput) thresholdInput.value = String(this.thresholdMs);
-		if (speedtestEnabledInput) speedtestEnabledInput.checked = this.speedtestEnabled;
 		if (speedtestTimeInput) speedtestTimeInput.value = this.formatTimeValue(this.speedtestHour, this.speedtestMinute);
+		this.updateSpeedtestToggleButtons();
 	}
 
 	async applySettings() {
@@ -191,10 +193,9 @@ export default class MonitoringModule {
 		}
 	}
 
-	async applySpeedtestSettings() {
-		const enabledInput = document.getElementById('monitoring-speedtest-enabled');
+	async applySpeedtestSettings(forceEnabled = null) {
 		const timeInput = document.getElementById('monitoring-speedtest-time');
-		const enabled = Boolean(enabledInput?.checked);
+		const enabled = forceEnabled == null ? this.speedtestEnabled : Boolean(forceEnabled);
 		const rawTime = String(timeInput?.value || '').trim() || '03:15';
 		const parsed = this.parseTimeValue(rawTime);
 		if (!parsed) {
@@ -221,11 +222,20 @@ export default class MonitoringModule {
 
 			await this.syncSpeedtestCron();
 			await this.refresh();
+			this.updateSpeedtestToggleButtons();
 			this.core.showToast('Daily speedtest schedule saved', 'success');
 		} catch (err) {
 			console.error('Failed to apply speedtest settings:', err);
 			this.core.showToast(`Failed to apply speedtest schedule: ${err?.message || 'unknown error'}`, 'error');
 		}
+	}
+
+	updateSpeedtestToggleButtons() {
+		const enableBtn = document.getElementById('monitoring-speedtest-enable-btn');
+		const disableBtn = document.getElementById('monitoring-speedtest-disable-btn');
+		if (!enableBtn || !disableBtn) return;
+		enableBtn.disabled = this.speedtestEnabled;
+		disableBtn.disabled = !this.speedtestEnabled;
 	}
 
 	async syncSpeedtestCron() {
