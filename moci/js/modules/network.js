@@ -1246,30 +1246,25 @@ export default class NetworkModule {
 			const tbody = document.querySelector('#network-active-connections-table tbody');
 			if (!tbody) return;
 
-			let leases = await this.fetchConnections();
-			if (!Array.isArray(leases)) leases = [];
+			let connections = await this.fetchConnections();
+			if (!Array.isArray(connections)) connections = [];
 
-			if (leases.length === 0) {
-				this.core.renderEmptyTable(tbody, 4, 'No active connections');
+			if (connections.length === 0) {
+				this.core.renderEmptyTable(tbody, 4, 'No active conntrack connections');
 				return;
 			}
 
-			tbody.innerHTML = leases
-				.map(lease => {
-					const ip = lease.ipaddr || lease.ip || 'N/A';
-					const mac = lease.macaddr || lease.mac || 'N/A';
-					const hostname = lease.hostname || lease.name || 'Unknown';
-					const expires = Number(lease.expires);
-					const status = Number.isFinite(expires)
-						? expires > 0
-							? `${expires}s`
-							: 'Permanent'
-						: lease.state || 'Active';
+			tbody.innerHTML = connections
+				.map(conn => {
+					const source = conn.source || 'N/A';
+					const destination = conn.destination || 'N/A';
+					const protocol = (conn.protocol || 'N/A').toUpperCase();
+					const status = conn.state || 'ACTIVE';
 					return `<tr>
-				<td>${this.core.escapeHtml(ip)}</td>
-				<td>${this.core.escapeHtml(mac)}</td>
-				<td>${this.core.escapeHtml(hostname)}</td>
-				<td>${this.core.escapeHtml(status)}</td>
+				<td>${this.core.escapeHtml(source)}</td>
+				<td>${this.core.escapeHtml(destination)}</td>
+				<td>${this.core.escapeHtml(protocol)}</td>
+				<td>${this.renderConntrackStateBadge(status)}</td>
 			</tr>`;
 				})
 				.join('');
@@ -1278,83 +1273,71 @@ export default class NetworkModule {
 
 	async fetchConnections() {
 		try {
-			const [status, result] = await this.core.ubusCall('luci-rpc', 'getDHCPLeases', {});
-			if (status === 0 && Array.isArray(result?.dhcp_leases) && result.dhcp_leases.length > 0) {
-				return result.dhcp_leases;
-			}
-		} catch {}
-
-		try {
-			const [status, result] = await this.core.ubusCall('file', 'read', { path: '/tmp/dhcp.leases' });
-			if (status !== 0 || !result?.data) return [];
-			return String(result.data)
-				.split('\n')
-				.map(line => line.trim())
-				.filter(Boolean)
-				.map(line => {
-					const parts = line.split(/\s+/);
-					const expiryEpoch = Number(parts[0]);
-					const mac = parts[1] || '';
-					const ip = parts[2] || '';
-					const hostname = parts[3] && parts[3] !== '*' ? parts[3] : 'Unknown';
-					let expires = 0;
-					if (Number.isFinite(expiryEpoch) && expiryEpoch > 0) {
-						expires = Math.max(0, Math.floor(expiryEpoch - Date.now() / 1000));
-					}
-					return { ipaddr: ip, macaddr: mac, hostname, expires };
-				});
-		} catch {
-			// Continue into ARP fallback.
-		}
-
-		try {
-			const [status, result] = await this.core.ubusCall('file', 'read', { path: '/proc/net/arp' });
-			if (status !== 0 || !result?.data) return [];
-			const arpRows = String(result.data)
-				.split('\n')
-				.slice(1)
-				.map(line => line.trim())
-				.filter(Boolean)
-				.map(line => line.split(/\s+/))
-				.filter(parts => parts.length >= 6)
-				.filter(parts => parts[3] && parts[3] !== '00:00:00:00:00:00')
-				.map(parts => ({
-					ipaddr: parts[0] || 'N/A',
-					macaddr: parts[3] || 'N/A',
-					hostname: 'Unknown',
-					expires: NaN
-				}));
-			if (arpRows.length > 0) return arpRows;
-		} catch {
-			// Continue into ip-neigh fallback.
-		}
-
-		// Final fallback: neighbor table (IPv4+IPv6), useful when ARP is sparse.
-		try {
 			const [status, result] = await this.core.ubusCall('file', 'exec', {
 				command: '/bin/sh',
-				params: ['-c', '/sbin/ip neigh show 2>/dev/null || ip neigh show 2>/dev/null']
+				params: [
+					'-c',
+					'if command -v conntrack >/dev/null 2>&1; then conntrack -L 2>/dev/null | head -n 500; ' +
+						'elif [ -r /proc/net/nf_conntrack ]; then head -n 500 /proc/net/nf_conntrack 2>/dev/null; ' +
+						'elif [ -r /proc/net/ip_conntrack ]; then head -n 500 /proc/net/ip_conntrack 2>/dev/null; ' +
+						'fi'
+				]
 			});
 			if (status !== 0 || !result?.stdout) return [];
-			return String(result.stdout)
-				.split('\n')
-				.map(line => line.trim())
-				.filter(Boolean)
-				.map(line => {
-					const ipMatch = line.match(/^(\S+)/);
-					const macMatch = line.match(/\blladdr\s+([0-9a-f:]{17})\b/i);
-					const stateMatch = line.match(/\b(REACHABLE|STALE|DELAY|PROBE|PERMANENT|FAILED|INCOMPLETE)\b/i);
-					return {
-						ipaddr: ipMatch ? ipMatch[1] : 'N/A',
-						macaddr: macMatch ? macMatch[1] : 'N/A',
-						hostname: 'Unknown',
-						expires: NaN,
-						state: stateMatch ? stateMatch[1].toUpperCase() : 'Active'
-					};
-				});
+			return this.parseConntrackRows(String(result.stdout || ''));
 		} catch {
 			return [];
 		}
+	}
+
+	parseConntrackRows(raw) {
+		return String(raw || '')
+			.split('\n')
+			.map(line => line.trim())
+			.filter(Boolean)
+			.map(line => this.parseConntrackLine(line))
+			.filter(Boolean);
+	}
+
+	parseConntrackLine(line) {
+		const text = String(line || '').trim();
+		if (!text) return null;
+
+		const tokens = text.split(/\s+/);
+		let protocol = '';
+		for (const token of tokens) {
+			if (/^(tcp|udp|icmp|icmpv6|sctp|gre|dccp)$/i.test(token)) {
+				protocol = token.toLowerCase();
+				break;
+			}
+		}
+
+		const stateMatch = text.match(
+			/\b(ESTABLISHED|SYN_SENT|SYN_RECV|FIN_WAIT|TIME_WAIT|CLOSE|CLOSE_WAIT|LAST_ACK|LISTEN|CLOSING|UNREPLIED|ASSURED)\b/i
+		);
+		const srcMatches = [...text.matchAll(/\bsrc=([^\s]+)/g)];
+		const dstMatches = [...text.matchAll(/\bdst=([^\s]+)/g)];
+		const sportMatches = [...text.matchAll(/\bsport=([^\s]+)/g)];
+		const dportMatches = [...text.matchAll(/\bdport=([^\s]+)/g)];
+
+		const src = srcMatches[0]?.[1] || '';
+		const dst = dstMatches[0]?.[1] || '';
+		const sport = sportMatches[0]?.[1] || '';
+		const dport = dportMatches[0]?.[1] || '';
+
+		return {
+			source: src ? `${src}${sport ? `:${sport}` : ''}` : 'N/A',
+			destination: dst ? `${dst}${dport ? `:${dport}` : ''}` : 'N/A',
+			protocol: protocol || 'unknown',
+			state: stateMatch ? stateMatch[1].toUpperCase() : 'ACTIVE'
+		};
+	}
+
+	renderConntrackStateBadge(state) {
+		const s = String(state || 'ACTIVE').toUpperCase();
+		if (s === 'ESTABLISHED' || s === 'ASSURED') return this.core.renderBadge('success', s);
+		if (s === 'UNREPLIED' || s === 'SYN_SENT' || s === 'SYN_RECV') return this.core.renderBadge('warning', s);
+		return this.core.renderBadge('info', s);
 	}
 
 	async runDiagnostic(type) {
