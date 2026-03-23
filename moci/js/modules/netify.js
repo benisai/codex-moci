@@ -19,7 +19,7 @@ export default class NetifyModule {
 		this.lastFlowCount = -1;
 		this.loadChunkSize = 3000;
 		this.sqlChunkSize = 200;
-		this.sqlChunkCalls = 15;
+		this.sqlChunkCalls = 100;
 		this.lastLoadedLimit = 0;
 		this.loadedOffset = 0;
 		this.hasMoreFlows = true;
