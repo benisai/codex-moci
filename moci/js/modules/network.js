@@ -119,6 +119,9 @@ export default class NetworkModule {
 		const addBtn = (id, modalId) => {
 			document.getElementById(id)?.addEventListener('click', () => {
 				this.core.resetModal(modalId);
+				if (id === 'add-forward-btn') {
+					this.loadForwardDeviceOptions();
+				}
 				this.core.openModal(modalId);
 			});
 		};
@@ -436,6 +439,7 @@ export default class NetworkModule {
 			const [status, result] = await this.core.uciGet('firewall', id);
 			if (status !== 0 || !result?.values) throw new Error('Not found');
 			const c = result.values;
+			await this.loadForwardDeviceOptions();
 			document.getElementById('edit-forward-section').value = id;
 			document.getElementById('edit-forward-name').value = c.name || '';
 			document.getElementById('edit-forward-proto').value = c.proto || 'tcp';
@@ -446,6 +450,35 @@ export default class NetworkModule {
 			this.core.openModal('forward-modal');
 		} catch {
 			this.core.showToast('Failed to load rule', 'error');
+		}
+	}
+
+	async loadForwardDeviceOptions() {
+		const list = document.getElementById('forward-device-list');
+		if (!list) return;
+
+		let leases = [];
+		try {
+			const [status, result] = await this.core.ubusCall('luci-rpc', 'getDHCPLeases', {});
+			if (status === 0 && Array.isArray(result?.dhcp_leases)) {
+				leases = result.dhcp_leases;
+			}
+		} catch {}
+
+		const options = leases
+			.map(lease => ({
+				ip: String(lease.ipaddr || '').trim(),
+				hostname: String(lease.hostname || 'Unknown').trim()
+			}))
+			.filter(item => item.ip)
+			.sort((a, b) => a.hostname.localeCompare(b.hostname));
+
+		list.innerHTML = '';
+		for (const option of options) {
+			const el = document.createElement('option');
+			el.value = option.ip;
+			el.label = `${option.hostname} (${option.ip})`;
+			list.appendChild(el);
 		}
 	}
 
