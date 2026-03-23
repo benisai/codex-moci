@@ -292,16 +292,65 @@ export default class MonitoringModule {
 	}
 
 	renderAll() {
-		this.renderStatusCard();
-		this.renderTimeline();
-		this.renderRecentTable();
+		const aggregated = this.aggregateFiveMinuteSamples(this.samples);
+		this.renderStatusCard(aggregated);
+		this.renderTimeline(aggregated);
+		this.renderRecentTable(aggregated);
 	}
 
-	renderStatusCard() {
+	aggregateFiveMinuteSamples(samples) {
+		const bucketMs = 5 * 60 * 1000;
+		const buckets = new Map();
+
+		for (const sample of samples || []) {
+			const ts = Number(sample?.ts) || Date.now();
+			const bucketStart = Math.floor(ts / bucketMs) * bucketMs;
+			let b = buckets.get(bucketStart);
+			if (!b) {
+				b = {
+					start: bucketStart,
+					lastTs: ts,
+					target: sample?.target || this.target,
+					total: 0,
+					valid: 0,
+					latencySum: 0
+				};
+				buckets.set(bucketStart, b);
+			}
+
+			b.total += 1;
+			if (sample?.latency != null && Number.isFinite(Number(sample.latency))) {
+				b.valid += 1;
+				b.latencySum += Number(sample.latency);
+			}
+			if (ts > b.lastTs) {
+				b.lastTs = ts;
+				b.target = sample?.target || b.target;
+			}
+		}
+
+		return Array.from(buckets.values())
+			.sort((a, b) => a.start - b.start)
+			.map(b => {
+				const latency = b.valid > 0 ? b.latencySum / b.valid : null;
+				const status = latency == null ? 'error' : this.getStatusFromLatency(latency);
+				return {
+					ts: b.lastTs,
+					target: b.target || this.target,
+					latency,
+					status,
+					totalPings: b.total,
+					validPings: b.valid,
+					lossPct: b.total > 0 ? ((b.total - b.valid) / b.total) * 100 : 0
+				};
+			});
+	}
+
+	renderStatusCard(displaySamples = []) {
 		const toggleBtn = document.getElementById('monitoring-toggle-btn');
 		if (toggleBtn) toggleBtn.textContent = this.serviceRunning ? 'STOP SERVICE' : 'START SERVICE';
 
-		const latest = this.samples[this.samples.length - 1];
+		const latest = displaySamples[displaySamples.length - 1];
 		const latencyEl = document.getElementById('monitoring-latency');
 		const statusEl = document.getElementById('monitoring-status');
 		const avgEl = document.getElementById('monitoring-avg');
@@ -316,10 +365,12 @@ export default class MonitoringModule {
 			statusEl.innerHTML = statusBadge;
 		}
 
-		const windowSamples = this.samples.slice(-12);
+		const windowSamples = displaySamples.slice(-12);
 		const valid = windowSamples.filter(s => s.latency != null);
 		const avg = valid.length > 0 ? valid.reduce((sum, s) => sum + s.latency, 0) / valid.length : 0;
-		const loss = windowSamples.length > 0 ? ((windowSamples.length - valid.length) / windowSamples.length) * 100 : 0;
+		const totalPings = windowSamples.reduce((sum, s) => sum + (Number(s.totalPings) || 0), 0);
+		const totalValid = windowSamples.reduce((sum, s) => sum + (Number(s.validPings) || 0), 0);
+		const loss = totalPings > 0 ? ((totalPings - totalValid) / totalPings) * 100 : 0;
 
 		if (avgEl) avgEl.textContent = `${avg.toFixed(1)} ms`;
 		if (lossEl) lossEl.textContent = `${loss.toFixed(0)}%`;
@@ -333,12 +384,12 @@ export default class MonitoringModule {
 		return this.core.renderBadge('error', 'outage');
 	}
 
-	renderTimeline() {
+	renderTimeline(displaySamples = []) {
 		const bars = document.getElementById('monitoring-timeline-bars');
 		const labels = document.getElementById('monitoring-timeline-labels');
 		if (!bars || !labels) return;
 
-		const segments = this.samples.slice(-12);
+		const segments = displaySamples.slice(-12);
 		if (segments.length === 0) {
 			bars.innerHTML = '<div class="monitoring-empty">No data yet</div>';
 			labels.innerHTML = '';
@@ -349,7 +400,7 @@ export default class MonitoringModule {
 			.map(segment => {
 				const cls = this.getSegmentClass(segment);
 				const latency = segment.latency != null ? `${segment.latency.toFixed(1)}ms` : 'timeout';
-				const title = `${this.formatTime(segment.ts)} • ${latency}`;
+				const title = `${this.formatTime(segment.ts)} • avg ${latency} (${segment.validPings || 0}/${segment.totalPings || 0} pings)`;
 				return `<div class="monitoring-segment ${cls}" title="${this.core.escapeHtml(title)}"></div>`;
 			})
 			.join('');
@@ -367,11 +418,11 @@ export default class MonitoringModule {
 		return 'seg-ok';
 	}
 
-	renderRecentTable() {
+	renderRecentTable(displaySamples = []) {
 		const tbody = document.querySelector('#monitoring-recent-table tbody');
 		if (!tbody) return;
 
-		const rows = this.samples.slice(-12).reverse();
+		const rows = displaySamples.slice(-12).reverse();
 		if (rows.length === 0) {
 			this.core.renderEmptyTable(tbody, 4, 'No ping samples yet');
 			return;
@@ -379,7 +430,7 @@ export default class MonitoringModule {
 
 		tbody.innerHTML = rows
 			.map(row => {
-					const latency = row.latency != null ? `${row.latency.toFixed(1)} ms` : 'timeout';
+					const latency = row.latency != null ? `${row.latency.toFixed(1)} ms avg` : 'timeout';
 					return `<tr>
 						<td>${this.core.escapeHtml(this.formatTime(row.ts))}</td>
 						<td>${this.core.escapeHtml(row.target || this.target)}</td>
