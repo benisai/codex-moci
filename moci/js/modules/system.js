@@ -6,6 +6,9 @@ export default class SystemModule {
 		this.cronRaw = '';
 		this.sshKeysRaw = '';
 		this.firmwareFile = null;
+		this.packages = [];
+		this.packagesPage = 0;
+		this.packagesPageSize = 50;
 
 		this.core.registerRoute('/system', (path, subPaths) => {
 			const pageElement = document.getElementById('system-page');
@@ -40,6 +43,14 @@ export default class SystemModule {
 		document.getElementById('backup-btn')?.addEventListener('click', () => this.createBackup());
 		document.getElementById('reset-btn')?.addEventListener('click', () => this.factoryReset());
 		document.getElementById('reboot-btn')?.addEventListener('click', () => this.rebootSystem());
+		document.getElementById('packages-prev-btn')?.addEventListener('click', () => {
+			this.packagesPage = Math.max(0, this.packagesPage - 1);
+			this.renderPackagesTable();
+		});
+		document.getElementById('packages-next-btn')?.addEventListener('click', () => {
+			this.packagesPage += 1;
+			this.renderPackagesTable();
+		});
 		document
 			.getElementById('restart-network-btn')
 			?.addEventListener('click', () => this.core.serviceReload('network'));
@@ -303,27 +314,48 @@ export default class SystemModule {
 				if (pkg.name) packages.push(pkg);
 			}
 
-			const tbody = document.querySelector('#packages-table tbody');
-			if (!tbody) return;
-			if (packages.length === 0) {
-				this.core.renderEmptyTable(tbody, 3, 'No packages found');
-				return;
-			}
-			const display = packages.slice(0, 100);
-			let html = display
-				.map(
-					p => `<tr>
+			this.packages = packages;
+			this.packagesPage = 0;
+			this.renderPackagesTable();
+		});
+	}
+
+	renderPackagesTable() {
+		const tbody = document.querySelector('#packages-table tbody');
+		const infoEl = document.getElementById('packages-page-info');
+		const prevBtn = document.getElementById('packages-prev-btn');
+		const nextBtn = document.getElementById('packages-next-btn');
+		if (!tbody) return;
+
+		const total = this.packages.length;
+		if (total === 0) {
+			this.core.renderEmptyTable(tbody, 3, 'No packages found');
+			if (infoEl) infoEl.textContent = '0-0 of 0';
+			if (prevBtn) prevBtn.disabled = true;
+			if (nextBtn) nextBtn.disabled = true;
+			return;
+		}
+
+		const maxPage = Math.max(0, Math.ceil(total / this.packagesPageSize) - 1);
+		if (this.packagesPage > maxPage) this.packagesPage = maxPage;
+
+		const startIdx = this.packagesPage * this.packagesPageSize;
+		const endIdx = Math.min(total, startIdx + this.packagesPageSize);
+		const pageRows = this.packages.slice(startIdx, endIdx);
+
+		tbody.innerHTML = pageRows
+			.map(
+				p => `<tr>
 				<td>${this.core.escapeHtml(p.name)}</td>
 				<td>${this.core.escapeHtml(p.version)}</td>
 				<td>${this.core.renderBadge('success', 'Installed')}</td>
 			</tr>`
-				)
-				.join('');
-			if (packages.length > 100) {
-				html += `<tr><td colspan="3" style="text-align:center;color:var(--steel-muted)">Showing 100 of ${packages.length} packages</td></tr>`;
-			}
-			tbody.innerHTML = html;
-		});
+			)
+			.join('');
+
+		if (infoEl) infoEl.textContent = `${startIdx + 1}-${endIdx} of ${total}`;
+		if (prevBtn) prevBtn.disabled = this.packagesPage <= 0;
+		if (nextBtn) nextBtn.disabled = this.packagesPage >= maxPage;
 	}
 
 	async loadStartup() {
