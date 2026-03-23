@@ -850,19 +850,31 @@ export default class NetworkModule {
 			}
 
 			let globalSection = null;
-			const sources = [];
+			const rows = [];
 			for (const [section, cfg] of Object.entries(config)) {
 				const type = String(cfg?.['.type'] || '');
 				if ((type === 'adblock' || section === 'global') && !globalSection) {
 					globalSection = { id: section, values: cfg };
 				} else if (type === 'source') {
-					sources.push({
-						section,
+					rows.push({
+						id: `source:${section}`,
 						name: String(cfg.adb_srcdesc || cfg.name || section),
 						url: String(cfg.adb_src || cfg.url || ''),
-						enabled: this.isEnabledValue(cfg.enabled)
+						enabled: this.isEnabledValue(cfg.enabled),
+						kind: 'source'
 					});
 				}
+			}
+
+			const feedList = this.parseAdblockFeedList(globalSection?.values?.adb_feed);
+			for (const feed of feedList) {
+				rows.push({
+					id: `feed:${feed}`,
+					name: feed,
+					url: 'Preset feed',
+					enabled: true,
+					kind: 'feed'
+				});
 			}
 
 			document.getElementById('adblock-enabled').checked = this.isEnabledValue(
@@ -872,18 +884,18 @@ export default class NetworkModule {
 				globalSection?.values?.adb_safesearch ?? globalSection?.values?.safesearch ?? '0'
 			);
 
-			if (sources.length === 0) {
+			if (rows.length === 0) {
 				this.core.renderEmptyTable(tbody, 4, 'No target lists configured');
 				return;
 			}
 
-			tbody.innerHTML = sources
+			tbody.innerHTML = rows
 				.map(
 					row => `<tr>
 				<td>${this.core.escapeHtml(row.name)}</td>
 				<td>${this.core.escapeHtml(row.url || 'N/A')}</td>
 				<td>${row.enabled ? this.core.renderBadge('success', 'ENABLED') : this.core.renderBadge('error', 'DISABLED')}</td>
-				<td><button class="action-btn-sm danger" data-action="delete" data-id="${this.core.escapeHtml(row.section)}">DELETE</button></td>
+				<td><button class="action-btn-sm danger" data-action="delete" data-id="${this.core.escapeHtml(row.id)}">DELETE</button></td>
 			</tr>`
 				)
 				.join('');
@@ -939,6 +951,23 @@ export default class NetworkModule {
 		return v === '1' || v === 'true' || v === 'on' || v === 'enabled' || v === 'yes';
 	}
 
+	parseAdblockFeedList(value) {
+		if (Array.isArray(value)) {
+			return value
+				.map(v => this.stripOuterQuotes(v))
+				.filter(Boolean);
+		}
+		const raw = String(value || '');
+		const quoted = [...raw.matchAll(/'([^']+)'|"([^"]+)"/g)]
+			.map(m => m[1] || m[2])
+			.filter(Boolean);
+		if (quoted.length > 0) return quoted;
+		return raw
+			.split(/\s+/)
+			.map(v => this.stripOuterQuotes(v))
+			.filter(Boolean);
+	}
+
 	async saveAdblockSettings() {
 		const enabled = document.getElementById('adblock-enabled')?.checked ? '1' : '0';
 		const safesearch = document.getElementById('adblock-safesearch')?.checked ? '1' : '0';
@@ -974,20 +1003,23 @@ export default class NetworkModule {
 			this.core.showToast('Target list name is required', 'error');
 			return;
 		}
-		if (!/^https?:\/\/\S+/i.test(url)) {
+		if (url && !/^https?:\/\/\S+/i.test(url)) {
 			this.core.showToast('Enter a valid target list URL', 'error');
 			return;
 		}
 
 		try {
-			const [status, result] = await this.core.uciAdd('adblock', 'source');
-			if (status !== 0 || !result?.section) throw new Error('Unable to create adblock source');
-			await this.core.uciSet('adblock', result.section, {
-				name,
-				adb_srcdesc: name,
-				adb_src: url,
-				enabled
-			});
+			if (url) {
+				const [status, result] = await this.core.uciAdd('adblock', 'source');
+				if (status !== 0 || !result?.section) throw new Error('Unable to create adblock source');
+				await this.core.uciSet('adblock', result.section, {
+					name,
+					adb_srcdesc: name,
+					adb_src: url,
+					enabled
+				});
+			}
+			await this.appendAdblockFeed(name);
 			await this.core.uciCommit('adblock');
 			await this.reloadAdblockService();
 			this.core.showToast('Target list added', 'success');
@@ -1004,7 +1036,12 @@ export default class NetworkModule {
 		if (!section) return;
 		if (!confirm('Delete this target list?')) return;
 		try {
-			await this.core.uciDelete('adblock', section);
+			const id = String(section);
+			if (id.startsWith('source:')) {
+				await this.core.uciDelete('adblock', id.slice('source:'.length));
+			} else if (id.startsWith('feed:')) {
+				await this.removeAdblockFeed(id.slice('feed:'.length));
+			}
 			await this.core.uciCommit('adblock');
 			await this.reloadAdblockService();
 			this.core.showToast('Target list deleted', 'success');
@@ -1024,6 +1061,22 @@ export default class NetworkModule {
 					'/etc/init.d/adblock start 2>/dev/null || true'
 			]
 		});
+	}
+
+	async appendAdblockFeed(feedName) {
+		const [status, result] = await this.core.uciGet('adblock', 'global');
+		if (status !== 0 || !result?.values) throw new Error('adblock global section not found');
+		const current = this.parseAdblockFeedList(result.values.adb_feed);
+		if (!current.includes(feedName)) current.push(feedName);
+		await this.core.uciSet('adblock', 'global', { adb_feed: current });
+	}
+
+	async removeAdblockFeed(feedName) {
+		const [status, result] = await this.core.uciGet('adblock', 'global');
+		if (status !== 0 || !result?.values) throw new Error('adblock global section not found');
+		const current = this.parseAdblockFeedList(result.values.adb_feed);
+		const next = current.filter(v => v !== feedName);
+		await this.core.uciSet('adblock', 'global', { adb_feed: next });
 	}
 
 	async loadDDNS() {
