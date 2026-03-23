@@ -1414,22 +1414,24 @@
 
 						<div class="tab-content hidden" id="tab-adblock" data-feature="adblock">
 							<div class="stat-card">
-								<div class="section-title">ADBLOCK SETTINGS</div>
+								<div class="section-title">ADBLOCK CONFIGURATION</div>
 								<div class="form-group">
-									<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
-										<input type="checkbox" id="adblock-enabled" />
-										<span>ENABLE ADBLOCK</span>
-									</label>
+									<label class="form-label">ENABLE ADBLOCK</label>
+									<select id="adblock-enabled" class="form-input">
+										<option value="0">Disabled</option>
+										<option value="1">Enabled</option>
+									</select>
 								</div>
 								<div class="form-group">
-									<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
-										<input type="checkbox" id="adblock-safesearch" />
-										<span>ENABLE SAFESEARCH</span>
-									</label>
+									<label class="form-label">ENABLE SAFESEARCH</label>
+									<select id="adblock-safesearch" class="form-input">
+										<option value="0">Disabled</option>
+										<option value="1">Enabled</option>
+									</select>
 								</div>
 								<div class="quick-actions">
-									<button class="action-btn" id="save-adblock-settings-btn">SAVE SETTINGS</button>
-									<button class="action-btn" id="refresh-adblock-btn">REFRESH</button>
+									<button class="action-btn" id="save-adblock-settings-btn">SAVE CONFIGURATION</button>
+									<button class="action-btn" id="refresh-adblock-btn">REFRESH STATUS</button>
 								</div>
 							</div>
 
@@ -1449,10 +1451,11 @@
 									/>
 								</div>
 								<div class="form-group">
-									<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
-										<input type="checkbox" id="adblock-new-list-enabled" checked />
-										<span>ENABLED</span>
-									</label>
+									<label class="form-label">LIST STATUS</label>
+									<select id="adblock-new-list-enabled" class="form-input">
+										<option value="1">Enabled</option>
+										<option value="0">Disabled</option>
+									</select>
 								</div>
 								<div class="quick-actions" style="margin-bottom: 16px">
 									<button class="action-btn" id="add-adblock-list-btn">ADD TARGET LIST</button>

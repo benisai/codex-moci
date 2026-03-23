@@ -843,8 +843,8 @@ export default class NetworkModule {
 			}
 
 			if (!config) {
-				document.getElementById('adblock-enabled').checked = false;
-				document.getElementById('adblock-safesearch').checked = false;
+				document.getElementById('adblock-enabled').value = '0';
+				document.getElementById('adblock-safesearch').value = '0';
 				this.core.renderEmptyTable(tbody, 4, 'Adblock config not found. Install adblock/luci-app-adblock first.');
 				return;
 			}
@@ -877,12 +877,16 @@ export default class NetworkModule {
 				});
 			}
 
-			document.getElementById('adblock-enabled').checked = this.isEnabledValue(
+			document.getElementById('adblock-enabled').value = this.isEnabledValue(
 				globalSection?.values?.adb_enabled ?? globalSection?.values?.enabled ?? '0'
-			);
-			document.getElementById('adblock-safesearch').checked = this.isEnabledValue(
+			)
+				? '1'
+				: '0';
+			document.getElementById('adblock-safesearch').value = this.isEnabledValue(
 				globalSection?.values?.adb_safesearch ?? globalSection?.values?.safesearch ?? '0'
-			);
+			)
+				? '1'
+				: '0';
 
 			if (rows.length === 0) {
 				this.core.renderEmptyTable(tbody, 4, 'No target lists configured');
@@ -969,8 +973,8 @@ export default class NetworkModule {
 	}
 
 	async saveAdblockSettings() {
-		const enabled = document.getElementById('adblock-enabled')?.checked ? '1' : '0';
-		const safesearch = document.getElementById('adblock-safesearch')?.checked ? '1' : '0';
+		const enabled = String(document.getElementById('adblock-enabled')?.value || '0') === '1' ? '1' : '0';
+		const safesearch = String(document.getElementById('adblock-safesearch')?.value || '0') === '1' ? '1' : '0';
 
 		try {
 			let section = 'global';
@@ -997,7 +1001,7 @@ export default class NetworkModule {
 	async addAdblockTargetList() {
 		const name = String(document.getElementById('adblock-new-list-name')?.value || '').trim();
 		const url = String(document.getElementById('adblock-new-list-url')?.value || '').trim();
-		const enabled = document.getElementById('adblock-new-list-enabled')?.checked ? '1' : '0';
+		const enabled = String(document.getElementById('adblock-new-list-enabled')?.value || '1') === '1' ? '1' : '0';
 
 		if (!name) {
 			this.core.showToast('Target list name is required', 'error');
@@ -1025,7 +1029,7 @@ export default class NetworkModule {
 			this.core.showToast('Target list added', 'success');
 			document.getElementById('adblock-new-list-name').value = '';
 			document.getElementById('adblock-new-list-url').value = '';
-			document.getElementById('adblock-new-list-enabled').checked = true;
+			document.getElementById('adblock-new-list-enabled').value = '1';
 			await this.loadAdblock();
 		} catch {
 			this.core.showToast('Failed to add target list', 'error');
