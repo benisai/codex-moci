@@ -92,8 +92,6 @@ scp -r moci/* root@192.168.1.1:/www/moci/
 ## Installation
 ### Manual Install
 
-**Quick start:**
-
 ```bash
 opkg update or apk update
 opkg install / apk add git git-http ca-bundle nano
@@ -117,7 +115,7 @@ uci commit uhttpd
 Access at `http://192.168.1.1/moci/` and login with your root credentials.
 
 
-What it does:
+What does the shell script do?:
 - installs required packages (`netifyd`, `netcat`, `vnstat`, `nlbwmon`, etc.)
 - deploys web UI to `/www/moci`
 - installs/updates `rpcd` ACL (`/usr/share/rpcd/acl.d/moci.json`)
@@ -129,24 +127,11 @@ What it does:
 - installs `/etc/config/moci` defaults for Monitoring + Netify
 - enables/restarts `rpcd`, `uhttpd`, `netify-collector`, `ping-monitor`, `vnstat`, `nlbwmon`, `netifyd`
 
-After running, open:
+After running script, open:
 - `http://<router-lan-ip>/moci/`
 
 If ACLs changed, log out/in once to refresh your ubus session permissions.
 
----
-
-## Building from Source
-
-To build the ipk package yourself:
-
-```bash
-# In OpenWrt buildroot
-git clone https://github.com/HudsonGraeme/MoCI.git package/moci
-make package/moci/compile
-```
-
-The package will be in `bin/packages/*/base/moci_*.ipk`
 
 ---
 
