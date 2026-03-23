@@ -7,8 +7,10 @@ export default class SystemModule {
 		this.sshKeysRaw = '';
 		this.firmwareFile = null;
 		this.packages = [];
+		this.filteredPackages = [];
 		this.packagesPage = 0;
 		this.packagesPageSize = 50;
+		this.packagesQuery = '';
 
 		this.core.registerRoute('/system', (path, subPaths) => {
 			const pageElement = document.getElementById('system-page');
@@ -43,6 +45,14 @@ export default class SystemModule {
 		document.getElementById('backup-btn')?.addEventListener('click', () => this.createBackup());
 		document.getElementById('reset-btn')?.addEventListener('click', () => this.factoryReset());
 		document.getElementById('reboot-btn')?.addEventListener('click', () => this.rebootSystem());
+		document.getElementById('packages-search')?.addEventListener('input', event => {
+			this.packagesQuery = String(event?.target?.value || '')
+				.trim()
+				.toLowerCase();
+			this.packagesPage = 0;
+			this.applyPackageFilter();
+			this.renderPackagesTable();
+		});
 		document.getElementById('packages-prev-btn')?.addEventListener('click', () => {
 			this.packagesPage = Math.max(0, this.packagesPage - 1);
 			this.renderPackagesTable();
@@ -315,9 +325,23 @@ export default class SystemModule {
 			}
 
 			this.packages = packages;
+			this.applyPackageFilter();
 			this.packagesPage = 0;
 			this.renderPackagesTable();
 		});
+	}
+
+	applyPackageFilter() {
+		const q = this.packagesQuery;
+		if (!q) {
+			this.filteredPackages = [...this.packages];
+			return;
+		}
+		this.filteredPackages = this.packages.filter(pkg =>
+			`${pkg.name || ''} ${pkg.version || ''}`
+				.toLowerCase()
+				.includes(q)
+		);
 	}
 
 	renderPackagesTable() {
@@ -327,9 +351,10 @@ export default class SystemModule {
 		const nextBtn = document.getElementById('packages-next-btn');
 		if (!tbody) return;
 
-		const total = this.packages.length;
+		const source = Array.isArray(this.filteredPackages) ? this.filteredPackages : [];
+		const total = source.length;
 		if (total === 0) {
-			this.core.renderEmptyTable(tbody, 3, 'No packages found');
+			this.core.renderEmptyTable(tbody, 3, this.packagesQuery ? 'No matching packages' : 'No packages found');
 			if (infoEl) infoEl.textContent = '0-0 of 0';
 			if (prevBtn) prevBtn.disabled = true;
 			if (nextBtn) nextBtn.disabled = true;
@@ -341,7 +366,7 @@ export default class SystemModule {
 
 		const startIdx = this.packagesPage * this.packagesPageSize;
 		const endIdx = Math.min(total, startIdx + this.packagesPageSize);
-		const pageRows = this.packages.slice(startIdx, endIdx);
+		const pageRows = source.slice(startIdx, endIdx);
 
 		tbody.innerHTML = pageRows
 			.map(
