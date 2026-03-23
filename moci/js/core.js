@@ -132,6 +132,7 @@ export class OpenWrtCore {
 			firewall: '1',
 			dhcp: '1',
 			dns: '1',
+			adblock: '1',
 			wireguard: '1',
 			qos: '1',
 			ddns: '1',
@@ -193,7 +194,7 @@ export class OpenWrtCore {
 		const moduleFeatures = {
 			dashboard: ['dashboard'],
 			devices: ['devices'],
-			network: ['network', 'wireless', 'firewall', 'dhcp', 'dns', 'diagnostics'],
+			network: ['network', 'wireless', 'firewall', 'dhcp', 'dns', 'adblock', 'diagnostics'],
 			monitoring: ['monitoring'],
 			system: ['system', 'backup', 'packages', 'services', 'ssh_keys', 'storage', 'leds', 'firmware'],
 			netify: ['netify'],

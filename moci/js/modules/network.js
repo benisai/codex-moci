@@ -18,6 +18,7 @@ export default class NetworkModule {
 					firewall: () => this.loadFirewall(),
 					dhcp: () => this.loadDHCP(),
 					dns: () => this.loadDNS(),
+					adblock: () => this.loadAdblock(),
 					ddns: () => this.loadDDNS(),
 					qos: () => this.loadQoS(),
 					vpn: () => this.loadVPN(),
@@ -152,6 +153,14 @@ export default class NetworkModule {
 		document.getElementById('save-qos-config-btn')?.addEventListener('click', () => this.saveQoSConfig());
 		document.getElementById('save-wg-config-btn')?.addEventListener('click', () => this.saveWgConfig());
 		document.getElementById('generate-wg-keys-btn')?.addEventListener('click', () => this.generateWgKeys());
+		document.getElementById('save-adblock-settings-btn')?.addEventListener('click', () => this.saveAdblockSettings());
+		document.getElementById('refresh-adblock-btn')?.addEventListener('click', () => this.loadAdblock());
+		document.getElementById('add-adblock-list-btn')?.addEventListener('click', () => this.addAdblockTargetList());
+
+		const adblockCleanup = this.core.delegateActions('adblock-targets-table', {
+			delete: id => this.deleteAdblockTargetList(id)
+		});
+		if (adblockCleanup) this.cleanups.push(adblockCleanup);
 	}
 
 	setupDiagnostics() {
@@ -817,6 +826,149 @@ export default class NetworkModule {
 		} catch {
 			this.core.showToast('Failed to delete hosts entry', 'error');
 		}
+	}
+
+	async loadAdblock() {
+		await this.core.loadResource('adblock-targets-table', 4, 'adblock', async () => {
+			const tbody = document.querySelector('#adblock-targets-table tbody');
+			if (!tbody) return;
+
+			let config = null;
+			try {
+				const [status, result] = await this.core.uciGet('adblock');
+				if (status === 0 && result?.values) config = result.values;
+			} catch {}
+
+			if (!config) {
+				document.getElementById('adblock-enabled').checked = false;
+				document.getElementById('adblock-safesearch').checked = false;
+				this.core.renderEmptyTable(tbody, 4, 'Adblock config not found. Install adblock/luci-app-adblock first.');
+				return;
+			}
+
+			let globalSection = null;
+			const sources = [];
+			for (const [section, cfg] of Object.entries(config)) {
+				const type = String(cfg?.['.type'] || '');
+				if (type === 'adblock' && !globalSection) {
+					globalSection = { id: section, values: cfg };
+				} else if (type === 'source') {
+					sources.push({
+						section,
+						name: String(cfg.adb_srcdesc || cfg.name || section),
+						url: String(cfg.adb_src || cfg.url || ''),
+						enabled: String(cfg.enabled || '0') === '1'
+					});
+				}
+			}
+
+			document.getElementById('adblock-enabled').checked = String(globalSection?.values?.adb_enabled || '0') === '1';
+			document.getElementById('adblock-safesearch').checked =
+				String(globalSection?.values?.adb_safesearch || '0') === '1';
+
+			if (sources.length === 0) {
+				this.core.renderEmptyTable(tbody, 4, 'No target lists configured');
+				return;
+			}
+
+			tbody.innerHTML = sources
+				.map(
+					row => `<tr>
+				<td>${this.core.escapeHtml(row.name)}</td>
+				<td>${this.core.escapeHtml(row.url || 'N/A')}</td>
+				<td>${row.enabled ? this.core.renderBadge('success', 'ENABLED') : this.core.renderBadge('error', 'DISABLED')}</td>
+				<td><button class="action-btn-sm danger" data-action="delete" data-id="${this.core.escapeHtml(row.section)}">DELETE</button></td>
+			</tr>`
+				)
+				.join('');
+		});
+	}
+
+	async saveAdblockSettings() {
+		const enabled = document.getElementById('adblock-enabled')?.checked ? '1' : '0';
+		const safesearch = document.getElementById('adblock-safesearch')?.checked ? '1' : '0';
+
+		try {
+			let section = 'global';
+			const [status, result] = await this.core.uciGet('adblock', 'global');
+			if (status !== 0 || !result?.values) {
+				const [addStatus, addResult] = await this.core.uciAdd('adblock', 'adblock');
+				if (addStatus !== 0 || !addResult?.section) throw new Error('Unable to create adblock section');
+				section = addResult.section;
+			}
+
+			await this.core.uciSet('adblock', section, {
+				adb_enabled: enabled,
+				adb_safesearch: safesearch
+			});
+			await this.core.uciCommit('adblock');
+			await this.reloadAdblockService();
+			this.core.showToast('Adblock settings saved', 'success');
+			await this.loadAdblock();
+		} catch {
+			this.core.showToast('Failed to save Adblock settings', 'error');
+		}
+	}
+
+	async addAdblockTargetList() {
+		const name = String(document.getElementById('adblock-new-list-name')?.value || '').trim();
+		const url = String(document.getElementById('adblock-new-list-url')?.value || '').trim();
+		const enabled = document.getElementById('adblock-new-list-enabled')?.checked ? '1' : '0';
+
+		if (!name) {
+			this.core.showToast('Target list name is required', 'error');
+			return;
+		}
+		if (!/^https?:\/\/\S+/i.test(url)) {
+			this.core.showToast('Enter a valid target list URL', 'error');
+			return;
+		}
+
+		try {
+			const [status, result] = await this.core.uciAdd('adblock', 'source');
+			if (status !== 0 || !result?.section) throw new Error('Unable to create adblock source');
+			await this.core.uciSet('adblock', result.section, {
+				name,
+				adb_srcdesc: name,
+				adb_src: url,
+				enabled
+			});
+			await this.core.uciCommit('adblock');
+			await this.reloadAdblockService();
+			this.core.showToast('Target list added', 'success');
+			document.getElementById('adblock-new-list-name').value = '';
+			document.getElementById('adblock-new-list-url').value = '';
+			document.getElementById('adblock-new-list-enabled').checked = true;
+			await this.loadAdblock();
+		} catch {
+			this.core.showToast('Failed to add target list', 'error');
+		}
+	}
+
+	async deleteAdblockTargetList(section) {
+		if (!section) return;
+		if (!confirm('Delete this target list?')) return;
+		try {
+			await this.core.uciDelete('adblock', section);
+			await this.core.uciCommit('adblock');
+			await this.reloadAdblockService();
+			this.core.showToast('Target list deleted', 'success');
+			await this.loadAdblock();
+		} catch {
+			this.core.showToast('Failed to delete target list', 'error');
+		}
+	}
+
+	async reloadAdblockService() {
+		await this.core.ubusCall('file', 'exec', {
+			command: '/bin/sh',
+			params: [
+				'-c',
+				'/etc/init.d/adblock reload 2>/dev/null || ' +
+					'/etc/init.d/adblock restart 2>/dev/null || ' +
+					'/etc/init.d/adblock start 2>/dev/null || true'
+			]
+		});
 	}
 
 	async loadDDNS() {

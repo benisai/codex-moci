@@ -290,6 +290,7 @@
 							<button class="tab-btn" data-tab="firewall">FIREWALL</button>
 							<button class="tab-btn" data-tab="dhcp" data-feature="dhcp">DHCP</button>
 							<button class="tab-btn" data-tab="dns">DNS & HOSTS</button>
+							<button class="tab-btn" data-tab="adblock" data-feature="adblock">ADBLOCK</button>
 							<button class="tab-btn" data-tab="ddns">DDNS</button>
 							<button class="tab-btn" data-tab="qos">QOS</button>
 							<button class="tab-btn" data-tab="vpn">VPN</button>
@@ -1398,6 +1399,71 @@
 											<th>DESTINATION</th>
 											<th>PROTOCOL</th>
 											<th>STATUS</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td colspan="4" style="text-align: center; color: var(--steel-muted)">
+												Loading...
+											</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+
+						<div class="tab-content hidden" id="tab-adblock" data-feature="adblock">
+							<div class="stat-card">
+								<div class="section-title">ADBLOCK SETTINGS</div>
+								<div class="form-group">
+									<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+										<input type="checkbox" id="adblock-enabled" />
+										<span>ENABLE ADBLOCK</span>
+									</label>
+								</div>
+								<div class="form-group">
+									<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+										<input type="checkbox" id="adblock-safesearch" />
+										<span>ENABLE SAFESEARCH</span>
+									</label>
+								</div>
+								<div class="quick-actions">
+									<button class="action-btn" id="save-adblock-settings-btn">SAVE SETTINGS</button>
+									<button class="action-btn" id="refresh-adblock-btn">REFRESH</button>
+								</div>
+							</div>
+
+							<div class="stat-card" style="margin-top: 24px">
+								<div class="section-title">TARGET LISTS</div>
+								<div class="form-group">
+									<label class="form-label">LIST NAME</label>
+									<input type="text" id="adblock-new-list-name" class="form-input" placeholder="my_custom_list" />
+								</div>
+								<div class="form-group">
+									<label class="form-label">LIST URL</label>
+									<input
+										type="text"
+										id="adblock-new-list-url"
+										class="form-input"
+										placeholder="https://example.com/blocklist.txt"
+									/>
+								</div>
+								<div class="form-group">
+									<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+										<input type="checkbox" id="adblock-new-list-enabled" checked />
+										<span>ENABLED</span>
+									</label>
+								</div>
+								<div class="quick-actions" style="margin-bottom: 16px">
+									<button class="action-btn" id="add-adblock-list-btn">ADD TARGET LIST</button>
+								</div>
+								<table class="data-table" id="adblock-targets-table">
+									<thead>
+										<tr>
+											<th>NAME</th>
+											<th>URL</th>
+											<th>ENABLED</th>
+											<th>ACTIONS</th>
 										</tr>
 									</thead>
 									<tbody>
