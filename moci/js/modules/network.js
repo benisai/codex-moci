@@ -884,12 +884,10 @@ export default class NetworkModule {
 				<td>${this.core.escapeHtml(row.name)}</td>
 				<td>${this.core.escapeHtml(row.url || 'N/A')}</td>
 				<td>${row.enabled ? this.core.renderBadge('success', 'ENABLED') : this.core.renderBadge('error', 'DISABLED')}</td>
-				<td>
-					<button class="action-btn-sm" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">
-						${row.enabled ? 'DISABLE' : 'ENABLE'}
-					</button>
+				<td><div class="action-buttons">
+					<button class="action-btn-sm" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">${row.enabled ? 'DISABLE' : 'ENABLE'}</button>
 					<button class="action-btn-sm danger" data-action="delete" data-id="${this.core.escapeHtml(row.id)}">DELETE</button>
-				</td>
+				</div></td>
 			</tr>`
 				)
 				.join('');
