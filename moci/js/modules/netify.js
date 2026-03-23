@@ -259,7 +259,10 @@ pgrep -fa moci-netify-collector || true
 			await this.loadFlowTotalCount();
 			await this.refreshHostnameMap();
 			this.renderOverview();
-			if (refreshTopApps) this.renderTopApps();
+			if (refreshTopApps) {
+				this.recomputeTopAppsRows();
+				this.renderTopApps();
+			}
 			this.renderRecentFlows();
 		} catch (err) {
 			console.error('Failed to refresh Netify view:', err);
@@ -619,10 +622,7 @@ pgrep -fa moci-netify-collector || true
 		document.getElementById('netify-total-bytes').textContent = this.core.formatBytes(totalBytes);
 	}
 
-	renderTopApps() {
-		const tbody = document.querySelector('#netify-top-apps-table tbody');
-		if (!tbody) return;
-
+	recomputeTopAppsRows() {
 		const map = new Map();
 		for (const flow of this.flows) {
 			const key = flow.app || 'Unknown';
@@ -641,6 +641,13 @@ pgrep -fa moci-netify-collector || true
 				lastSeen: item.lastTs ? this.formatTimestamp(item.lastTs) : '-'
 			}));
 		this.topAppsRows = rows;
+		this.topAppsPage = 0;
+	}
+
+	renderTopApps() {
+		const tbody = document.querySelector('#netify-top-apps-table tbody');
+		if (!tbody) return;
+		const rows = Array.isArray(this.topAppsRows) ? this.topAppsRows : [];
 
 		if (rows.length === 0) {
 			this.core.renderEmptyTable(tbody, 3, 'No Netify flow data yet');
