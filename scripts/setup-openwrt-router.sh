@@ -121,6 +121,10 @@ fi
 for pkg in \
 	nano \
 	htop \
+	gawk \
+	grep \
+	sed \
+	coreutils-sort \
 	uhttpd-mod-ubus \
 	netifyd \
 	vnstat2 \
