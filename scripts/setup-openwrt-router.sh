@@ -91,6 +91,10 @@ install_first_available_pkg() {
 set_uci() {
 	key="$1"
 	value="$2"
+	value="${value#\'}"
+	value="${value%\'}"
+	value="${value#\"}"
+	value="${value%\"}"
 	uci set "$key=$value"
 }
 
@@ -152,23 +156,23 @@ fi
 install_file "$REPO_DIR/files/moci.config" /etc/config/moci 0644
 
 log "Setting uhttpd home to /www"
-set_uci uhttpd.main.home "'/www'"
+set_uci uhttpd.main.home "/www"
 uci commit uhttpd
 
 log "Applying MoCI runtime defaults"
-set_uci moci.collector.enabled "'1'"
-set_uci moci.collector.host "'127.0.0.1'"
-set_uci moci.collector.port "'7150'"
-set_uci moci.collector.db_path "'/tmp/moci-netify.sqlite'"
-set_uci moci.collector.retention_rows "'9999999'"
-set_uci moci.collector.stream_timeout "'45'"
-set_uci moci.ping_monitor.enabled "'1'"
-set_uci moci.ping_monitor.target "'1.1.1.1'"
-set_uci moci.ping_monitor.interval "'60'"
-set_uci moci.ping_monitor.threshold "'100'"
-set_uci moci.ping_monitor.timeout "'2'"
-set_uci moci.ping_monitor.output_file "'/tmp/moci-ping-monitor.txt'"
-set_uci moci.ping_monitor.max_lines "'2000'"
+set_uci moci.collector.enabled "1"
+set_uci moci.collector.host "127.0.0.1"
+set_uci moci.collector.port "7150"
+set_uci moci.collector.db_path "/tmp/moci-netify.sqlite"
+set_uci moci.collector.retention_rows "9999999"
+set_uci moci.collector.stream_timeout "45"
+set_uci moci.ping_monitor.enabled "1"
+set_uci moci.ping_monitor.target "1.1.1.1"
+set_uci moci.ping_monitor.interval "60"
+set_uci moci.ping_monitor.threshold "100"
+set_uci moci.ping_monitor.timeout "2"
+set_uci moci.ping_monitor.output_file "/tmp/moci-ping-monitor.txt"
+set_uci moci.ping_monitor.max_lines "2000"
 uci commit moci
 
 NETIFYD_CONF="/etc/netifyd.conf"
