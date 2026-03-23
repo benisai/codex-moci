@@ -708,48 +708,37 @@ export default class SystemModule {
 
 	async loadMounts() {
 		await this.core.loadResource('mounts-table', 6, 'storage', async () => {
-			const [s, r] = await this.core.ubusCall('file', 'exec', {
-				command: '/bin/df',
-				params: ['-h']
-			});
-			if (s !== 0 || !r?.stdout) throw new Error('No data');
+			const configured = await this.readConfiguredMounts();
+			const runtime = await this.readRuntimeMounts();
+			const usageByMountPoint = await this.readMountUsageByMountPoint();
 
-			const lines = r.stdout
-				.split('\n')
-				.slice(1)
-				.filter(l => l.trim());
-			const mounts = lines.map(line => {
-				const parts = line.trim().split(/\s+/);
-				return {
-					device: parts[0],
-					size: parts[1],
-					used: parts[2],
-					available: parts[3],
-					usePercent: parts[4],
-					mountPoint: parts[5]
-				};
-			});
+			const mounts = this.buildMountRows(configured, runtime, usageByMountPoint);
 
 			const charts = document.getElementById('storage-charts');
 			if (charts) {
-				charts.innerHTML = mounts
-					.filter(m => m.mountPoint !== '/dev')
-					.map(
-						m => `<div style="padding:12px;background:var(--slate-bg);border-radius:6px">
-					<div style="font-weight:600;font-size:12px;margin-bottom:8px">${this.core.escapeHtml(m.mountPoint)}</div>
-					<div class="progress-bar" style="margin-bottom:8px">
-						<div class="progress-fill" style="width:${this.core.escapeHtml(m.usePercent)}"></div>
-					</div>
-					<div style="font-size:11px;color:var(--steel-muted)">${this.core.escapeHtml(m.used)} / ${this.core.escapeHtml(m.size)} (${this.core.escapeHtml(m.usePercent)})</div>
-				</div>`
-					)
-					.join('');
+				const chartRows = mounts.filter(m => m.isMounted && this.isStorageMountPoint(m.mountPoint));
+				if (chartRows.length === 0) {
+					charts.innerHTML =
+						'<div style="padding:12px;background:var(--slate-bg);border-radius:6px;color:var(--steel-muted);font-size:12px">No mounted storage devices detected.</div>';
+				} else {
+					charts.innerHTML = chartRows
+						.map(
+							m => `<div style="padding:12px;background:var(--slate-bg);border-radius:6px">
+						<div style="font-weight:600;font-size:12px;margin-bottom:8px">${this.core.escapeHtml(m.mountPoint)}</div>
+						<div class="progress-bar" style="margin-bottom:8px">
+							<div class="progress-fill" style="width:${this.core.escapeHtml(m.usePercent)}"></div>
+						</div>
+						<div style="font-size:11px;color:var(--steel-muted)">${this.core.escapeHtml(m.used)} / ${this.core.escapeHtml(m.size)} (${this.core.escapeHtml(m.usePercent)})</div>
+					</div>`
+						)
+						.join('');
+				}
 			}
 
 			const tbody = document.querySelector('#mounts-table tbody');
 			if (!tbody) return;
 			if (mounts.length === 0) {
-				this.core.renderEmptyTable(tbody, 6, 'No mount points');
+				this.core.renderEmptyTable(tbody, 6, 'No configured or mounted storage');
 				return;
 			}
 			tbody.innerHTML = mounts
@@ -757,7 +746,7 @@ export default class SystemModule {
 					m => `<tr>
 				<td>${this.core.escapeHtml(m.device)}</td>
 				<td>${this.core.escapeHtml(m.mountPoint)}</td>
-				<td>N/A</td>
+				<td>${this.core.escapeHtml(m.filesystem || 'N/A')}</td>
 				<td>${this.core.escapeHtml(m.size)}</td>
 				<td>${this.core.escapeHtml(m.used)}</td>
 				<td>${this.core.escapeHtml(m.available)}</td>
@@ -765,6 +754,128 @@ export default class SystemModule {
 				)
 				.join('');
 		});
+	}
+
+	isStorageMountPoint(path) {
+		const p = String(path || '');
+		if (!p) return false;
+		if (p === '/') return false;
+		if (p.startsWith('/proc')) return false;
+		if (p.startsWith('/sys')) return false;
+		if (p.startsWith('/dev')) return false;
+		if (p.startsWith('/tmp')) return false;
+		if (p.startsWith('/run')) return false;
+		return true;
+	}
+
+	async readConfiguredMounts() {
+		try {
+			const [status, result] = await this.core.uciGet('fstab');
+			if (status !== 0 || !result?.values) return [];
+			return Object.entries(result.values)
+				.filter(([, v]) => v?.['.type'] === 'mount')
+				.map(([section, v]) => ({
+					section,
+					device: v.device || v.uuid || v.label || section,
+					mountPoint: v.target || '',
+					filesystem: v.fstype || '',
+					enabled: String(v.enabled || '1') !== '0'
+				}))
+				.filter(m => m.mountPoint);
+		} catch {
+			return [];
+		}
+	}
+
+	async readRuntimeMounts() {
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'read', { path: '/proc/mounts' });
+			if (status !== 0 || !result?.data) return [];
+			return String(result.data)
+				.split('\n')
+				.map(line => line.trim())
+				.filter(Boolean)
+				.map(line => {
+					const parts = line.split(/\s+/);
+					return {
+						device: parts[0] || '',
+						mountPoint: parts[1] || '',
+						filesystem: parts[2] || '',
+						isMounted: true
+					};
+				})
+				.filter(m => m.mountPoint);
+		} catch {
+			return [];
+		}
+	}
+
+	async readMountUsageByMountPoint() {
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/df',
+				params: ['-h', '-P']
+			});
+			if (status !== 0 || !result?.stdout) return new Map();
+			const lines = String(result.stdout)
+				.split('\n')
+				.slice(1)
+				.map(l => l.trim())
+				.filter(Boolean);
+			const map = new Map();
+			for (const line of lines) {
+				const parts = line.split(/\s+/);
+				if (parts.length < 6) continue;
+				map.set(parts[5], {
+					device: parts[0],
+					size: parts[1],
+					used: parts[2],
+					available: parts[3],
+					usePercent: parts[4]
+				});
+			}
+			return map;
+		} catch {
+			return new Map();
+		}
+	}
+
+	buildMountRows(configured, runtime, usageByMountPoint) {
+		const rows = [];
+		const byMountPoint = new Map();
+
+		for (const r of runtime || []) {
+			const usage = usageByMountPoint.get(r.mountPoint) || {};
+			const row = {
+				device: usage.device || r.device || 'N/A',
+				mountPoint: r.mountPoint || 'N/A',
+				filesystem: r.filesystem || 'N/A',
+				size: usage.size || 'N/A',
+				used: usage.used || 'N/A',
+				available: usage.available || 'N/A',
+				usePercent: usage.usePercent || '0%',
+				isMounted: true
+			};
+			byMountPoint.set(row.mountPoint, row);
+			rows.push(row);
+		}
+
+		for (const c of configured || []) {
+			if (byMountPoint.has(c.mountPoint)) continue;
+			rows.push({
+				device: c.device || 'N/A',
+				mountPoint: c.mountPoint || 'N/A',
+				filesystem: c.filesystem || 'N/A',
+				size: 'N/A',
+				used: c.enabled ? 'N/A' : 'Disabled',
+				available: 'N/A',
+				usePercent: '0%',
+				isMounted: false
+			});
+		}
+
+		rows.sort((a, b) => String(a.mountPoint).localeCompare(String(b.mountPoint)));
+		return rows;
 	}
 
 	async loadLED() {
