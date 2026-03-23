@@ -813,7 +813,11 @@ pgrep -fa moci-netify-collector || true
 				<td>${this.core.escapeHtml(row.timeLabel)}</td>
 				<td>${this.core.escapeHtml(this.resolveDeviceLabel(row))}</td>
 				<td>${this.core.escapeHtml(row.localIp || '-')}</td>
-				<td>${this.core.escapeHtml(row.fqdn || '-')}</td>
+				<td>
+					<span class="netify-fqdn-ellipsis" title="${this.core.escapeHtml(row.fqdn || '-')}">
+						${this.core.escapeHtml(row.fqdn || '-')}
+					</span>
+				</td>
 				<td>${this.core.escapeHtml(row.app)}</td>
 				<td>${this.core.escapeHtml(row.proto)}</td>
 				<td>${this.core.escapeHtml(row.destIp)}</td>

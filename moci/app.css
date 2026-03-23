@@ -1553,6 +1553,15 @@ select.form-input {
 	color: var(--steel-muted);
 }
 
+.netify-fqdn-ellipsis {
+	display: inline-block;
+	max-width: 250px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	vertical-align: bottom;
+}
+
 .netify-collapsible-header {
 	display: flex;
 	align-items: center;
