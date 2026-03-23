@@ -803,12 +803,13 @@ export default class DashboardModule {
 		this.updateTrafficPeriodButtons();
 
 		document.getElementById('traffic-period-hourly')?.addEventListener('click', () => this.setTrafficPeriod('hourly'));
+		document.getElementById('traffic-period-5min')?.addEventListener('click', () => this.setTrafficPeriod('5min'));
 		document.getElementById('traffic-period-daily')?.addEventListener('click', () => this.setTrafficPeriod('daily'));
 		document.getElementById('traffic-period-monthly')?.addEventListener('click', () => this.setTrafficPeriod('monthly'));
 	}
 
 	setTrafficPeriod(period) {
-		if (!['hourly', 'daily', 'monthly'].includes(period)) return;
+		if (!['5min', 'hourly', 'daily', 'monthly'].includes(period)) return;
 		if (this.trafficPeriod === period) return;
 		this.trafficPeriod = period;
 		this.lastMonthlyRefresh = 0;
@@ -818,6 +819,7 @@ export default class DashboardModule {
 
 	updateTrafficPeriodButtons() {
 		const map = {
+			'5min': 'traffic-period-5min',
 			hourly: 'traffic-period-hourly',
 			daily: 'traffic-period-daily',
 			monthly: 'traffic-period-monthly'
@@ -890,6 +892,7 @@ export default class DashboardModule {
 	getVnstatPeriodRows(traffic, period) {
 		if (!traffic) return [];
 		const keyMap = {
+			'5min': ['fiveminute', 'fiveminutes', '5minute', '5minutes', 'minute', 'minutes'],
 			hourly: ['hour', 'hours'],
 			daily: ['day', 'days'],
 			monthly: ['month', 'months']
@@ -932,13 +935,14 @@ export default class DashboardModule {
 		const minute = Number(timeObj.minute ?? timeObj.min ?? dateObj.minute) || 0;
 
 		// Some vnstat hourly rows use "id" as the hour bucket (0-23).
-		if (period === 'hourly' && !hour) {
+		if ((period === 'hourly' || period === '5min') && !hour) {
 			const maybeHour = Number(item?.id);
 			if (Number.isFinite(maybeHour) && maybeHour >= 0 && maybeHour <= 23) {
 				hour = maybeHour;
 			}
 		}
 
+		if (period === '5min') return new Date(year, month - 1, day, hour, minute).getTime();
 		if (period === 'hourly') return new Date(year, month - 1, day, hour, minute).getTime();
 		if (period === 'daily') return new Date(year, month - 1, day).getTime();
 		return new Date(year, month - 1, 1).getTime();
@@ -1087,6 +1091,7 @@ export default class DashboardModule {
 
 	formatTrafficLabel(ts, period) {
 		const d = new Date(ts);
+		if (period === '5min') return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 		if (period === 'hourly') return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 		if (period === 'daily') return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 		return d.toLocaleDateString([], { month: 'short' });
