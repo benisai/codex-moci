@@ -116,6 +116,12 @@ export default class SystemModule {
 		if (servicesCleanup) this.cleanups.push(servicesCleanup);
 
 		this.setupFirmwareUpload();
+
+		// Ensure the MOCI config panel never stays on the static "Loading..." placeholder.
+		this.loadMociConfig().catch(() => {
+			const grid = document.getElementById('moci-features-grid');
+			if (grid) grid.innerHTML = '<div style="color: var(--steel-muted)">Failed to load MoCI config.</div>';
+		});
 	}
 
 	cleanup() {
@@ -161,29 +167,33 @@ export default class SystemModule {
 		const grid = document.getElementById('moci-features-grid');
 		if (!grid) return;
 
-		let values = {};
 		try {
-			const [status, result] = await this.core.uciGet('moci', 'features');
-			if (status === 0 && result?.values) {
-				values = result.values;
-			}
-		} catch {}
+			let values = {};
+			try {
+				const [status, result] = await this.core.uciGet('moci', 'features');
+				if (status === 0 && result?.values) {
+					values = result.values;
+				}
+			} catch {}
 
-		const defaults = this.core.getDefaultFeatures ? this.core.getDefaultFeatures() : {};
-		const featureKeys = this.getMociFeatureKeys();
-		if (featureKeys.length === 0) {
-			grid.innerHTML = '<div style="color: var(--steel-muted)">No MoCI features available.</div>';
-			return;
+			const defaults = this.core.getDefaultFeatures ? this.core.getDefaultFeatures() : {};
+			const featureKeys = this.getMociFeatureKeys();
+			if (featureKeys.length === 0) {
+				grid.innerHTML = '<div style="color: var(--steel-muted)">No MoCI features available.</div>';
+				return;
+			}
+			grid.innerHTML = featureKeys
+				.map(key => {
+					const value = String(values[key] ?? defaults[key] ?? '0') === '1';
+					return `<label style="display:flex; align-items:center; gap:10px; padding:10px; border:1px solid var(--glass-border); border-radius:6px; background: rgba(255,255,255,0.02);">
+						<input type="checkbox" class="moci-feature-toggle" data-feature-key="${this.core.escapeHtml(key)}" ${value ? 'checked' : ''} />
+						<span style="font-family: var(--font-mono); font-size: 11px; color: var(--starship-steel); letter-spacing: 0.08em;">${this.core.escapeHtml(this.formatMociFeatureLabel(key))}</span>
+					</label>`;
+				})
+				.join('');
+		} catch {
+			grid.innerHTML = '<div style="color: var(--steel-muted)">Failed to load MoCI config.</div>';
 		}
-		grid.innerHTML = featureKeys
-			.map(key => {
-				const value = String(values[key] ?? defaults[key] ?? '0') === '1';
-				return `<label style="display:flex; align-items:center; gap:10px; padding:10px; border:1px solid var(--glass-border); border-radius:6px; background: rgba(255,255,255,0.02);">
-					<input type="checkbox" class="moci-feature-toggle" data-feature-key="${this.core.escapeHtml(key)}" ${value ? 'checked' : ''} />
-					<span style="font-family: var(--font-mono); font-size: 11px; color: var(--starship-steel); letter-spacing: 0.08em;">${this.core.escapeHtml(this.formatMociFeatureLabel(key))}</span>
-				</label>`;
-			})
-			.join('');
 	}
 
 	async saveMociConfig() {
