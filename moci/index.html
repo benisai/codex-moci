@@ -267,11 +267,18 @@
 										</div>
 										<div class="form-group">
 											<label class="form-label">STATIC IP ADDRESS</label>
-											<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px">
-												<input type="checkbox" id="devices-pin-static" />
-												<label class="form-label" for="devices-pin-static" style="margin: 0">STATIC</label>
+											<div style="display: flex; align-items: center; gap: 8px">
+												<input
+													type="text"
+													id="devices-pin-ip"
+													class="form-input"
+													placeholder="192.168.1.50"
+													style="flex: 1"
+												/>
+												<button type="button" class="action-btn-sm danger" id="devices-pin-static-btn" style="white-space: nowrap">
+													STATIC IP OFF
+												</button>
 											</div>
-											<input type="text" id="devices-pin-ip" class="form-input" placeholder="192.168.1.50" />
 										</div>
 									</div>
 									<div class="modal-footer">

@@ -30,7 +30,7 @@ export default class DevicesModule {
 			saveBtnId: 'save-devices-pin-btn',
 			saveHandler: () => this.savePinnedIp()
 		});
-		document.getElementById('devices-pin-static')?.addEventListener('change', () => this.syncStaticIpField());
+		document.getElementById('devices-pin-static-btn')?.addEventListener('click', () => this.toggleStaticIpButton());
 
 		this.core.delegateActions('devices-table', {
 			pin: mac => this.openPinDialog(mac)
@@ -309,20 +309,38 @@ export default class DevicesModule {
 		document.getElementById('devices-pin-section').value = row.staticSection || '';
 		document.getElementById('devices-pin-hostname').value = row.hostname && row.hostname !== 'Unknown' ? row.hostname : '';
 		document.getElementById('devices-pin-mac').value = normalizedMac;
-		const staticCheckbox = document.getElementById('devices-pin-static');
-		if (staticCheckbox) staticCheckbox.checked = Boolean(row.pinned);
 		document.getElementById('devices-pin-ip').value = row.ip && row.ip !== 'N/A' ? row.ip : '';
+		this.setStaticIpEnabled(Boolean(row.pinned));
 		this.syncStaticIpField();
 		this.core.openModal('devices-pin-modal');
 	}
 
+	toggleStaticIpButton() {
+		this.setStaticIpEnabled(!this.isStaticIpEnabled());
+		this.syncStaticIpField();
+	}
+
+	isStaticIpEnabled() {
+		const btn = document.getElementById('devices-pin-static-btn');
+		return btn?.dataset?.enabled === '1';
+	}
+
+	setStaticIpEnabled(enabled) {
+		const btn = document.getElementById('devices-pin-static-btn');
+		if (!btn) return;
+		const on = Boolean(enabled);
+		btn.dataset.enabled = on ? '1' : '0';
+		btn.classList.remove('success', 'danger');
+		btn.classList.add(on ? 'success' : 'danger');
+		btn.textContent = on ? 'STATIC IP ON' : 'STATIC IP OFF';
+	}
+
 	syncStaticIpField() {
-		const staticCheckbox = document.getElementById('devices-pin-static');
 		const ipInput = document.getElementById('devices-pin-ip');
-		if (!staticCheckbox || !ipInput) return;
-		const useStatic = Boolean(staticCheckbox.checked);
+		if (!ipInput) return;
+		const useStatic = this.isStaticIpEnabled();
 		ipInput.disabled = !useStatic;
-		ipInput.placeholder = useStatic ? '192.168.1.50' : 'Disabled unless Static is checked';
+		ipInput.placeholder = useStatic ? '192.168.1.50' : 'Disabled unless Static IP is ON';
 	}
 
 	isValidIpv4(ip) {
@@ -340,7 +358,7 @@ export default class DevicesModule {
 		const hostname = (document.getElementById('devices-pin-hostname').value || '').trim();
 		const mac = this.normalizeMac(document.getElementById('devices-pin-mac').value);
 		const ip = (document.getElementById('devices-pin-ip').value || '').trim();
-		const useStatic = Boolean(document.getElementById('devices-pin-static')?.checked);
+		const useStatic = this.isStaticIpEnabled();
 
 		if (!mac) {
 			this.core.showToast('Invalid MAC address', 'error');
