@@ -1070,8 +1070,8 @@ export default class SystemModule {
 	async readMountUsageByMountPoint() {
 		try {
 			const [status, result] = await this.core.ubusCall('file', 'exec', {
-				command: '/bin/df',
-				params: ['-h', '-P']
+				command: '/bin/sh',
+				params: ['-c', 'df -h -P 2>/dev/null || /bin/df -h -P 2>/dev/null || /usr/bin/df -h -P 2>/dev/null']
 			});
 			if (status !== 0 || !result?.stdout) return new Map();
 			const lines = String(result.stdout)
