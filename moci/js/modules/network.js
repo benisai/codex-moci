@@ -4,6 +4,8 @@ export default class NetworkModule {
 		this.subTabs = null;
 		this.cleanups = [];
 		this.hostsRaw = '';
+		this.connectionsRefreshTimer = null;
+		this.isRefreshingConnections = false;
 
 		this.core.registerRoute('/network', (path, subPaths) => {
 			const pageElement = document.getElementById('network-page');
@@ -159,6 +161,7 @@ export default class NetworkModule {
 	}
 
 	cleanup() {
+		this.stopConnectionsAutoRefresh();
 		if (this.subTabs) {
 			this.subTabs.cleanup();
 			this.subTabs = null;
@@ -1242,33 +1245,59 @@ export default class NetworkModule {
 	}
 
 	async loadConnections() {
+		this.startConnectionsAutoRefresh();
 		await this.core.loadResource('network-active-connections-table', 4, null, async () => {
-			const tbody = document.querySelector('#network-active-connections-table tbody');
-			if (!tbody) return;
-
-			let connections = await this.fetchConnections();
-			if (!Array.isArray(connections)) connections = [];
-
-			if (connections.length === 0) {
-				this.core.renderEmptyTable(tbody, 4, 'No active conntrack connections');
-				return;
-			}
-
-			tbody.innerHTML = connections
-				.map(conn => {
-					const source = conn.source || 'N/A';
-					const destination = conn.destination || 'N/A';
-					const protocol = (conn.protocol || 'N/A').toUpperCase();
-					const status = conn.state || 'ACTIVE';
-					return `<tr>
-				<td>${this.core.escapeHtml(source)}</td>
-				<td>${this.core.escapeHtml(destination)}</td>
-				<td>${this.core.escapeHtml(protocol)}</td>
-				<td>${this.renderConntrackStateBadge(status)}</td>
-			</tr>`;
-				})
-				.join('');
+			await this.renderConnectionsTable();
 		});
+	}
+
+	async renderConnectionsTable() {
+		const tbody = document.querySelector('#network-active-connections-table tbody');
+		if (!tbody) return;
+
+		let connections = await this.fetchConnections();
+		if (!Array.isArray(connections)) connections = [];
+
+		if (connections.length === 0) {
+			this.core.renderEmptyTable(tbody, 4, 'No active conntrack connections');
+			return;
+		}
+
+		tbody.innerHTML = connections
+			.map(conn => {
+				const source = conn.source || 'N/A';
+				const destination = conn.destination || 'N/A';
+				const protocol = (conn.protocol || 'N/A').toUpperCase();
+				const status = conn.state || 'ACTIVE';
+				return `<tr>
+			<td>${this.core.escapeHtml(source)}</td>
+			<td>${this.core.escapeHtml(destination)}</td>
+			<td>${this.core.escapeHtml(protocol)}</td>
+			<td>${this.renderConntrackStateBadge(status)}</td>
+		</tr>`;
+			})
+			.join('');
+	}
+
+	startConnectionsAutoRefresh() {
+		if (this.connectionsRefreshTimer) return;
+		this.connectionsRefreshTimer = setInterval(async () => {
+			if (document.hidden) return;
+			if (!this.core.currentRoute || !this.core.currentRoute.startsWith('/network/connections')) return;
+			if (this.isRefreshingConnections) return;
+			this.isRefreshingConnections = true;
+			try {
+				await this.renderConnectionsTable();
+			} finally {
+				this.isRefreshingConnections = false;
+			}
+		}, 5000);
+	}
+
+	stopConnectionsAutoRefresh() {
+		if (!this.connectionsRefreshTimer) return;
+		clearInterval(this.connectionsRefreshTimer);
+		this.connectionsRefreshTimer = null;
 	}
 
 	async fetchConnections() {
