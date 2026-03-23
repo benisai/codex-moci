@@ -10,7 +10,21 @@
 
 </div>
 
-![MoCI Dashboard](https://github.com/user-attachments/assets/dc150d3c-75fc-480b-a0bd-10b67cdc6226)
+![MoCI Dashboard](https://github.com/benisai/codex-moci/blob/main/screenshots/moci-dashboard.png)
+</br>
+</br>
+![MoCI Devices](https://github.com/benisai/codex-moci/blob/main/screenshots/moci-devices.png)
+</br>
+</br>
+![MoCI Netify](https://github.com/benisai/codex-moci/blob/main/screenshots/moci-netify.png)
+</br>
+</br>
+![MoCI Monitoring](https://github.com/benisai/codex-moci/blob/main/screenshots/moci-monitoring.png)
+</br>
+</br>
+![MoCI Settings](https://github.com/benisai/codex-moci/blob/main/screenshots/moci-settings.png)
+</br>
+</br>
 
 ---
 
@@ -70,34 +84,19 @@ scp -r moci/* root@192.168.1.1:/www/moci/
 ---
 
 ## Installation
-
-### Option 1: Package (Recommended)
-
-Download the ipk for your architecture from [Releases](https://github.com/HudsonGraeme/MoCI/releases/latest):
-
-```bash
-wget https://github.com/HudsonGraeme/MoCI/releases/latest/download/moci_VERSION_ARCH.ipk
-opkg install moci_VERSION_ARCH.ipk
-```
-
-Available architectures: x86_64, ramips/mt7621, ath79, mediatek/filogic, bcm27xx, ipq40xx, mvebu, ipq806x
-
-Replace `VERSION_ARCH` with your specific file from the releases page.
-
-### Option 2: Manual Install
+### Manual Install
 
 **Quick start:**
 
 ```bash
-scp -r moci/* root@192.168.1.1:/www/moci/
-scp rpcd-acl.json root@192.168.1.1:/usr/share/rpcd/acl.d/moci.json
-ssh root@192.168.1.1 "/etc/init.d/rpcd restart"
-```
+opkg update or apk update
+opkg install / apk add git git-http ca-bundle nano
+git clone https://github.com/benisai/codex-moci.git
+cd codex-moci
+sh scripts/setup-openwrt-router.sh
 
-**First time setup** (if you get 404):
-
-```bash
-ssh root@192.168.1.1
+cp rpcd-acl.json /usr/share/rpcd/acl.d/moci.json
+/etc/init.d/rpcd restart
 uci set uhttpd.main.home='/www'
 uci commit uhttpd
 /etc/init.d/uhttpd restart
@@ -111,17 +110,6 @@ uci commit uhttpd
 
 Access at `http://192.168.1.1/moci/` and login with your root credentials.
 
-### Option 3: New Router Bootstrap Script
-
-For a fresh OpenWrt router, run the included bootstrap script directly on the router:
-
-```bash
-opkg update
-opkg install git git-http ca-bundle
-git clone https://github.com/benisai/codex-moci.git
-cd codex-moci
-sh scripts/setup-openwrt-router.sh
-```
 
 What it does:
 - installs required packages (`netifyd`, `netcat`, `vnstat`, `nlbwmon`, etc.)
