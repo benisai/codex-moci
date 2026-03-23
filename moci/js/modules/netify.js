@@ -30,6 +30,9 @@ export default class NetifyModule {
 		this.currentMaxPage = 0;
 		this.pauseAutoRefresh = false;
 		this.userPausedAutoRefresh = false;
+		this.isRefreshingCards = false;
+		this.lastCardsRefreshAt = 0;
+		this.cardsRefreshIntervalMs = 10000;
 		this.lastTopAppsRefreshAt = 0;
 		this.isRefreshingTopApps = false;
 
@@ -161,6 +164,9 @@ export default class NetifyModule {
 			}
 			if (this.core.currentRoute && this.core.currentRoute.startsWith('/netify')) {
 				const now = Date.now();
+				if (now - this.lastCardsRefreshAt >= this.cardsRefreshIntervalMs) {
+					this.refreshCardsAuto();
+				}
 				if (now - this.lastTopAppsRefreshAt >= 60000) {
 					this.refreshTopAppsAuto();
 				}
@@ -269,6 +275,7 @@ pgrep -fa moci-netify-collector || true
 			await this.loadFlowTotalCount();
 			await this.refreshHostnameMap();
 			this.renderOverview();
+			this.lastCardsRefreshAt = Date.now();
 			if (refreshTopApps) {
 				this.recomputeTopAppsRows(this.flows);
 				this.renderTopApps();
@@ -281,6 +288,24 @@ pgrep -fa moci-netify-collector || true
 			if (showErrorToast) this.core.showToast('Failed to refresh Netify data', 'error');
 		} finally {
 			this.isRefreshing = false;
+		}
+	}
+
+	async refreshCardsAuto() {
+		if (this.isRefreshing || this.isRefreshingCards) return;
+		this.isRefreshingCards = true;
+		try {
+			const configuredLimit = Math.min(Math.max(Number(this.maxLines) || 5000, 50), 20000);
+			const maxWindowRows = Math.max(20, this.sqlChunkSize * this.sqlChunkCalls);
+			const limit = Math.max(20, Math.min(configuredLimit, maxWindowRows));
+			const snapshot = await this.fetchFlowChunkWindow(limit, 0);
+			const totalCount = await this.queryFlowTotalCount();
+			this.renderOverview(snapshot, totalCount);
+			this.lastCardsRefreshAt = Date.now();
+		} catch (err) {
+			this.logDebug(`Card auto-refresh failed: ${err?.message || 'unknown error'}`);
+		} finally {
+			this.isRefreshingCards = false;
 		}
 	}
 
@@ -331,19 +356,23 @@ pgrep -fa moci-netify-collector || true
 
 	async loadFlowTotalCount() {
 		try {
-			const out = await this.querySql('SELECT COUNT(*) FROM flow_raw;');
-			const lines = String(out || '')
-				.trim()
-				.split('\n')
-				.map(line => line.trim())
-				.filter(Boolean);
-			const numericLine = [...lines].reverse().find(line => /^\d+$/.test(line)) || '0';
-			const count = Number(numericLine);
-			this.totalFlowCount = Number.isFinite(count) && count >= 0 ? count : 0;
+			this.totalFlowCount = await this.queryFlowTotalCount();
 		} catch (err) {
 			this.totalFlowCount = Number(this.flows.length) || 0;
 			this.logDebug(`Failed to load total flow count: ${err?.message || 'unknown error'}`);
 		}
+	}
+
+	async queryFlowTotalCount() {
+		const out = await this.querySql('SELECT COUNT(*) FROM flow_raw;');
+		const lines = String(out || '')
+			.trim()
+			.split('\n')
+			.map(line => line.trim())
+			.filter(Boolean);
+		const numericLine = [...lines].reverse().find(line => /^\d+$/.test(line)) || '0';
+		const count = Number(numericLine);
+		return Number.isFinite(count) && count >= 0 ? count : 0;
 	}
 
 	async loadFlowFile(reset = false) {
@@ -640,11 +669,11 @@ pgrep -fa moci-netify-collector || true
 		return /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(first) ? first : '';
 	}
 
-	renderOverview() {
-		const flowCount = Number(this.totalFlowCount) > 0 ? this.totalFlowCount : this.flows.length;
-		const devices = new Set(this.flows.map(f => f.device).filter(v => v && v !== 'unknown'));
-		const apps = new Set(this.flows.map(f => f.app).filter(Boolean));
-		const totalBytes = this.flows.reduce((sum, f) => sum + (f.bytes || 0), 0);
+	renderOverview(sourceFlows = this.flows, totalFlowCount = this.totalFlowCount) {
+		const flowCount = Number(totalFlowCount) > 0 ? totalFlowCount : sourceFlows.length;
+		const devices = new Set(sourceFlows.map(f => f.device).filter(v => v && v !== 'unknown'));
+		const apps = new Set(sourceFlows.map(f => f.app).filter(Boolean));
+		const totalBytes = sourceFlows.reduce((sum, f) => sum + (f.bytes || 0), 0);
 
 		document.getElementById('netify-flow-count').textContent = String(flowCount);
 		document.getElementById('netify-device-count').textContent = String(devices.size);
