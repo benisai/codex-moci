@@ -150,16 +150,15 @@ set_uci moci.ping_monitor.output_file "'/tmp/moci-ping-monitor.txt'"
 set_uci moci.ping_monitor.max_lines "'2000'"
 uci commit moci
 
-LAN_IP="$(uci -q get network.lan.ipaddr 2>/dev/null || true)"
 NETIFYD_CONF="/etc/netifyd.conf"
-if [ -n "$LAN_IP" ] && [ -f "$NETIFYD_CONF" ]; then
+if [ -f "$NETIFYD_CONF" ]; then
 	if grep -q "^listen_address\[0\]" "$NETIFYD_CONF"; then
-		sed -i "s|^listen_address\[0\].*|listen_address[0] = $LAN_IP|" "$NETIFYD_CONF"
+		sed -i "s|^listen_address\[0\].*|listen_address[0] = 127.0.0.1|" "$NETIFYD_CONF"
 	else
 		grep -q "^\[socket\]" "$NETIFYD_CONF" || echo "[socket]" >>"$NETIFYD_CONF"
-		sed -i "/^\[socket\]/a listen_address[0] = $LAN_IP" "$NETIFYD_CONF"
+		sed -i "/^\[socket\]/a listen_address[0] = 127.0.0.1" "$NETIFYD_CONF"
 	fi
-	log "Updated netifyd listen_address[0] to LAN IP $LAN_IP"
+	log "Updated netifyd listen_address[0] to 127.0.0.1"
 fi
 
 NLBW_CONF="/etc/config/nlbwmon"
