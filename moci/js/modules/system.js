@@ -41,6 +41,7 @@ export default class SystemModule {
 	setupHandlers() {
 		document.getElementById('save-general-btn')?.addEventListener('click', () => this.saveGeneral());
 		document.getElementById('sync-browser-time-btn')?.addEventListener('click', () => this.syncBrowserTime());
+		document.getElementById('save-moci-config-btn')?.addEventListener('click', () => this.saveMociConfig());
 		document.getElementById('change-password-btn')?.addEventListener('click', () => this.changePassword());
 		document.getElementById('backup-btn')?.addEventListener('click', () => this.createBackup());
 		document.getElementById('reset-btn')?.addEventListener('click', () => this.factoryReset());
@@ -140,6 +141,74 @@ export default class SystemModule {
 				document.getElementById('system-timezone').value = ur.values.zonename || ur.values.timezone || 'UTC';
 			}
 		} catch {}
+		await this.loadMociConfig();
+	}
+
+	getMociFeatureKeys() {
+		const defaults = this.core.getDefaultFeatures ? this.core.getDefaultFeatures() : {};
+		return Object.keys(defaults)
+			.filter(key => key !== 'dashboard')
+			.sort((a, b) => a.localeCompare(b));
+	}
+
+	formatMociFeatureLabel(key) {
+		return String(key || '')
+			.replace(/_/g, ' ')
+			.toUpperCase();
+	}
+
+	async loadMociConfig() {
+		const grid = document.getElementById('moci-features-grid');
+		if (!grid) return;
+
+		let values = {};
+		try {
+			const [status, result] = await this.core.uciGet('moci', 'features');
+			if (status === 0 && result?.values) {
+				values = result.values;
+			}
+		} catch {}
+
+		const defaults = this.core.getDefaultFeatures ? this.core.getDefaultFeatures() : {};
+		const featureKeys = this.getMociFeatureKeys();
+		grid.innerHTML = featureKeys
+			.map(key => {
+				const value = String(values[key] ?? defaults[key] ?? '0') === '1';
+				return `<label style="display:flex; align-items:center; gap:10px; padding:10px; border:1px solid var(--glass-border); border-radius:6px; background: rgba(255,255,255,0.02);">
+					<input type="checkbox" class="moci-feature-toggle" data-feature-key="${this.core.escapeHtml(key)}" ${value ? 'checked' : ''} />
+					<span style="font-family: var(--font-mono); font-size: 11px; color: var(--starship-steel); letter-spacing: 0.08em;">${this.core.escapeHtml(this.formatMociFeatureLabel(key))}</span>
+				</label>`;
+			})
+			.join('');
+	}
+
+	async saveMociConfig() {
+		const toggles = Array.from(document.querySelectorAll('#moci-features-grid .moci-feature-toggle'));
+		if (toggles.length === 0) {
+			this.core.showToast('No MoCI feature toggles found', 'error');
+			return;
+		}
+
+		const values = {};
+		for (const toggle of toggles) {
+			const key = String(toggle.getAttribute('data-feature-key') || '').trim();
+			if (!key) continue;
+			values[key] = toggle.checked ? '1' : '0';
+		}
+
+		try {
+			await this.core.uciSet('moci', 'features', values);
+			await this.core.uciCommit('moci');
+			await this.core.ubusCall('file', 'exec', {
+				command: '/etc/init.d/uhttpd',
+				params: ['restart']
+			});
+			await this.core.loadFeatures();
+			this.core.applyFeatureFlags();
+			this.core.showToast('MoCI config saved (uhttpd restarted)', 'success');
+		} catch {
+			this.core.showToast('Failed to save MoCI config', 'error');
+		}
 	}
 
 	async saveGeneral() {
