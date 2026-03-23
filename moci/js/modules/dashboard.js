@@ -420,21 +420,24 @@ export default class DashboardModule {
 	}
 
 	async fetchSystemLog() {
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', 'logread 2>/dev/null']
+			});
+			if (status === 0 && result?.stdout) return result.stdout;
+		} catch {}
+
 		const [status, result] = await this.core.ubusCall('file', 'exec', {
 			command: '/usr/libexec/syslog-wrapper',
 			params: []
 		});
-		if (status !== 0 || !result?.stdout) {
-			throw new Error('Failed to fetch system log');
-		}
+		if (status !== 0 || !result?.stdout) throw new Error('Failed to fetch system log');
 		return result.stdout;
 	}
 
 	parseSystemLog(stdout) {
-		return stdout
-			.split('\n')
-			.filter(l => l.trim())
-			.slice(-20);
+		return stdout.split('\n').filter(l => l.trim());
 	}
 
 	renderSystemLog(lines) {
