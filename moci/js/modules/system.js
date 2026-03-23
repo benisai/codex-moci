@@ -392,19 +392,33 @@ export default class SystemModule {
 
 	async loadPackages() {
 		await this.core.loadResource('packages-table', 3, 'packages', async () => {
-			const [status, result] = await this.core.ubusCall('file', 'read', {
+			let packages = [];
+
+			const [opkgStatus, opkgResult] = await this.core.ubusCall('file', 'read', {
 				path: '/usr/lib/opkg/status'
 			});
-			if (status !== 0 || !result?.data) throw new Error('No data');
+			if (opkgStatus === 0 && opkgResult?.data) {
+				packages = this.parseOpkgStatus(opkgResult.data);
+			}
 
-			const packages = [];
-			for (const block of result.data.split('\n\n')) {
-				let pkg = {};
-				for (const line of block.split('\n')) {
-					if (line.startsWith('Package: ')) pkg.name = line.substring(9);
-					else if (line.startsWith('Version: ')) pkg.version = line.substring(9);
+			// OpenWrt apk-based images store installed package metadata in this db.
+			if (packages.length === 0) {
+				const [apkStatus, apkResult] = await this.core.ubusCall('file', 'read', {
+					path: '/lib/apk/db/installed'
+				});
+				if (apkStatus === 0 && apkResult?.data) {
+					packages = this.parseApkInstalledDb(apkResult.data);
 				}
-				if (pkg.name) packages.push(pkg);
+			}
+
+			if (packages.length === 0) {
+				const [execStatus, execResult] = await this.core.ubusCall('file', 'exec', {
+					command: '/bin/sh',
+					params: ['-c', 'if command -v apk >/dev/null 2>&1; then apk info -v; fi']
+				});
+				if (execStatus === 0 && execResult?.stdout) {
+					packages = this.parseApkInfoOutput(execResult.stdout);
+				}
 			}
 
 			this.packages = packages;
@@ -412,6 +426,50 @@ export default class SystemModule {
 			this.packagesPage = 0;
 			this.renderPackagesTable();
 		});
+	}
+
+	parseOpkgStatus(content) {
+		const packages = [];
+		for (const block of String(content || '').split('\n\n')) {
+			const pkg = {};
+			for (const line of block.split('\n')) {
+				if (line.startsWith('Package: ')) pkg.name = line.substring(9);
+				else if (line.startsWith('Version: ')) pkg.version = line.substring(9);
+			}
+			if (pkg.name) packages.push(pkg);
+		}
+		return packages;
+	}
+
+	parseApkInstalledDb(content) {
+		const packages = [];
+		for (const block of String(content || '').split('\n\n')) {
+			let name = '';
+			let version = '';
+			for (const line of block.split('\n')) {
+				if (line.startsWith('P:')) name = line.substring(2).trim();
+				else if (line.startsWith('V:')) version = line.substring(2).trim();
+			}
+			if (name) packages.push({ name, version: version || 'N/A' });
+		}
+		return packages;
+	}
+
+	parseApkInfoOutput(content) {
+		return String(content || '')
+			.split('\n')
+			.map(line => line.trim())
+			.filter(Boolean)
+			.map(line => {
+				const idx = line.lastIndexOf('-');
+				if (idx > 0) {
+					return {
+						name: line.substring(0, idx),
+						version: line.substring(idx + 1) || 'N/A'
+					};
+				}
+				return { name: line, version: 'N/A' };
+			});
 	}
 
 	applyPackageFilter() {
