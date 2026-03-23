@@ -130,6 +130,7 @@ export default class SystemModule {
 	}
 
 	async loadGeneral() {
+		await this.loadMociConfig();
 		if (!this.core.isFeatureEnabled('system')) return;
 		try {
 			const [status, boardInfo] = await this.core.ubusCall('system', 'board', {});
@@ -141,7 +142,6 @@ export default class SystemModule {
 				document.getElementById('system-timezone').value = ur.values.zonename || ur.values.timezone || 'UTC';
 			}
 		} catch {}
-		await this.loadMociConfig();
 	}
 
 	getMociFeatureKeys() {
@@ -171,6 +171,10 @@ export default class SystemModule {
 
 		const defaults = this.core.getDefaultFeatures ? this.core.getDefaultFeatures() : {};
 		const featureKeys = this.getMociFeatureKeys();
+		if (featureKeys.length === 0) {
+			grid.innerHTML = '<div style="color: var(--steel-muted)">No MoCI features available.</div>';
+			return;
+		}
 		grid.innerHTML = featureKeys
 			.map(key => {
 				const value = String(values[key] ?? defaults[key] ?? '0') === '1';
