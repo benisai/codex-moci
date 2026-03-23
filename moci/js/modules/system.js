@@ -441,12 +441,12 @@ export default class SystemModule {
 			const usedPct = Number(String(rootUsage.usePercent || '').replace('%', ''));
 			if (!Number.isFinite(usedPct)) throw new Error('invalid root usage value');
 
-			const remainingPct = Math.max(0, Math.min(100, 100 - usedPct));
-			fillEl.style.width = `${remainingPct.toFixed(1)}%`;
-			labelEl.textContent = `Remaining: ${remainingPct.toFixed(1)}% (${rootUsage.available || 'N/A'} free of ${rootUsage.size || 'N/A'})`;
+			const clampedUsedPct = Math.max(0, Math.min(100, usedPct));
+			fillEl.style.width = `${clampedUsedPct.toFixed(1)}%`;
+			labelEl.textContent = `Used: ${clampedUsedPct.toFixed(1)}% (${rootUsage.used || 'N/A'} of ${rootUsage.size || 'N/A'})`;
 		} catch {
 			fillEl.style.width = '0%';
-			labelEl.textContent = 'Remaining: N/A';
+			labelEl.textContent = 'Used: N/A';
 		}
 	}
 
