@@ -26,6 +26,7 @@ export default class NetifyModule {
 		this.totalFlowCount = 0;
 		this.currentMaxPage = 0;
 		this.pauseAutoRefresh = false;
+		this.userPausedAutoRefresh = false;
 
 		this.core.registerRoute('/netify', async () => {
 			const pageElement = document.getElementById('netify-page');
@@ -49,6 +50,9 @@ export default class NetifyModule {
 		document.getElementById('netify-full-reset-btn')?.addEventListener('click', () => this.fullResetCollector());
 		document.getElementById('netify-debug-clear-btn')?.addEventListener('click', () => this.clearDebugLog());
 		document.getElementById('netify-collector-toggle-btn')?.addEventListener('click', () => this.toggleCollectorPanel());
+		document.getElementById('netify-auto-refresh-toggle-btn')?.addEventListener('click', () =>
+			this.toggleAutoRefreshPause()
+		);
 		document.getElementById('netify-flow-search')?.addEventListener('input', event => {
 			this.flowSearchQuery = String(event?.target?.value || '')
 				.trim()
@@ -82,6 +86,7 @@ export default class NetifyModule {
 			?.addEventListener('click', () => this.core.closeModal('netify-flow-action-modal'));
 		document.querySelector('#netify-flows-table tbody')?.addEventListener('click', event => this.handleFlowRowClick(event));
 		this.syncCollectorPanel();
+		this.updateAutoRefreshToggleUi();
 		this.renderDebugLog();
 	}
 
@@ -136,15 +141,32 @@ export default class NetifyModule {
 		this.pollInterval = setInterval(() => {
 			// Preserve user position while paging historical rows.
 			// Auto-refresh only when on page 1 (index 0).
-			if (
-				this.core.currentRoute &&
-				this.core.currentRoute.startsWith('/netify') &&
-				this.flowsPage === 0 &&
-				!this.pauseAutoRefresh
-			) {
+			if (this.core.currentRoute && this.core.currentRoute.startsWith('/netify') && !this.isAutoRefreshPaused()) {
 				this.refresh(false);
 			}
 		}, 10000);
+	}
+
+	isAutoRefreshPaused() {
+		return this.userPausedAutoRefresh || this.pauseAutoRefresh || this.flowsPage > 0;
+	}
+
+	toggleAutoRefreshPause() {
+		this.userPausedAutoRefresh = !this.userPausedAutoRefresh;
+		this.updateAutoRefreshToggleUi();
+		this.logDebug(this.userPausedAutoRefresh ? 'Auto-refresh paused by user' : 'Auto-refresh resumed by user');
+	}
+
+	updateAutoRefreshToggleUi() {
+		const btn = document.getElementById('netify-auto-refresh-toggle-btn');
+		if (!btn) return;
+		if (this.userPausedAutoRefresh) {
+			btn.textContent = 'RESUME';
+			btn.setAttribute('aria-pressed', 'true');
+		} else {
+			btn.textContent = 'PAUSE';
+			btn.setAttribute('aria-pressed', 'false');
+		}
 	}
 
 	async loadConfig() {
