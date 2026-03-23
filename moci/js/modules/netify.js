@@ -131,7 +131,9 @@ export default class NetifyModule {
 	startPolling() {
 		if (this.pollInterval) return;
 		this.pollInterval = setInterval(() => {
-			if (this.core.currentRoute && this.core.currentRoute.startsWith('/netify')) {
+			// Preserve user position while paging historical rows.
+			// Auto-refresh only when on page 1 (index 0).
+			if (this.core.currentRoute && this.core.currentRoute.startsWith('/netify') && this.flowsPage === 0) {
 				this.refresh(false);
 			}
 		}, 10000);
