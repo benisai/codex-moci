@@ -20,6 +20,9 @@ export default class DashboardModule {
 		this.lastMonthlyRefresh = 0;
 		this.trafficPeriod = 'hourly';
 		this.trafficControlsBound = false;
+		this.systemLogLines = [];
+		this.systemLogQuery = '';
+		this.systemLogSearchBound = false;
 
 		this.core.registerRoute('/dashboard', () => this.load());
 	}
@@ -119,6 +122,7 @@ export default class DashboardModule {
 		if (pageElement) pageElement.classList.remove('hidden');
 		this.applyLanVisibility();
 		this.applyDashboardColorTheme();
+		this.initSystemLogSearch();
 		try {
 			const systemInfo = await this.fetchSystemInfo();
 			const boardInfo = await this.fetchBoardInfo();
@@ -444,12 +448,20 @@ export default class DashboardModule {
 		const logEl = document.getElementById('system-log');
 		if (!logEl) return;
 
-		if (!lines || lines.length === 0) {
+		const sourceLines = Array.isArray(lines) ? lines : [];
+		const query = String(this.systemLogQuery || '').toLowerCase();
+		const filtered = query ? sourceLines.filter(line => String(line).toLowerCase().includes(query)) : sourceLines;
+
+		if (!sourceLines || sourceLines.length === 0) {
 			logEl.innerHTML = '<div class="log-line">No logs available</div>';
 			return;
 		}
+		if (filtered.length === 0) {
+			logEl.innerHTML = '<div class="log-line">No matching logs found</div>';
+			return;
+		}
 
-		const logHtml = lines
+		const logHtml = filtered
 			.map(line => {
 				let className = 'log-line';
 				if (line.toLowerCase().includes('error') || line.toLowerCase().includes('fail')) {
@@ -464,14 +476,29 @@ export default class DashboardModule {
 		logEl.innerHTML = logHtml;
 	}
 
+	initSystemLogSearch() {
+		if (this.systemLogSearchBound) return;
+		const input = document.getElementById('system-log-search');
+		if (!input) return;
+		this.systemLogSearchBound = true;
+		input.addEventListener('input', event => {
+			this.systemLogQuery = String(event?.target?.value || '')
+				.trim()
+				.toLowerCase();
+			this.renderSystemLog(this.systemLogLines);
+		});
+	}
+
 	async updateSystemLog() {
 		try {
 			const stdout = await this.fetchSystemLog();
 			const lines = this.parseSystemLog(stdout);
-			this.renderSystemLog(lines);
+			this.systemLogLines = lines;
+			this.renderSystemLog(this.systemLogLines);
 		} catch (err) {
 			console.error('Failed to load system log:', err);
-			this.renderSystemLog(null);
+			this.systemLogLines = [];
+			this.renderSystemLog(this.systemLogLines);
 		}
 	}
 
