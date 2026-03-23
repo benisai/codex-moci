@@ -45,7 +45,7 @@ export default class NetifyModule {
 	}
 
 	setupHandlers() {
-		document.getElementById('netify-refresh-btn')?.addEventListener('click', () => this.refresh(true));
+		document.getElementById('netify-refresh-btn')?.addEventListener('click', () => this.refresh(true, true));
 		document.getElementById('netify-start-btn')?.addEventListener('click', () => this.runServiceAction('start'));
 		document.getElementById('netify-stop-btn')?.addEventListener('click', () => this.runServiceAction('stop'));
 		document.getElementById('netify-restart-btn')?.addEventListener('click', () => this.runServiceAction('restart'));
@@ -144,7 +144,7 @@ export default class NetifyModule {
 		await this.loadConfig();
 		this.syncCollectorPanel();
 		this.startPolling();
-		await this.refresh(false);
+		await this.refresh(false, true);
 	}
 
 	startPolling() {
@@ -153,7 +153,7 @@ export default class NetifyModule {
 			// Preserve user position while paging historical rows.
 			// Auto-refresh only when on page 1 (index 0).
 			if (this.core.currentRoute && this.core.currentRoute.startsWith('/netify') && !this.isAutoRefreshPaused()) {
-				this.refresh(false);
+				this.refresh(false, false);
 			}
 		}, 10000);
 	}
@@ -249,7 +249,7 @@ pgrep -fa moci-netify-collector || true
 		}
 	}
 
-	async refresh(showErrorToast = true) {
+	async refresh(showErrorToast = true, refreshTopApps = true) {
 		if (this.isRefreshing) return;
 		this.isRefreshing = true;
 
@@ -259,7 +259,7 @@ pgrep -fa moci-netify-collector || true
 			await this.loadFlowTotalCount();
 			await this.refreshHostnameMap();
 			this.renderOverview();
-			this.renderTopApps();
+			if (refreshTopApps) this.renderTopApps();
 			this.renderRecentFlows();
 		} catch (err) {
 			console.error('Failed to refresh Netify view:', err);
