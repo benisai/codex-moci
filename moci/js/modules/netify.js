@@ -187,12 +187,15 @@ export default class NetifyModule {
 	updateAutoRefreshToggleUi() {
 		const btn = document.getElementById('netify-auto-refresh-toggle-btn');
 		if (!btn) return;
+		btn.classList.remove('danger', 'success');
 		if (this.userPausedAutoRefresh) {
 			btn.textContent = 'RESUME';
 			btn.setAttribute('aria-pressed', 'true');
+			btn.classList.add('danger');
 		} else {
 			btn.textContent = 'PAUSE';
 			btn.setAttribute('aria-pressed', 'false');
+			btn.classList.add('success');
 		}
 	}
 

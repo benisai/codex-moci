@@ -474,6 +474,17 @@ body {
 	border-color: rgba(255, 68, 68, 0.35);
 }
 
+.action-btn-sm.success {
+	border-color: rgba(144, 238, 144, 0.35);
+	color: #bfecc0;
+}
+
+.action-btn-sm.success:hover {
+	border-color: rgba(144, 238, 144, 0.65);
+	color: #c9f2ca;
+	box-shadow: 0 0 8px rgba(144, 238, 144, 0.15);
+}
+
 .devices-action-btn {
 	-webkit-appearance: none;
 	appearance: none;
