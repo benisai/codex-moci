@@ -601,7 +601,7 @@ pgrep -fa moci-netify-collector || true
 
 		const rows = Array.from(map.values())
 			.sort((a, b) => b.flows - a.flows)
-			.slice(0, 20)
+			.slice(0, 10)
 			.map(item => ({
 				app: item.app,
 				flows: String(item.flows),
