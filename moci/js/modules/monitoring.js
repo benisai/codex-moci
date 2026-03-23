@@ -438,6 +438,23 @@ export default class MonitoringModule {
 		return 'ok';
 	}
 
+	isColorfulGraphsEnabled() {
+		return this.core.isFeatureEnabled('colorful_graphs');
+	}
+
+	getSpeedtestPalette() {
+		if (this.isColorfulGraphsEnabled()) {
+			return {
+				download: 'rgba(56, 189, 248, 0.95)',
+				upload: 'rgba(248, 153, 56, 0.95)'
+			};
+		}
+		return {
+			download: 'rgba(226, 226, 229, 0.92)',
+			upload: 'rgba(180, 180, 185, 0.88)'
+		};
+	}
+
 	async toggleService() {
 		const action = this.serviceRunning ? 'stop' : 'start';
 		try {
@@ -664,6 +681,10 @@ export default class MonitoringModule {
 		const svg = document.getElementById('monitoring-speedtest-chart');
 		const labels = document.getElementById('monitoring-speedtest-labels');
 		if (!svg || !labels) return;
+		const palette = this.getSpeedtestPalette();
+		const legendText = this.isColorfulGraphsEnabled()
+			? 'Download (blue) / Upload (orange)'
+			: 'Download / Upload';
 
 		if (!Array.isArray(validRows) || validRows.length === 0) {
 			svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" class="monitoring-speedtest-legend">No speedtest data yet</text>';
@@ -709,8 +730,8 @@ export default class MonitoringModule {
 				const tipD = `${this.formatDate(p.ts)} download ${p.download.toFixed(1)} Mbps`;
 				const tipU = `${this.formatDate(p.ts)} upload ${p.upload.toFixed(1)} Mbps`;
 				return `
-					<circle cx="${x}" cy="${yd}" r="3" class="monitoring-speedtest-point-download"><title>${this.core.escapeHtml(tipD)}</title></circle>
-					<circle cx="${x}" cy="${yu}" r="3" class="monitoring-speedtest-point-upload"><title>${this.core.escapeHtml(tipU)}</title></circle>
+					<circle cx="${x}" cy="${yd}" r="3" class="monitoring-speedtest-point-download" style="fill: ${palette.download}"><title>${this.core.escapeHtml(tipD)}</title></circle>
+					<circle cx="${x}" cy="${yu}" r="3" class="monitoring-speedtest-point-upload" style="fill: ${palette.upload}"><title>${this.core.escapeHtml(tipU)}</title></circle>
 				`;
 			})
 			.join('');
@@ -718,10 +739,10 @@ export default class MonitoringModule {
 		svg.innerHTML = `
 			<rect x="0" y="0" width="${width}" height="${height}" fill="transparent" />
 			${grid.join('')}
-			<path d="${downloadPath}" class="monitoring-speedtest-line-download" />
-			<path d="${uploadPath}" class="monitoring-speedtest-line-upload" />
+			<path d="${downloadPath}" class="monitoring-speedtest-line-download" style="stroke: ${palette.download}" />
+			<path d="${uploadPath}" class="monitoring-speedtest-line-upload" style="stroke: ${palette.upload}" />
 			${circles}
-			<text x="${padLeft}" y="${height - 10}" class="monitoring-speedtest-legend">Download (blue) / Upload (orange)</text>
+			<text x="${padLeft}" y="${height - 10}" class="monitoring-speedtest-legend">${legendText}</text>
 		`;
 
 		labels.innerHTML = points.map(p => `<span>${this.core.escapeHtml(this.formatDate(p.ts, true))}</span>`).join('');
