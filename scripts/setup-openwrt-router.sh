@@ -40,15 +40,33 @@ install_file() {
 
 install_pkg_if_available() {
 	pkg="$1"
-	if opkg list-installed | grep -q "^$pkg -"; then
-		log "Package already installed: $pkg"
-		return 0
-	fi
-	if ! opkg list | grep -q "^$pkg -"; then
-		log "Package unavailable in current feed, skipping: $pkg"
-		return 0
-	fi
-	opkg install "$pkg" && log "Installed package: $pkg" || log "Failed to install package: $pkg"
+	case "$PKG_MGR" in
+	opkg)
+		if opkg list-installed | grep -q "^$pkg -"; then
+			log "Package already installed: $pkg"
+			return 0
+		fi
+		if ! opkg list | grep -q "^$pkg -"; then
+			log "Package unavailable in current feed, skipping: $pkg"
+			return 0
+		fi
+		opkg install "$pkg" && log "Installed package: $pkg" || log "Failed to install package: $pkg"
+		;;
+	apk)
+		if apk info -e "$pkg" >/dev/null 2>&1; then
+			log "Package already installed: $pkg"
+			return 0
+		fi
+		if ! apk search -x "$pkg" >/dev/null 2>&1; then
+			log "Package unavailable in current feed, skipping: $pkg"
+			return 0
+		fi
+		apk add "$pkg" && log "Installed package: $pkg" || log "Failed to install package: $pkg"
+		;;
+	*)
+		log "No supported package manager available; skipping package: $pkg"
+		;;
+	esac
 }
 
 set_uci() {
@@ -66,12 +84,20 @@ require_file "$REPO_DIR/rpcd-acl.json"
 require_file "$REPO_DIR/moci/index.html"
 
 log "Updating package feeds"
-opkg update
+PKG_MGR=""
+if have_cmd opkg; then
+	PKG_MGR="opkg"
+	opkg update
+elif have_cmd apk; then
+	PKG_MGR="apk"
+	apk update
+else
+	log "No supported package manager found (opkg/apk). Package install steps will be skipped."
+fi
 
-for pkg in \
+	for pkg in \
 	nano \
 	htop \
-	tcpdump-mini \
 	uhttpd-mod-ubus \
 	netcat \
 	sqlite3-cli \
