@@ -158,6 +158,7 @@ export default class NetworkModule {
 		document.getElementById('add-adblock-list-btn')?.addEventListener('click', () => this.addAdblockTargetList());
 
 		const adblockCleanup = this.core.delegateActions('adblock-targets-table', {
+			toggle: id => this.toggleAdblockTargetList(id),
 			delete: id => this.deleteAdblockTargetList(id)
 		});
 		if (adblockCleanup) this.cleanups.push(adblockCleanup);
@@ -883,7 +884,12 @@ export default class NetworkModule {
 				<td>${this.core.escapeHtml(row.name)}</td>
 				<td>${this.core.escapeHtml(row.url || 'N/A')}</td>
 				<td>${row.enabled ? this.core.renderBadge('success', 'ENABLED') : this.core.renderBadge('error', 'DISABLED')}</td>
-				<td><button class="action-btn-sm danger" data-action="delete" data-id="${this.core.escapeHtml(row.id)}">DELETE</button></td>
+				<td>
+					<button class="action-btn-sm" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">
+						${row.enabled ? 'DISABLE' : 'ENABLE'}
+					</button>
+					<button class="action-btn-sm danger" data-action="delete" data-id="${this.core.escapeHtml(row.id)}">DELETE</button>
+				</td>
 			</tr>`
 				)
 				.join('');
@@ -1017,6 +1023,23 @@ export default class NetworkModule {
 			await this.loadAdblock();
 		} catch {
 			this.core.showToast('Failed to delete target list', 'error');
+		}
+	}
+
+	async toggleAdblockTargetList(section) {
+		if (!section) return;
+		try {
+			const [status, result] = await this.core.uciGet('adblock-fast', String(section));
+			if (status !== 0 || !result?.values) throw new Error('Target list section not found');
+			const current = this.isEnabledValue(result.values.enabled ?? '0') ? '1' : '0';
+			const next = current === '1' ? '0' : '1';
+			await this.core.uciSet('adblock-fast', String(section), { enabled: next });
+			await this.core.uciCommit('adblock-fast');
+			await this.reloadAdblockService();
+			this.core.showToast(`Target list ${next === '1' ? 'enabled' : 'disabled'}`, 'success');
+			await this.loadAdblock();
+		} catch {
+			this.core.showToast('Failed to toggle target list', 'error');
 		}
 	}
 
