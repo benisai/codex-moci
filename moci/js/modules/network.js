@@ -833,57 +833,41 @@ export default class NetworkModule {
 			const tbody = document.querySelector('#adblock-targets-table tbody');
 			if (!tbody) return;
 
-			let config = null;
-			try {
-				const [status, result] = await this.core.uciGet('adblock');
-				if (status === 0 && result?.values) config = result.values;
-			} catch {}
-			if (!config) {
-				config = await this.readAdblockViaCli();
-			}
-
-			if (!config) {
+			const config = await this.readAdblockFastConfig();
+			if (!config || !config.values) {
 				document.getElementById('adblock-enabled').value = '0';
-				document.getElementById('adblock-safesearch').value = '0';
-				this.core.renderEmptyTable(tbody, 4, 'Adblock config not found. Install adblock/luci-app-adblock first.');
+				document.getElementById('adblock-config-update').value = '0';
+				this.core.renderEmptyTable(
+					tbody,
+					4,
+					'Adblock-Fast config not found. Install adblock-fast/luci-app-adblock-fast first.'
+				);
 				return;
 			}
 
-			let globalSection = null;
+			let mainSection = null;
 			const rows = [];
-			for (const [section, cfg] of Object.entries(config)) {
+			for (const [section, cfg] of Object.entries(config.values)) {
 				const type = String(cfg?.['.type'] || '');
-				if ((type === 'adblock' || section === 'global') && !globalSection) {
-					globalSection = { id: section, values: cfg };
-				} else if (type === 'source') {
+				if ((type === 'adblock-fast' || section === 'config') && !mainSection) {
+					mainSection = { id: section, values: cfg };
+				} else if (type === 'file_url') {
 					rows.push({
-						id: `source:${section}`,
-						name: String(cfg.adb_srcdesc || cfg.name || section),
-						url: String(cfg.adb_src || cfg.url || ''),
-						enabled: this.isEnabledValue(cfg.enabled),
-						kind: 'source'
+						id: section,
+						name: String(cfg.name || section),
+						url: String(cfg.url || ''),
+						enabled: this.isEnabledValue(cfg.enabled)
 					});
 				}
 			}
 
-			const feedList = this.parseAdblockFeedList(globalSection?.values?.adb_feed);
-			for (const feed of feedList) {
-				rows.push({
-					id: `feed:${feed}`,
-					name: feed,
-					url: 'Preset feed',
-					enabled: true,
-					kind: 'feed'
-				});
-			}
-
 			document.getElementById('adblock-enabled').value = this.isEnabledValue(
-				globalSection?.values?.adb_enabled ?? globalSection?.values?.enabled ?? '0'
+				mainSection?.values?.enabled ?? '0'
 			)
 				? '1'
 				: '0';
-			document.getElementById('adblock-safesearch').value = this.isEnabledValue(
-				globalSection?.values?.adb_safesearch ?? globalSection?.values?.safesearch ?? '0'
+			document.getElementById('adblock-config-update').value = this.isEnabledValue(
+				mainSection?.values?.config_update_enabled ?? '0'
 			)
 				? '1'
 				: '0';
@@ -906,20 +890,24 @@ export default class NetworkModule {
 		});
 	}
 
-	async readAdblockViaCli() {
+	async readAdblockFastConfig() {
+		try {
+			const [status, result] = await this.core.uciGet('adblock-fast');
+			if (status === 0 && result?.values) return result;
+		} catch {}
 		try {
 			const [status, result] = await this.core.ubusCall('file', 'exec', {
 				command: '/bin/sh',
-				params: ['-c', 'uci -q show adblock 2>/dev/null || true']
+				params: ['-c', 'uci -q show adblock-fast 2>/dev/null || true']
 			});
 			if (status !== 0 || !result?.stdout) return null;
-			return this.parseUciShowToConfig(String(result.stdout || ''));
+			return { values: this.parseUciShowToConfig(String(result.stdout || ''), 'adblock-fast') || null };
 		} catch {
 			return null;
 		}
 	}
 
-	parseUciShowToConfig(output) {
+	parseUciShowToConfig(output, packageName = 'adblock-fast') {
 		const cfg = {};
 		const lines = String(output || '')
 			.split('\n')
@@ -927,7 +915,8 @@ export default class NetworkModule {
 			.filter(Boolean);
 
 		for (const line of lines) {
-			const m = line.match(/^adblock\.([^.]+)\.([^=]+)=(.*)$/);
+			const escaped = packageName.replace('-', '\\-');
+			const m = line.match(new RegExp(`^${escaped}\\.([^.]+)\\.([^=]+)=(.*)$`));
 			if (!m) continue;
 			const section = m[1];
 			const key = m[2];
@@ -955,46 +944,29 @@ export default class NetworkModule {
 		return v === '1' || v === 'true' || v === 'on' || v === 'enabled' || v === 'yes';
 	}
 
-	parseAdblockFeedList(value) {
-		if (Array.isArray(value)) {
-			return value
-				.map(v => this.stripOuterQuotes(v))
-				.filter(Boolean);
-		}
-		const raw = String(value || '');
-		const quoted = [...raw.matchAll(/'([^']+)'|"([^"]+)"/g)]
-			.map(m => m[1] || m[2])
-			.filter(Boolean);
-		if (quoted.length > 0) return quoted;
-		return raw
-			.split(/\s+/)
-			.map(v => this.stripOuterQuotes(v))
-			.filter(Boolean);
-	}
-
 	async saveAdblockSettings() {
 		const enabled = String(document.getElementById('adblock-enabled')?.value || '0') === '1' ? '1' : '0';
-		const safesearch = String(document.getElementById('adblock-safesearch')?.value || '0') === '1' ? '1' : '0';
+		const configUpdate = String(document.getElementById('adblock-config-update')?.value || '0') === '1' ? '1' : '0';
 
 		try {
-			let section = 'global';
-			const [status, result] = await this.core.uciGet('adblock', 'global');
+			let section = 'config';
+			const [status, result] = await this.core.uciGet('adblock-fast', 'config');
 			if (status !== 0 || !result?.values) {
-				const [addStatus, addResult] = await this.core.uciAdd('adblock', 'adblock');
-				if (addStatus !== 0 || !addResult?.section) throw new Error('Unable to create adblock section');
+				const [addStatus, addResult] = await this.core.uciAdd('adblock-fast', 'adblock-fast', 'config');
+				if (addStatus !== 0 || !addResult?.section) throw new Error('Unable to create adblock-fast section');
 				section = addResult.section;
 			}
 
-			await this.core.uciSet('adblock', section, {
-				adb_enabled: enabled,
-				adb_safesearch: safesearch
+			await this.core.uciSet('adblock-fast', section, {
+				enabled,
+				config_update_enabled: configUpdate
 			});
-			await this.core.uciCommit('adblock');
+			await this.core.uciCommit('adblock-fast');
 			await this.reloadAdblockService();
-			this.core.showToast('Adblock settings saved', 'success');
+			this.core.showToast('Adblock-Fast settings saved', 'success');
 			await this.loadAdblock();
 		} catch {
-			this.core.showToast('Failed to save Adblock settings', 'error');
+			this.core.showToast('Failed to save Adblock-Fast settings', 'error');
 		}
 	}
 
@@ -1013,18 +985,16 @@ export default class NetworkModule {
 		}
 
 		try {
-			if (url) {
-				const [status, result] = await this.core.uciAdd('adblock', 'source');
-				if (status !== 0 || !result?.section) throw new Error('Unable to create adblock source');
-				await this.core.uciSet('adblock', result.section, {
-					name,
-					adb_srcdesc: name,
-					adb_src: url,
-					enabled
-				});
-			}
-			await this.appendAdblockFeed(name);
-			await this.core.uciCommit('adblock');
+			const [status, result] = await this.core.uciAdd('adblock-fast', 'file_url');
+			if (status !== 0 || !result?.section) throw new Error('Unable to create adblock-fast target list');
+			await this.core.uciSet('adblock-fast', result.section, {
+				'.type': 'file_url',
+				name,
+				url,
+				action: 'block',
+				enabled
+			});
+			await this.core.uciCommit('adblock-fast');
 			await this.reloadAdblockService();
 			this.core.showToast('Target list added', 'success');
 			document.getElementById('adblock-new-list-name').value = '';
@@ -1040,13 +1010,8 @@ export default class NetworkModule {
 		if (!section) return;
 		if (!confirm('Delete this target list?')) return;
 		try {
-			const id = String(section);
-			if (id.startsWith('source:')) {
-				await this.core.uciDelete('adblock', id.slice('source:'.length));
-			} else if (id.startsWith('feed:')) {
-				await this.removeAdblockFeed(id.slice('feed:'.length));
-			}
-			await this.core.uciCommit('adblock');
+			await this.core.uciDelete('adblock-fast', String(section));
+			await this.core.uciCommit('adblock-fast');
 			await this.reloadAdblockService();
 			this.core.showToast('Target list deleted', 'success');
 			await this.loadAdblock();
@@ -1060,27 +1025,11 @@ export default class NetworkModule {
 			command: '/bin/sh',
 			params: [
 				'-c',
-				'/etc/init.d/adblock reload 2>/dev/null || ' +
-					'/etc/init.d/adblock restart 2>/dev/null || ' +
-					'/etc/init.d/adblock start 2>/dev/null || true'
+				'/etc/init.d/adblock-fast reload 2>/dev/null || ' +
+					'/etc/init.d/adblock-fast restart 2>/dev/null || ' +
+					'/etc/init.d/adblock-fast start 2>/dev/null || true'
 			]
 		});
-	}
-
-	async appendAdblockFeed(feedName) {
-		const [status, result] = await this.core.uciGet('adblock', 'global');
-		if (status !== 0 || !result?.values) throw new Error('adblock global section not found');
-		const current = this.parseAdblockFeedList(result.values.adb_feed);
-		if (!current.includes(feedName)) current.push(feedName);
-		await this.core.uciSet('adblock', 'global', { adb_feed: current });
-	}
-
-	async removeAdblockFeed(feedName) {
-		const [status, result] = await this.core.uciGet('adblock', 'global');
-		if (status !== 0 || !result?.values) throw new Error('adblock global section not found');
-		const current = this.parseAdblockFeedList(result.values.adb_feed);
-		const next = current.filter(v => v !== feedName);
-		await this.core.uciSet('adblock', 'global', { adb_feed: next });
 	}
 
 	async loadDDNS() {

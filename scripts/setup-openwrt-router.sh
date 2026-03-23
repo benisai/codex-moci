@@ -127,7 +127,9 @@ for pkg in \
 	vnstati2 \
 	luci-app-vnstat2 \
 	nlbwmon \
-	luci-app-nlbwmon
+	luci-app-nlbwmon \
+	adblock-fast \
+	luci-app-adblock-fast
 do
 	install_pkg_if_available "$pkg"
 done
