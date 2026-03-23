@@ -30,6 +30,8 @@ export default class NetifyModule {
 		this.currentMaxPage = 0;
 		this.pauseAutoRefresh = false;
 		this.userPausedAutoRefresh = false;
+		this.lastTopAppsRefreshAt = 0;
+		this.isRefreshingTopApps = false;
 
 		this.core.registerRoute('/netify', async () => {
 			const pageElement = document.getElementById('netify-page');
@@ -157,6 +159,12 @@ export default class NetifyModule {
 			if (this.core.currentRoute && this.core.currentRoute.startsWith('/netify') && !this.isAutoRefreshPaused()) {
 				this.refresh(false, false);
 			}
+			if (this.core.currentRoute && this.core.currentRoute.startsWith('/netify')) {
+				const now = Date.now();
+				if (now - this.lastTopAppsRefreshAt >= 60000) {
+					this.refreshTopAppsAuto();
+				}
+			}
 		}, 10000);
 	}
 
@@ -262,8 +270,9 @@ pgrep -fa moci-netify-collector || true
 			await this.refreshHostnameMap();
 			this.renderOverview();
 			if (refreshTopApps) {
-				this.recomputeTopAppsRows();
+				this.recomputeTopAppsRows(this.flows);
 				this.renderTopApps();
+				this.lastTopAppsRefreshAt = Date.now();
 			}
 			this.renderRecentFlows();
 		} catch (err) {
@@ -272,6 +281,25 @@ pgrep -fa moci-netify-collector || true
 			if (showErrorToast) this.core.showToast('Failed to refresh Netify data', 'error');
 		} finally {
 			this.isRefreshing = false;
+		}
+	}
+
+	async refreshTopAppsAuto() {
+		if (this.isRefreshing || this.isRefreshingTopApps) return;
+		this.isRefreshingTopApps = true;
+		try {
+			const configuredLimit = Math.min(Math.max(Number(this.maxLines) || 5000, 50), 20000);
+			const maxWindowRows = Math.max(20, this.sqlChunkSize * this.sqlChunkCalls);
+			const limit = Math.max(20, Math.min(configuredLimit, maxWindowRows));
+			const snapshot = await this.fetchFlowChunkWindow(limit, 0);
+			this.recomputeTopAppsRows(snapshot);
+			this.renderTopApps();
+			this.lastTopAppsRefreshAt = Date.now();
+			this.logDebug(`Top apps auto-refreshed from ${snapshot.length} sampled row(s)`);
+		} catch (err) {
+			this.logDebug(`Top apps auto-refresh failed: ${err?.message || 'unknown error'}`);
+		} finally {
+			this.isRefreshingTopApps = false;
 		}
 	}
 
@@ -624,9 +652,9 @@ pgrep -fa moci-netify-collector || true
 		document.getElementById('netify-total-bytes').textContent = this.core.formatBytes(totalBytes);
 	}
 
-	recomputeTopAppsRows() {
+	recomputeTopAppsRows(sourceFlows = this.flows) {
 		const map = new Map();
-		for (const flow of this.flows) {
+		for (const flow of sourceFlows || []) {
 			const key = flow.app || 'Unknown';
 			const current = map.get(key) || { app: key, flows: 0, lastTs: 0 };
 			current.flows += 1;
