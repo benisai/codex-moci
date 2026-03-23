@@ -35,6 +35,7 @@ export default class SystemModule {
 
 	setupHandlers() {
 		document.getElementById('save-general-btn')?.addEventListener('click', () => this.saveGeneral());
+		document.getElementById('sync-browser-time-btn')?.addEventListener('click', () => this.syncBrowserTime());
 		document.getElementById('change-password-btn')?.addEventListener('click', () => this.changePassword());
 		document.getElementById('backup-btn')?.addEventListener('click', () => this.createBackup());
 		document.getElementById('reset-btn')?.addEventListener('click', () => this.factoryReset());
@@ -133,6 +134,46 @@ export default class SystemModule {
 			this.core.showToast('System settings saved', 'success');
 		} catch {
 			this.core.showToast('Failed to save settings', 'error');
+		}
+	}
+
+	async syncBrowserTime() {
+		const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+		const epochSec = Math.floor(Date.now() / 1000);
+		const safeZone = String(browserZone).trim();
+		if (!safeZone || !/^[A-Za-z0-9._+\-\/]+$/.test(safeZone)) {
+			this.core.showToast('Browser timezone is invalid', 'error');
+			return;
+		}
+
+		try {
+			await this.core.uciSet('system', '@system[0]', { zonename: safeZone });
+			await this.core.uciCommit('system');
+
+			await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', `date -u -s "@${epochSec}"`]
+			});
+
+			try {
+				await this.core.ubusCall('file', 'exec', {
+					command: '/etc/init.d/system',
+					params: ['reload']
+				});
+			} catch {}
+
+			try {
+				await this.core.ubusCall('file', 'exec', {
+					command: '/etc/init.d/sysntpd',
+					params: ['restart']
+				});
+			} catch {}
+
+			const timezoneInput = document.getElementById('system-timezone');
+			if (timezoneInput) timezoneInput.value = safeZone;
+			this.core.showToast(`Router time synced (${safeZone})`, 'success');
+		} catch {
+			this.core.showToast('Failed to sync browser time', 'error');
 		}
 	}
 
