@@ -390,6 +390,7 @@ export default class SystemModule {
 	}
 
 	async loadPackages() {
+		await this.updateSoftwareRootSpace();
 		await this.core.loadResource('packages-table', 3, 'packages', async () => {
 			let packages = [];
 
@@ -425,6 +426,28 @@ export default class SystemModule {
 			this.packagesPage = 0;
 			this.renderPackagesTable();
 		});
+	}
+
+	async updateSoftwareRootSpace() {
+		const labelEl = document.getElementById('software-root-space-label');
+		const fillEl = document.getElementById('software-root-space-fill');
+		if (!labelEl || !fillEl) return;
+
+		try {
+			const usageByMountPoint = await this.readMountUsageByMountPoint();
+			const rootUsage = usageByMountPoint.get('/');
+			if (!rootUsage) throw new Error('root mount usage unavailable');
+
+			const usedPct = Number(String(rootUsage.usePercent || '').replace('%', ''));
+			if (!Number.isFinite(usedPct)) throw new Error('invalid root usage value');
+
+			const remainingPct = Math.max(0, Math.min(100, 100 - usedPct));
+			fillEl.style.width = `${remainingPct.toFixed(1)}%`;
+			labelEl.textContent = `Remaining: ${remainingPct.toFixed(1)}% (${rootUsage.available || 'N/A'} free of ${rootUsage.size || 'N/A'})`;
+		} catch {
+			fillEl.style.width = '0%';
+			labelEl.textContent = 'Remaining: N/A';
+		}
 	}
 
 	parseOpkgStatus(content) {
