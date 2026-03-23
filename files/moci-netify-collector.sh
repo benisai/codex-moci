@@ -18,6 +18,7 @@ NETIFY_DB="$DEFAULT_DB"
 RETENTION_ROWS="$DEFAULT_RETENTION_ROWS"
 STREAM_TIMEOUT="$DEFAULT_STREAM_TIMEOUT"
 SQLITE_BIN=""
+NETIFY_FEATURE_ENABLED="1"
 
 log() {
 	logger -t moci-netify-collector "$*"
@@ -84,6 +85,9 @@ load_config() {
 
 		value="$(uci -q get moci.collector.stream_timeout 2>/dev/null || true)"
 		[ -n "$value" ] && STREAM_TIMEOUT="$value"
+
+		value="$(uci -q get moci.features.netify 2>/dev/null || true)"
+		[ -n "$value" ] && NETIFY_FEATURE_ENABLED="$value"
 	fi
 }
 
@@ -170,9 +174,17 @@ consume_stream() {
 
 run_forever() {
 	refresh_runtime_config
+	if [ "$NETIFY_FEATURE_ENABLED" != "1" ]; then
+		log "netify feature disabled (moci.features.netify=$NETIFY_FEATURE_ENABLED); exiting collector"
+		exit 0
+	fi
 	log "starting netify collector host=$NETIFY_HOST port=$NETIFY_PORT db=$NETIFY_DB timeout=${STREAM_TIMEOUT}s"
 	while true; do
 		refresh_runtime_config
+		if [ "$NETIFY_FEATURE_ENABLED" != "1" ]; then
+			log "netify feature disabled (moci.features.netify=$NETIFY_FEATURE_ENABLED); exiting collector"
+			exit 0
+		fi
 		log "connecting to netify stream at $NETIFY_HOST:$NETIFY_PORT"
 		consume_stream || true
 		log "stream disconnected; retrying in ${RECONNECT_DELAY}s"
