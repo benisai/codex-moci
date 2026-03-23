@@ -1251,30 +1251,43 @@
 								</div>
 								<div class="modal-body">
 									<input type="hidden" id="edit-cron-index" />
-
 									<div class="form-group">
-										<label class="form-label">MINUTE (0-59, * for every)</label>
-										<input type="text" id="edit-cron-minute" class="form-input" placeholder="*" />
+										<label class="form-label">TIME</label>
+										<input type="time" id="edit-cron-time" class="form-input" value="00:00" />
 									</div>
 
 									<div class="form-group">
-										<label class="form-label">HOUR (0-23, * for every)</label>
-										<input type="text" id="edit-cron-hour" class="form-input" placeholder="*" />
-									</div>
-
-									<div class="form-group">
-										<label class="form-label">DAY OF MONTH (1-31, * for every)</label>
-										<input type="text" id="edit-cron-day" class="form-input" placeholder="*" />
-									</div>
-
-									<div class="form-group">
-										<label class="form-label">MONTH (1-12, * for every)</label>
-										<input type="text" id="edit-cron-month" class="form-input" placeholder="*" />
-									</div>
-
-									<div class="form-group">
-										<label class="form-label">DAY OF WEEK (0-6, 0=Sunday, * for every)</label>
-										<input type="text" id="edit-cron-weekday" class="form-input" placeholder="*" />
+										<label class="form-label">DAYS</label>
+										<div style="display:grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px">
+											<label style="display:flex; align-items:center; justify-content:center; gap:6px; padding:8px; border:1px solid var(--glass-border); border-radius:6px; background: rgba(255,255,255,0.02); cursor:pointer;">
+												<input type="checkbox" class="cron-dow" id="cron-dow-0" value="0" checked />
+												<span style="font-size:11px">SUN</span>
+											</label>
+											<label style="display:flex; align-items:center; justify-content:center; gap:6px; padding:8px; border:1px solid var(--glass-border); border-radius:6px; background: rgba(255,255,255,0.02); cursor:pointer;">
+												<input type="checkbox" class="cron-dow" id="cron-dow-1" value="1" checked />
+												<span style="font-size:11px">MON</span>
+											</label>
+											<label style="display:flex; align-items:center; justify-content:center; gap:6px; padding:8px; border:1px solid var(--glass-border); border-radius:6px; background: rgba(255,255,255,0.02); cursor:pointer;">
+												<input type="checkbox" class="cron-dow" id="cron-dow-2" value="2" checked />
+												<span style="font-size:11px">TUE</span>
+											</label>
+											<label style="display:flex; align-items:center; justify-content:center; gap:6px; padding:8px; border:1px solid var(--glass-border); border-radius:6px; background: rgba(255,255,255,0.02); cursor:pointer;">
+												<input type="checkbox" class="cron-dow" id="cron-dow-3" value="3" checked />
+												<span style="font-size:11px">WED</span>
+											</label>
+											<label style="display:flex; align-items:center; justify-content:center; gap:6px; padding:8px; border:1px solid var(--glass-border); border-radius:6px; background: rgba(255,255,255,0.02); cursor:pointer;">
+												<input type="checkbox" class="cron-dow" id="cron-dow-4" value="4" checked />
+												<span style="font-size:11px">THU</span>
+											</label>
+											<label style="display:flex; align-items:center; justify-content:center; gap:6px; padding:8px; border:1px solid var(--glass-border); border-radius:6px; background: rgba(255,255,255,0.02); cursor:pointer;">
+												<input type="checkbox" class="cron-dow" id="cron-dow-5" value="5" checked />
+												<span style="font-size:11px">FRI</span>
+											</label>
+											<label style="display:flex; align-items:center; justify-content:center; gap:6px; padding:8px; border:1px solid var(--glass-border); border-radius:6px; background: rgba(255,255,255,0.02); cursor:pointer;">
+												<input type="checkbox" class="cron-dow" id="cron-dow-6" value="6" checked />
+												<span style="font-size:11px">SAT</span>
+											</label>
+										</div>
 									</div>
 
 									<div class="form-group">

@@ -86,8 +86,7 @@ export default class SystemModule {
 		});
 
 		document.getElementById('add-cron-btn')?.addEventListener('click', () => {
-			this.core.resetModal('cron-modal');
-			this.core.openModal('cron-modal');
+			this.openCronCreateModal();
 		});
 
 		document.getElementById('add-ssh-key-btn')?.addEventListener('click', () => {
@@ -643,32 +642,41 @@ export default class SystemModule {
 		const entry = entries[parseInt(index)];
 		if (!entry) return;
 		document.getElementById('edit-cron-index').value = index;
-		document.getElementById('edit-cron-minute').value = entry.minute;
-		document.getElementById('edit-cron-hour').value = entry.hour;
-		document.getElementById('edit-cron-day').value = entry.day;
-		document.getElementById('edit-cron-month').value = entry.month;
-		document.getElementById('edit-cron-weekday').value = entry.weekday;
+		document.getElementById('edit-cron-time').value = this.cronTimeFromEntry(entry);
+		this.applyCronWeekdaySelection(entry.weekday);
 		document.getElementById('edit-cron-command').value = entry.command;
 		document.getElementById('edit-cron-enabled').checked = entry.enabled;
+		if (entry.day !== '*' || entry.month !== '*') {
+			this.core.showToast('Editing simplified to weekly/day schedule in this dialog', 'warning');
+		}
 		this.core.openModal('cron-modal');
 	}
 
 	async saveCronEntry() {
 		const index = document.getElementById('edit-cron-index').value;
-		const minute = document.getElementById('edit-cron-minute').value || '*';
-		const hour = document.getElementById('edit-cron-hour').value || '*';
-		const day = document.getElementById('edit-cron-day').value || '*';
-		const month = document.getElementById('edit-cron-month').value || '*';
-		const weekday = document.getElementById('edit-cron-weekday').value || '*';
+		const timeValue = String(document.getElementById('edit-cron-time')?.value || '00:00');
+		const [hourPart, minutePart] = timeValue.split(':');
+		const hour = Number(hourPart);
+		const minute = Number(minutePart);
 		const command = document.getElementById('edit-cron-command').value.trim();
 		const enabled = document.getElementById('edit-cron-enabled').checked;
+		const weekdays = this.getSelectedCronWeekdays();
 
 		if (!command) {
 			this.core.showToast('Command is required', 'error');
 			return;
 		}
+		if (!Number.isInteger(hour) || hour < 0 || hour > 23 || !Number.isInteger(minute) || minute < 0 || minute > 59) {
+			this.core.showToast('Select a valid time', 'error');
+			return;
+		}
+		if (weekdays.length === 0) {
+			this.core.showToast('Select at least one day', 'error');
+			return;
+		}
 
-		const newLine = `${enabled ? '' : '# '}${minute} ${hour} ${day} ${month} ${weekday} ${command}`;
+		const weekdayExpr = weekdays.length === 7 ? '*' : weekdays.join(',');
+		const newLine = `${enabled ? '' : '# '}${minute} ${hour} * * ${weekdayExpr} ${command}`;
 		const lines = this.cronRaw.split('\n');
 
 		if (index !== '') {
@@ -692,6 +700,73 @@ export default class SystemModule {
 		} catch {
 			this.core.showToast('Failed to save cron entry', 'error');
 		}
+	}
+
+	openCronCreateModal() {
+		document.getElementById('edit-cron-index').value = '';
+		document.getElementById('edit-cron-time').value = '00:00';
+		document.getElementById('edit-cron-command').value = '';
+		document.getElementById('edit-cron-enabled').checked = true;
+		this.applyCronWeekdaySelection('*');
+		this.core.openModal('cron-modal');
+	}
+
+	cronTimeFromEntry(entry) {
+		const hour = Number(entry?.hour);
+		const minute = Number(entry?.minute);
+		const h = Number.isInteger(hour) && hour >= 0 && hour <= 23 ? String(hour).padStart(2, '0') : '00';
+		const m = Number.isInteger(minute) && minute >= 0 && minute <= 59 ? String(minute).padStart(2, '0') : '00';
+		return `${h}:${m}`;
+	}
+
+	getSelectedCronWeekdays() {
+		return Array.from(document.querySelectorAll('.cron-dow:checked'))
+			.map(el => Number(el.value))
+			.filter(v => Number.isInteger(v) && v >= 0 && v <= 6)
+			.sort((a, b) => a - b);
+	}
+
+	applyCronWeekdaySelection(expr) {
+		const selected = this.parseCronWeekdayExpression(expr);
+		for (let i = 0; i <= 6; i++) {
+			const cb = document.getElementById(`cron-dow-${i}`);
+			if (cb) cb.checked = selected.has(i);
+		}
+	}
+
+	parseCronWeekdayExpression(expr) {
+		const value = String(expr || '*')
+			.trim()
+			.toLowerCase();
+		const all = new Set([0, 1, 2, 3, 4, 5, 6]);
+		if (!value || value === '*') return all;
+
+		const byName = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+		const selected = new Set();
+		for (const partRaw of value.split(',')) {
+			const part = partRaw.trim();
+			if (!part) continue;
+
+			if (part.includes('-')) {
+				const [aRaw, bRaw] = part.split('-').map(s => s.trim());
+				const a = /^[0-7]$/.test(aRaw) ? Number(aRaw) % 7 : byName[aRaw];
+				const b = /^[0-7]$/.test(bRaw) ? Number(bRaw) % 7 : byName[bRaw];
+				if (Number.isInteger(a) && Number.isInteger(b)) {
+					if (a <= b) {
+						for (let i = a; i <= b; i++) selected.add(i);
+					} else {
+						for (let i = a; i <= 6; i++) selected.add(i);
+						for (let i = 0; i <= b; i++) selected.add(i);
+					}
+				}
+				continue;
+			}
+
+			if (/^[0-7]$/.test(part)) selected.add(Number(part) % 7);
+			else if (Object.prototype.hasOwnProperty.call(byName, part)) selected.add(byName[part]);
+		}
+
+		return selected.size > 0 ? selected : all;
 	}
 
 	async deleteCronEntry(index) {
