@@ -685,6 +685,7 @@ export default class SystemModule {
 				path: '/etc/crontabs/root',
 				data: lines.join('\n') + (this.cronRaw.endsWith('\n') ? '' : '\n')
 			});
+			await this.applyCronChanges();
 			this.core.closeModal('cron-modal');
 			this.core.showToast('Cron entry saved', 'success');
 			this.loadCron();
@@ -705,11 +706,28 @@ export default class SystemModule {
 				path: '/etc/crontabs/root',
 				data: lines.join('\n') + (this.cronRaw.endsWith('\n') ? '' : '\n')
 			});
+			await this.applyCronChanges();
 			this.core.showToast('Task deleted', 'success');
 			this.loadCron();
 		} catch {
 			this.core.showToast('Failed to delete task', 'error');
 		}
+	}
+
+	async applyCronChanges() {
+		// Different OpenWrt variants expose either "cron" or "crond".
+		// Try common restart/reload paths, then signal crond directly.
+		await this.core.ubusCall('file', 'exec', {
+			command: '/bin/sh',
+			params: [
+				'-c',
+				'/etc/init.d/cron reload 2>/dev/null || ' +
+					'/etc/init.d/cron restart 2>/dev/null || ' +
+					'/etc/init.d/crond reload 2>/dev/null || ' +
+					'/etc/init.d/crond restart 2>/dev/null || ' +
+					'killall -HUP crond 2>/dev/null || true'
+			]
+		});
 	}
 
 	async loadSSHKeys() {
