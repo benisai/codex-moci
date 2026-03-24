@@ -358,20 +358,17 @@ export default class DevicesModule {
 			recent: []
 		};
 
-		const topApps = summary.topApps.length > 0 ? summary.topApps.map(a => `${this.core.escapeHtml(a.name)} (${a.count})`).join(' • ') : 'N/A';
-		const recentRows =
-			summary.recent.length > 0
-				? summary.recent
+		const appRows =
+			summary.topApps.length > 0
+				? summary.topApps
 						.map(
-							r => `<tr>
-					<td>${this.core.escapeHtml(r.time)}</td>
-					<td>${this.core.escapeHtml(r.fqdn || r.app || 'Unknown')}</td>
-					<td>${this.core.escapeHtml(r.proto || 'N/A')}</td>
-					<td>${this.core.escapeHtml(r.destIp || '-')}</td>
+							item => `<tr>
+					<td>${this.core.escapeHtml(item.name)}</td>
+					<td>${this.core.escapeHtml(String(item.count))}</td>
 				</tr>`
 						)
 						.join('')
-				: `<tr><td colspan="4" style="text-align:center;color:var(--steel-muted)">No recent flows for this device</td></tr>`;
+				: `<tr><td colspan="2" style="text-align:center;color:var(--steel-muted)">No application data for this device</td></tr>`;
 
 		return `<div style="padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 6px;">
 			<div style="display:flex; flex-wrap:wrap; gap:14px; margin-bottom:10px; font-size:11px; font-family:var(--font-mono); color:var(--steel-light)">
@@ -380,17 +377,15 @@ export default class DevicesModule {
 				<span>TOTAL BYTES: ${this.core.escapeHtml(this.core.formatBytes(summary.bytes || 0))}</span>
 				<span>LAST SEEN: ${this.core.escapeHtml(summary.lastSeen)}</span>
 			</div>
-			<div style="margin-bottom:10px; font-size:11px; color:var(--steel-muted); font-family:var(--font-mono)">TOP APPS: ${topApps}</div>
+			<div style="margin-bottom:10px; font-size:11px; color:var(--steel-muted); font-family:var(--font-mono)">TOP APPLICATIONS (10)</div>
 			<table class="data-table" style="margin-top:0">
 				<thead>
 					<tr>
-						<th>TIME</th>
-						<th>HOST / APP</th>
-						<th>PROTOCOL</th>
-						<th>DEST IP</th>
+						<th>APPLICATION</th>
+						<th>FLOWS</th>
 					</tr>
 				</thead>
-				<tbody>${recentRows}</tbody>
+				<tbody>${appRows}</tbody>
 			</table>
 		</div>`;
 	}
@@ -437,7 +432,7 @@ export default class DevicesModule {
 
 			const topApps = Array.from(apps.entries())
 				.sort((a, b) => b[1] - a[1])
-				.slice(0, 5)
+				.slice(0, 10)
 				.map(([name, count]) => ({ name, count }));
 
 			this.netifyByMac.set(mac, {
