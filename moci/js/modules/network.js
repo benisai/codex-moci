@@ -187,7 +187,10 @@ export default class NetworkModule {
 
 	async loadInterfaces() {
 		await this.core.loadResource('interfaces-table', 6, 'network', async () => {
-			const [, result] = await this.core.ubusCall('network.interface', 'dump', {});
+			const [[, result], procNetDevMap] = await Promise.all([
+				this.core.ubusCall('network.interface', 'dump', {}),
+				this.readProcNetDevMap()
+			]);
 			if (!result?.interface) throw new Error('No data');
 			const tbody = document.querySelector('#interfaces-table tbody');
 			if (!tbody) return;
@@ -198,8 +201,9 @@ export default class NetworkModule {
 			tbody.innerHTML = result.interface
 				.map(iface => {
 					const ipv4 = iface['ipv4-address']?.[0]?.address || '---.---.---.---';
-					const rx = this.core.formatBytes(iface.statistics?.rx_bytes || 0);
-					const tx = this.core.formatBytes(iface.statistics?.tx_bytes || 0);
+					const { rxBytes, txBytes } = this.resolveInterfaceTotals(iface, procNetDevMap);
+					const rx = this.core.formatBytes(rxBytes);
+					const tx = this.core.formatBytes(txBytes);
 					return `<tr>
 					<td>${this.core.escapeHtml(iface.interface)}</td>
 					<td>${this.core.escapeHtml(iface.proto || 'none').toUpperCase()}</td>
@@ -211,6 +215,60 @@ export default class NetworkModule {
 				})
 				.join('');
 		});
+	}
+
+	async readProcNetDevMap() {
+		const map = new Map();
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'read', { path: '/proc/net/dev' });
+			if (status !== 0 || !result?.data) return map;
+			const lines = String(result.data)
+				.split('\n')
+				.slice(2)
+				.map(line => line.trim())
+				.filter(Boolean);
+			for (const line of lines) {
+				const [devPart, rest] = line.split(':');
+				if (!devPart || !rest) continue;
+				const dev = devPart.trim();
+				const fields = rest
+					.trim()
+					.split(/\s+/)
+					.map(v => Number(v) || 0);
+				// /proc/net/dev format: rx bytes is field 0, tx bytes is field 8
+				map.set(dev, { rxBytes: fields[0] || 0, txBytes: fields[8] || 0 });
+			}
+		} catch {}
+		return map;
+	}
+
+	resolveInterfaceTotals(iface, procNetDevMap) {
+		const stats = iface?.statistics || iface?.stats || {};
+		const directRx = Number(stats.rx_bytes ?? stats.rxBytes ?? 0) || 0;
+		const directTx = Number(stats.tx_bytes ?? stats.txBytes ?? 0) || 0;
+		if (directRx > 0 || directTx > 0) {
+			return { rxBytes: directRx, txBytes: directTx };
+		}
+
+		const candidates = [];
+		const addCandidate = value => {
+			const v = String(value || '').trim();
+			if (v && !candidates.includes(v)) candidates.push(v);
+		};
+
+		addCandidate(iface?.l3_device);
+		if (!Array.isArray(iface?.device)) addCandidate(iface?.device);
+		addCandidate(iface?.interface);
+		if (Array.isArray(iface?.device)) {
+			for (const d of iface.device) addCandidate(d);
+		}
+
+		for (const dev of candidates) {
+			const fromProc = procNetDevMap.get(dev);
+			if (fromProc) return fromProc;
+		}
+
+		return { rxBytes: 0, txBytes: 0 };
 	}
 
 	async editInterface(id) {
