@@ -323,19 +323,34 @@ export default class SystemModule {
 
 	async createBackup() {
 		try {
+			const backupCmd =
+				'BACKUP_FILE="/tmp/backup-$(cat /proc/sys/kernel/hostname 2>/dev/null || echo openwrt)-$(date +%F-%H%M%S).tar.gz"; ' +
+				'LOG_FILE="/tmp/moci-backup.log"; ' +
+				'if /sbin/sysupgrade -b "$BACKUP_FILE" >"$LOG_FILE" 2>&1 || /sbin/sysupgrade --create-backup "$BACKUP_FILE" >"$LOG_FILE" 2>&1; then ' +
+				'echo "$BACKUP_FILE"; ' +
+				'else cat "$LOG_FILE" >&2; exit 1; fi';
+
 			const [s, r] = await this.core.ubusCall(
 				'file',
 				'exec',
-				{ command: '/sbin/sysupgrade', params: ['--create-backup', '/tmp/backup.tar.gz'] },
-				{ timeout: 30000 }
+				{ command: '/bin/sh', params: ['-c', backupCmd] },
+				{ timeout: 90000 }
 			);
-			if (s !== 0) throw new Error('Backup failed');
+			if (s !== 0) throw new Error((r?.stderr || '').trim() || 'Backup failed');
+
+			const backupPath = String(r?.stdout || '')
+				.trim()
+				.split('\n')
+				.pop();
+			if (!backupPath || !backupPath.startsWith('/tmp/')) {
+				throw new Error('Backup file path not returned');
+			}
 
 			const [rs, rr] = await this.core.ubusCall('file', 'read', {
-				path: '/tmp/backup.tar.gz',
+				path: backupPath,
 				base64: true
 			});
-			if (rs !== 0 || !rr?.data) throw new Error('Failed to read backup');
+			if (rs !== 0 || !rr?.data) throw new Error('Failed to read generated backup archive');
 
 			const binary = atob(rr.data);
 			const bytes = new Uint8Array(binary.length);
@@ -345,15 +360,18 @@ export default class SystemModule {
 			const url = URL.createObjectURL(blob);
 			const a = document.createElement('a');
 			a.href = url;
-			a.download = `backup-${new Date().toISOString().slice(0, 10)}.tar.gz`;
+			a.download = backupPath.split('/').pop() || `backup-${new Date().toISOString().slice(0, 10)}.tar.gz`;
 			a.click();
 			URL.revokeObjectURL(url);
 			this.core.showToast('Backup created', 'success');
-		} catch {
-			this.core.showToast('Failed to create backup', 'error');
+		} catch (err) {
+			this.core.showToast(`Failed to create backup: ${err?.message || 'unknown error'}`, 'error');
 		} finally {
 			try {
-				await this.core.ubusCall('file', 'exec', { command: '/bin/rm', params: ['-f', '/tmp/backup.tar.gz'] });
+				await this.core.ubusCall('file', 'exec', {
+					command: '/bin/sh',
+					params: ['-c', 'rm -f /tmp/backup-*.tar.gz /tmp/moci-backup.log']
+				});
 			} catch {}
 		}
 	}
@@ -363,13 +381,23 @@ export default class SystemModule {
 		if (!confirm('This action cannot be undone. Are you absolutely sure?')) return;
 		try {
 			await this.core.ubusCall('file', 'exec', {
-				command: '/sbin/firstboot',
-				params: ['-y']
+				command: '/bin/sh',
+				params: [
+					'-c',
+					'if command -v firstboot >/dev/null 2>&1; then firstboot -y; ' +
+						'elif command -v jffs2reset >/dev/null 2>&1; then jffs2reset -y; ' +
+						'elif [ -x /sbin/firstboot ]; then /sbin/firstboot -y; ' +
+						'elif [ -x /sbin/jffs2reset ]; then /sbin/jffs2reset -y; ' +
+						'else echo "No reset utility found" >&2; exit 127; fi'
+				]
 			});
 			this.core.showToast('Factory reset initiated, rebooting...', 'success');
 			setTimeout(async () => {
 				try {
-					await this.core.ubusCall('system', 'reboot', {});
+					await this.core.ubusCall('file', 'exec', {
+						command: '/bin/sh',
+						params: ['-c', 'sleep 2; reboot']
+					});
 					setTimeout(() => this.core.logout(), 2000);
 				} catch {}
 			}, 2000);
