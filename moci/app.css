@@ -397,6 +397,18 @@ body {
 	padding-right: 12px;
 }
 
+.devices-row-expandable {
+	cursor: pointer;
+}
+
+.devices-row-expandable:hover {
+	background: rgba(255, 255, 255, 0.03);
+}
+
+.devices-netify-detail-row td {
+	background: rgba(255, 255, 255, 0.015);
+}
+
 .data-table tbody tr:hover {
 	background: rgba(255, 255, 255, 0.02);
 }
