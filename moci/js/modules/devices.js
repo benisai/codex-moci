@@ -39,7 +39,6 @@ export default class DevicesModule {
 		this.core.delegateActions('devices-table', {
 			pin: mac => this.openPinDialog(mac)
 		});
-		document.querySelector('#devices-table tbody')?.addEventListener('click', event => this.handleRowClick(event));
 	}
 
 	startRefreshLoop() {
@@ -306,6 +305,10 @@ export default class DevicesModule {
 				</tr>`;
 			})
 			.join('');
+
+		tbody.querySelectorAll('tr[data-device-mac]').forEach(tr => {
+			tr.addEventListener('click', event => this.handleRowClick(event));
+		});
 	}
 
 	handleRowClick(event) {
