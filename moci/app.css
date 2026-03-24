@@ -363,6 +363,12 @@ body {
 	border: 1px solid rgba(180, 155, 72, 0.32);
 }
 
+.monitoring-excellent-soft {
+	background: rgba(255, 255, 255, 0.02);
+	color: #bfecc0;
+	border: 1px solid rgba(144, 238, 144, 0.25);
+}
+
 .data-table {
 	width: 100%;
 	border-collapse: collapse;

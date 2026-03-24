@@ -654,7 +654,12 @@ export default class MonitoringModule {
 	}
 
 	getStatusBadge(status) {
-		if (status === 'ok') return this.core.renderBadge('success', 'excellent');
+		if (status === 'ok') {
+			const badge = this.core.renderBadge('success', 'excellent');
+			return this.isColorfulGraphsEnabled()
+				? badge.replace('class="badge badge-success"', 'class="badge badge-success monitoring-excellent-soft"')
+				: badge;
+		}
 		if (status === 'good') return this.core.renderBadge('info', 'good');
 		if (status === 'critical') return this.core.renderBadge('error', `over ${Math.round(this.thresholdMs)}ms`);
 		if (status === 'warn') return this.core.renderBadge('warning', 'high latency');
