@@ -170,6 +170,7 @@ export default class NetworkModule {
 	setupDiagnostics() {
 		document.getElementById('ping-btn')?.addEventListener('click', () => this.runDiagnostic('ping'));
 		document.getElementById('traceroute-btn')?.addEventListener('click', () => this.runDiagnostic('traceroute'));
+		document.getElementById('nslookup-btn')?.addEventListener('click', () => this.runDiagnostic('nslookup'));
 		document.getElementById('wol-btn')?.addEventListener('click', () => this.runWoL());
 	}
 
@@ -1726,6 +1727,18 @@ export default class NetworkModule {
 					host
 				],
 				timeout: 45000
+			},
+			nslookup: {
+				command: '/bin/sh',
+				params: [
+					'-c',
+					'if command -v nslookup >/dev/null 2>&1; then nslookup "$1"; ' +
+						'elif command -v busybox >/dev/null 2>&1; then busybox nslookup "$1"; ' +
+						'else echo "nslookup command not found"; exit 127; fi',
+					'sh',
+					host
+				],
+				timeout: 30000
 			}
 		};
 
