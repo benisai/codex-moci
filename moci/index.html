@@ -1531,6 +1531,24 @@
 							</div>
 
 							<div class="stat-card" style="margin-top: 24px">
+								<div class="section-title">NSLOOKUP</div>
+								<div class="diagnostic-form">
+									<input
+										type="text"
+										id="nslookup-host"
+										placeholder="Enter hostname or domain"
+										class="diag-input"
+									/>
+									<button class="action-btn" id="nslookup-btn">RUN NSLOOKUP</button>
+								</div>
+								<div class="log-viewer" id="nslookup-output" style="min-height: 200px">
+									<div class="log-line" style="color: var(--steel-muted)">
+										Enter a hostname/domain and click Run Nslookup
+									</div>
+								</div>
+							</div>
+
+							<div class="stat-card" style="margin-top: 24px">
 								<div class="section-title">WAKE-ON-LAN</div>
 								<div class="diagnostic-form">
 									<input
@@ -1549,24 +1567,6 @@
 								<div class="log-viewer" id="wol-output" style="min-height: 100px">
 									<div class="log-line" style="color: var(--steel-muted)">
 										Enter a MAC address to wake a device on the network
-									</div>
-								</div>
-							</div>
-
-							<div class="stat-card" style="margin-top: 24px">
-								<div class="section-title">NSLOOKUP</div>
-								<div class="diagnostic-form">
-									<input
-										type="text"
-										id="nslookup-host"
-										placeholder="Enter hostname or domain"
-										class="diag-input"
-									/>
-									<button class="action-btn" id="nslookup-btn">RUN NSLOOKUP</button>
-								</div>
-								<div class="log-viewer" id="nslookup-output" style="min-height: 200px">
-									<div class="log-line" style="color: var(--steel-muted)">
-										Enter a hostname/domain and click Run Nslookup
 									</div>
 								</div>
 							</div>
