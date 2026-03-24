@@ -661,9 +661,22 @@ export default class MonitoringModule {
 				: badge;
 		}
 		if (status === 'good') return this.core.renderBadge('info', 'good');
-		if (status === 'critical') return this.core.renderBadge('error', `over ${Math.round(this.thresholdMs)}ms`);
-		if (status === 'warn') return this.core.renderBadge('warning', 'high latency');
-		return this.core.renderBadge('error', 'outage');
+		if (status === 'critical') {
+			const badge = this.core.renderBadge('error', `over ${Math.round(this.thresholdMs)}ms`);
+			return this.isColorfulGraphsEnabled()
+				? badge.replace('class="badge badge-error"', 'class="badge badge-error monitoring-high-latency-soft"')
+				: badge;
+		}
+		if (status === 'warn') {
+			const badge = this.core.renderBadge('warning', 'high latency');
+			return this.isColorfulGraphsEnabled()
+				? badge.replace('class="badge badge-warning"', 'class="badge badge-warning monitoring-latency-soft"')
+				: badge;
+		}
+		const badge = this.core.renderBadge('error', 'outage');
+		return this.isColorfulGraphsEnabled()
+			? badge.replace('class="badge badge-error"', 'class="badge badge-error monitoring-high-latency-soft"')
+			: badge;
 	}
 
 	renderTimeline(displaySamples = []) {

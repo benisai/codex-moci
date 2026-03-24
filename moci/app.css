@@ -369,6 +369,18 @@ body {
 	border: 1px solid rgba(144, 238, 144, 0.25);
 }
 
+.monitoring-latency-soft {
+	background: rgba(255, 255, 255, 0.02);
+	color: #d3bf7c;
+	border: 1px solid rgba(180, 155, 72, 0.32);
+}
+
+.monitoring-high-latency-soft {
+	background: rgba(255, 170, 170, 0.08);
+	color: #ffb0b0;
+	border: 1px solid rgba(255, 125, 125, 0.45);
+}
+
 .data-table {
 	width: 100%;
 	border-collapse: collapse;
