@@ -9,6 +9,9 @@ export default class DevicesModule {
 		this.expandedMac = '';
 		this.netifyByMac = new Map();
 		this.netifyDbPath = '/tmp/moci-netify.sqlite';
+		this.deviceSqlChunkSize = 200;
+		this.deviceSqlChunkCalls = 15;
+		this.deviceMaxRows = 3000;
 
 		this.core.registerRoute('/devices', async () => {
 			const pageElement = document.getElementById('devices-page');
@@ -393,12 +396,7 @@ export default class DevicesModule {
 	async loadNetifyDetails(mac) {
 		try {
 			const dbPath = await this.resolveNetifyDbPath();
-			const sql = `SELECT json FROM flow_raw WHERE json LIKE '%"local_mac":"${mac}"%' ORDER BY id DESC LIMIT 200;`;
-			const raw = await this.querySql(dbPath, sql);
-			const lines = String(raw || '')
-				.split('\n')
-				.map(line => line.trim())
-				.filter(Boolean);
+			const lines = await this.fetchDeviceFlowWindow(dbPath, mac, this.deviceMaxRows);
 
 			const flows = [];
 			for (const line of lines) {
@@ -452,6 +450,60 @@ export default class DevicesModule {
 				error: err?.message || 'query failed'
 			});
 		}
+	}
+
+	async fetchDeviceFlowWindow(dbPath, mac, requestedRows) {
+		const safeMac = this.normalizeMac(mac);
+		if (!safeMac) return [];
+
+		const maxWindowRows = Math.max(20, this.deviceSqlChunkSize * this.deviceSqlChunkCalls);
+		const requested = Math.max(20, Math.min(Number(requestedRows) || this.deviceMaxRows, maxWindowRows));
+		const tried = new Set();
+		const limits = [requested, 1500, 800, 400, 200].filter(n => {
+			if (n < 20 || tried.has(n)) return false;
+			tried.add(n);
+			return true;
+		});
+
+		let lastErr = null;
+		for (const limit of limits) {
+			try {
+				const rows = await this.fetchDeviceFlowChunkWindow(dbPath, safeMac, limit, 0);
+				if (rows.length > 0) return rows;
+			} catch (err) {
+				lastErr = err;
+			}
+		}
+		if (lastErr) throw lastErr;
+		return [];
+	}
+
+	async fetchDeviceFlowChunkWindow(dbPath, mac, limit, startOffset) {
+		const maxStep = Math.max(20, Number(this.deviceSqlChunkSize) || 200);
+		const maxCalls = Math.max(1, Number(this.deviceSqlChunkCalls) || 15);
+		let remaining = Math.max(0, Number(limit) || 0);
+		let offset = Math.max(0, Number(startOffset) || 0);
+		let combined = [];
+		let calls = 0;
+
+		while (remaining > 0 && calls < maxCalls) {
+			const step = Math.min(maxStep, remaining);
+			const sql = `SELECT json FROM flow_raw WHERE json LIKE '%"local_mac":"${mac}"%' ORDER BY id DESC LIMIT ${step} OFFSET ${offset};`;
+			const out = await this.querySql(dbPath, sql);
+			const lines = String(out || '')
+				.split('\n')
+				.map(line => line.trim())
+				.filter(Boolean);
+			if (lines.length === 0) break;
+
+			combined = combined.concat(lines);
+			offset += lines.length;
+			remaining -= lines.length;
+			calls += 1;
+			if (lines.length < step) break;
+		}
+
+		return combined;
 	}
 
 	async resolveNetifyDbPath() {
