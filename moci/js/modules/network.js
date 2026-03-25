@@ -196,7 +196,11 @@ export default class NetworkModule {
 			'dhcp-static-table': { edit: id => this.editStaticLease(id), delete: id => this.deleteStaticLease(id) },
 			'dns-entries-table': { edit: id => this.editDnsEntry(id), delete: id => this.deleteDnsEntry(id) },
 			'hosts-table': { edit: id => this.editHostEntry(id), delete: id => this.deleteHostEntry(id) },
-			'ddns-table': { edit: id => this.editDDNS(id), delete: id => this.deleteDDNS(id) },
+			'ddns-table': {
+				toggle: id => this.toggleDDNS(id),
+				edit: id => this.editDDNS(id),
+				delete: id => this.deleteDDNS(id)
+			},
 			'qos-rules-table': { edit: id => this.editQoSRule(id), delete: id => this.deleteQoSRule(id) },
 			'wg-peers-table': { edit: id => this.editWgPeer(id), delete: id => this.deleteWgPeer(id) }
 		};
@@ -2003,32 +2007,118 @@ export default class NetworkModule {
 	}
 
 	async loadDDNS() {
-		await this.core.loadResource('ddns-table', 6, 'ddns', async () => {
+		await this.core.loadResource('ddns-table', 7, 'ddns', async () => {
 			const [status, result] = await this.core.uciGet('ddns');
 			if (status !== 0 || !result?.values) throw new Error('No data');
 			const services = Object.entries(result.values)
 				.filter(([, v]) => v['.type'] === 'service')
 				.map(([k, v]) => ({ section: k, ...v }));
+			const runtimeBySection = await this.fetchDdnsRuntimeMap(services);
 
 			const tbody = document.querySelector('#ddns-table tbody');
 			if (!tbody) return;
 			if (services.length === 0) {
-				this.core.renderEmptyTable(tbody, 6, 'No DDNS services configured');
+				this.core.renderEmptyTable(tbody, 7, 'No DDNS services configured');
 				return;
 			}
 			tbody.innerHTML = services
-				.map(
-					s => `<tr>
+				.map(s => {
+					const enabled = String(s.enabled || '0') === '1';
+					const runtime = runtimeBySection.get(String(s.section)) || { state: 'UNKNOWN', ip: '' };
+					const effectiveState = enabled ? runtime.state : 'DISABLED';
+					const stateBadge =
+						effectiveState === 'RUNNING'
+							? this.core.renderBadge('success', 'RUNNING')
+							: effectiveState === 'STOPPED' || effectiveState === 'DISABLED'
+								? this.core.renderBadge('error', effectiveState)
+								: this.core.renderBadge('warning', 'UNKNOWN');
+					return `<tr>
 				<td>${this.core.escapeHtml(s.section)}</td>
 				<td>${this.core.escapeHtml(s.lookup_host || s.domain || 'N/A')}</td>
 				<td>${this.core.escapeHtml(s.service_name || 'Custom')}</td>
-				<td>${this.core.renderBadge('info', 'N/A')}</td>
-				<td>${this.core.renderStatusBadge(s.enabled === '1')}</td>
+				<td>${this.core.escapeHtml(runtime.ip || 'N/A')}</td>
+				<td>${stateBadge}</td>
+				<td><button class="action-btn-sm status-indicator-btn ${enabled ? 'success' : 'danger'}" type="button" data-action="toggle" data-id="${this.core.escapeHtml(s.section)}">${enabled ? 'ENABLED' : 'DISABLED'}</button></td>
 				<td>${this.core.renderActionButtons(s.section)}</td>
-			</tr>`
-				)
+			</tr>`;
+				})
 				.join('');
 		});
+	}
+
+	async fetchDdnsRuntimeMap(services) {
+		const map = new Map();
+		if (!Array.isArray(services) || services.length === 0) return map;
+
+		const rows = await Promise.all(
+			services.map(async service => {
+				const section = String(service?.section || '').trim();
+				if (!section) return null;
+				const runtime = await this.fetchDdnsRuntime(section);
+				return [section, runtime];
+			})
+		);
+
+		for (const row of rows) {
+			if (!row) continue;
+			map.set(row[0], row[1]);
+		}
+
+		return map;
+	}
+
+	async fetchDdnsRuntime(section) {
+		try {
+			const safeSection = this.shellQuote(section);
+			const command = `section=${safeSection}
+status_out="$(/etc/init.d/ddns status "$section" 2>/dev/null || true)"
+state="UNKNOWN"
+if printf "%s\\n" "$status_out" | grep -qiE 'running|updating|pid'; then
+	state="RUNNING"
+elif printf "%s\\n" "$status_out" | grep -qiE 'stopped|not running|disabled|inactive'; then
+	state="STOPPED"
+fi
+ip="$(printf "%s\\n" "$status_out" | grep -Eo '([0-9]{1,3}\\.){3}[0-9]{1,3}' | head -n 1)"
+if [ -z "$ip" ]; then
+	for f in "/var/run/ddns/${section}.ip" "/var/run/ddns/${section}.dat" "/var/run/ddns/${section}.update" "/tmp/ddns/${section}.ip"; do
+		[ -r "$f" ] || continue
+		ip="$(grep -Eo '([0-9]{1,3}\\.){3}[0-9]{1,3}' "$f" | head -n 1)"
+		[ -n "$ip" ] && break
+	done
+fi
+printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', command]
+			});
+			if (status !== 0) return { state: 'UNKNOWN', ip: '' };
+			const stdout = String(result?.stdout || '');
+			const state = (stdout.match(/STATE=([A-Z_]+)/)?.[1] || 'UNKNOWN').trim();
+			const ip = (stdout.match(/IP=([^\n]*)/)?.[1] || '').trim();
+			return { state, ip };
+		} catch {
+			return { state: 'UNKNOWN', ip: '' };
+		}
+	}
+
+	async toggleDDNS(id) {
+		if (!id) return;
+		try {
+			const [status, result] = await this.core.uciGet('ddns', id);
+			if (status !== 0 || !result?.values) throw new Error('DDNS section not found');
+			const currentEnabled = String(result.values.enabled || '0') === '1';
+			const nextEnabled = currentEnabled ? '0' : '1';
+			await this.core.uciSet('ddns', id, { enabled: nextEnabled });
+			await this.core.uciCommit('ddns');
+			await this.core.ubusCall('file', 'exec', {
+				command: '/etc/init.d/ddns',
+				params: ['restart']
+			});
+			this.core.showToast(`DDNS ${nextEnabled === '1' ? 'enabled' : 'disabled'}`, 'success');
+			await this.loadDDNS();
+		} catch {
+			this.core.showToast('Failed to update DDNS status', 'error');
+		}
 	}
 
 	async editDDNS(id) {
