@@ -1263,6 +1263,7 @@ export default class NetworkModule {
 	async loadPBR() {
 		await this.core.loadResource('pbr-policies-table', 10, null, async () => {
 			this.syncPbrSettingsPanel();
+			await this.populatePbrInterfaceOptions();
 			const policyTbody = document.querySelector('#pbr-policies-table tbody');
 			const dnsTbody = document.querySelector('#pbr-dns-policies-table tbody');
 			const includeTbody = document.querySelector('#pbr-includes-table tbody');
@@ -1519,6 +1520,8 @@ export default class NetworkModule {
 			const [status, result] = await this.core.uciGet('pbr', String(section));
 			if (status !== 0 || !result?.values) throw new Error('Policy not found');
 			const cfg = result.values;
+			const selectedInterface = String(cfg.interface || 'wan');
+			await this.populatePbrInterfaceOptions(selectedInterface);
 			document.getElementById('edit-pbr-policy-section').value = String(section);
 			document.getElementById('edit-pbr-policy-enabled').value = this.isEnabledValue(cfg.enabled ?? '1') ? '1' : '0';
 			document.getElementById('edit-pbr-policy-name').value = String(cfg.name || '');
@@ -1528,7 +1531,7 @@ export default class NetworkModule {
 			document.getElementById('edit-pbr-policy-dest-port').value = String(cfg.dest_port || '');
 			document.getElementById('edit-pbr-policy-proto').value = String(cfg.proto || 'all');
 			document.getElementById('edit-pbr-policy-chain').value = String(cfg.chain || 'prerouting');
-			document.getElementById('edit-pbr-policy-interface').value = String(cfg.interface || 'wan');
+			document.getElementById('edit-pbr-policy-interface').value = selectedInterface;
 			this.core.openModal('pbr-policy-modal');
 		} catch {
 			this.core.showToast('Failed to load PBR policy', 'error');
@@ -1600,6 +1603,56 @@ export default class NetworkModule {
 		resetValue('pbr-policy-proto', 'all');
 		resetValue('pbr-policy-chain', 'prerouting');
 		resetValue('pbr-policy-interface', 'wan');
+	}
+
+	async populatePbrInterfaceOptions(editSelected = '') {
+		const addSelect = document.getElementById('pbr-policy-interface');
+		const editSelect = document.getElementById('edit-pbr-policy-interface');
+		if (!addSelect && !editSelect) return;
+
+		let names = [];
+		try {
+			const [, dump] = await this.core.ubusCall('network.interface', 'dump', {});
+			const rows = Array.isArray(dump?.interface) ? dump.interface : [];
+			const set = new Set();
+			for (const row of rows) {
+				const n = String(row?.interface || '').trim();
+				if (!n || n === 'loopback') continue;
+				set.add(n);
+			}
+			names = Array.from(set);
+		} catch {}
+
+		if (names.length === 0) {
+			try {
+				const [status, result] = await this.core.uciGet('network');
+				if (status === 0 && result?.values) {
+					const set = new Set();
+					for (const [section, cfg] of Object.entries(result.values)) {
+						if (String(cfg?.['.type'] || '') === 'interface' && section !== 'loopback') set.add(section);
+					}
+					names = Array.from(set);
+				}
+			} catch {}
+		}
+
+		if (!names.includes('wan')) names.unshift('wan');
+		names = Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
+
+		const render = (selectEl, preferred) => {
+			if (!selectEl) return;
+			const current = String(selectEl.value || '').trim();
+			const selected = String(preferred || current || 'wan').trim();
+			const list = [...names];
+			if (selected && !list.includes(selected)) list.push(selected);
+			selectEl.innerHTML = list
+				.map(name => `<option value="${this.core.escapeHtml(name)}">${this.core.escapeHtml(name)}</option>`)
+				.join('');
+			selectEl.value = selected || (list.includes('wan') ? 'wan' : list[0] || '');
+		};
+
+		render(addSelect, String(addSelect?.value || 'wan'));
+		render(editSelect, editSelected);
 	}
 
 	async addPbrDnsPolicy() {
