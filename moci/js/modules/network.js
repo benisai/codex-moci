@@ -118,6 +118,14 @@ export default class NetworkModule {
 		});
 
 		this.core.setupModal({
+			modalId: 'adblock-list-modal',
+			closeBtnId: 'close-adblock-list-modal',
+			cancelBtnId: 'cancel-adblock-list-btn',
+			saveBtnId: 'save-adblock-list-btn',
+			saveHandler: () => this.addAdblockTargetList()
+		});
+
+		this.core.setupModal({
 			modalId: 'pbr-dns-policy-modal',
 			closeBtnId: 'close-pbr-dns-policy-modal',
 			cancelBtnId: 'cancel-pbr-dns-policy-btn',
@@ -215,7 +223,11 @@ export default class NetworkModule {
 		document.getElementById('generate-wg-keys-btn')?.addEventListener('click', () => this.generateWgKeys());
 		document.getElementById('save-adblock-settings-btn')?.addEventListener('click', () => this.saveAdblockSettings());
 		document.getElementById('refresh-adblock-btn')?.addEventListener('click', () => this.loadAdblock());
-		document.getElementById('add-adblock-list-btn')?.addEventListener('click', () => this.addAdblockTargetList());
+		document.getElementById('add-adblock-list-btn')?.addEventListener('click', () => {
+			this.core.resetModal('adblock-list-modal');
+			this.resetAdblockListForm();
+			this.core.openModal('adblock-list-modal');
+		});
 		document.getElementById('adblock-settings-toggle-btn')?.addEventListener('click', () =>
 			this.toggleAdblockSettingsPanel()
 		);
@@ -1436,13 +1448,21 @@ export default class NetworkModule {
 			await this.core.uciCommit('adblock-fast');
 			await this.reloadAdblockService();
 			this.core.showToast('Target list added', 'success');
-			document.getElementById('adblock-new-list-name').value = '';
-			document.getElementById('adblock-new-list-url').value = '';
-			document.getElementById('adblock-new-list-enabled').value = '1';
+			this.resetAdblockListForm();
+			this.core.closeModal('adblock-list-modal');
 			await this.loadAdblock();
 		} catch {
 			this.core.showToast('Failed to add target list', 'error');
 		}
+	}
+
+	resetAdblockListForm() {
+		const nameEl = document.getElementById('adblock-new-list-name');
+		const urlEl = document.getElementById('adblock-new-list-url');
+		const enabledEl = document.getElementById('adblock-new-list-enabled');
+		if (nameEl) nameEl.value = '';
+		if (urlEl) urlEl.value = '';
+		if (enabledEl) enabledEl.value = '1';
 	}
 
 	async deleteAdblockTargetList(section) {

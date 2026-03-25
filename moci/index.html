@@ -1442,26 +1442,6 @@
 						<div class="tab-content hidden" id="tab-adblock" data-feature="adblock">
 							<div class="stat-card">
 								<div class="section-title">TARGET LISTS</div>
-								<div class="form-group">
-									<label class="form-label">LIST NAME</label>
-									<input type="text" id="adblock-new-list-name" class="form-input" placeholder="my_custom_list" />
-								</div>
-								<div class="form-group">
-									<label class="form-label">LIST URL</label>
-									<input
-										type="text"
-										id="adblock-new-list-url"
-										class="form-input"
-										placeholder="https://example.com/blocklist.txt"
-									/>
-								</div>
-								<div class="form-group">
-									<label class="form-label">LIST STATUS</label>
-									<select id="adblock-new-list-enabled" class="form-input">
-										<option value="1">Enabled</option>
-										<option value="0">Disabled</option>
-									</select>
-								</div>
 								<div class="quick-actions" style="margin-bottom: 16px">
 									<button class="action-btn" id="add-adblock-list-btn">ADD TARGET LIST</button>
 								</div>
@@ -1750,6 +1730,42 @@
 									</div>
 								</div>
 							</div>
+							</div>
+						</div>
+
+						<div class="modal hidden" id="adblock-list-modal">
+							<div class="modal-backdrop"></div>
+							<div class="modal-content">
+								<div class="modal-header">
+									<h3 class="modal-title">ADD TARGET LIST</h3>
+									<button class="modal-close" id="close-adblock-list-modal">&times;</button>
+								</div>
+								<div class="modal-body">
+									<div class="form-group">
+										<label class="form-label">LIST NAME</label>
+										<input type="text" id="adblock-new-list-name" class="form-input" placeholder="my_custom_list" />
+									</div>
+									<div class="form-group">
+										<label class="form-label">LIST URL</label>
+										<input
+											type="text"
+											id="adblock-new-list-url"
+											class="form-input"
+											placeholder="https://example.com/blocklist.txt"
+										/>
+									</div>
+									<div class="form-group">
+										<label class="form-label">LIST STATUS</label>
+										<select id="adblock-new-list-enabled" class="form-input">
+											<option value="1">Enabled</option>
+											<option value="0">Disabled</option>
+										</select>
+									</div>
+								</div>
+								<div class="modal-footer">
+									<button class="action-btn" id="cancel-adblock-list-btn">CANCEL</button>
+									<button class="action-btn" id="save-adblock-list-btn">ADD TARGET LIST</button>
+								</div>
 							</div>
 						</div>
 
