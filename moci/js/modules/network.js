@@ -786,7 +786,7 @@ export default class NetworkModule {
 						<td>${this.core.escapeHtml(f.dest_ip || 'N/A')}</td>
 						<td>${this.core.escapeHtml(f.dest_port || f.src_dport || 'N/A')}</td>
 						<td>${this.core.renderStatusBadge(f.enabled !== '0')}</td>
-						<td>${this.core.renderActionButtons(f.section)}</td>
+						<td>${this.renderFirewallActionButtons(f.section)}</td>
 					</tr>`
 						)
 						.join('');
@@ -808,13 +808,20 @@ export default class NetworkModule {
 						<td>${this.core.escapeHtml(r.proto || 'Any')}</td>
 						<td>${this.core.escapeHtml(r.dest_port || 'Any')}</td>
 						<td>${this.core.renderBadge(r.target === 'ACCEPT' ? 'success' : 'error', r.target || 'DROP')}</td>
-						<td>${this.core.renderActionButtons(r.section)}</td>
+						<td>${this.renderFirewallActionButtons(r.section)}</td>
 					</tr>`
 						)
 						.join('');
 				}
 			}
 		});
+	}
+
+	renderFirewallActionButtons(id) {
+		const eid = this.core.escapeHtml(id);
+		const colorful = this.core.isFeatureEnabled('colorful_graphs');
+		const deleteClass = colorful ? ' danger' : '';
+		return `<button class="action-btn-sm" data-action="edit" data-id="${eid}" style="font-size:11px;padding:4px 8px;line-height:1.2">EDIT</button><button class="action-btn-sm${deleteClass}" data-action="delete" data-id="${eid}" style="font-size:11px;padding:4px 8px;line-height:1.2">DELETE</button>`;
 	}
 
 	async editForward(id) {
