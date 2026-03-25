@@ -504,6 +504,18 @@ body {
 	border-color: rgba(255, 68, 68, 0.35);
 }
 
+.action-btn-sm.warning {
+	border-color: rgba(255, 184, 0, 0.35);
+	color: #ffd79a;
+}
+
+.action-btn-sm.warning:hover {
+	border-color: rgba(255, 184, 0, 0.75);
+	color: #ffcc7a;
+	box-shadow: 0 0 8px rgba(255, 184, 0, 0.2);
+	background: rgba(255, 184, 0, 0.08);
+}
+
 .action-btn-sm.success {
 	border-color: rgba(144, 238, 144, 0.35);
 	color: #bfecc0;

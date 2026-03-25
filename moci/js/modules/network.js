@@ -136,7 +136,11 @@ export default class NetworkModule {
 		addBtn('add-wg-peer-btn', 'wg-peer-modal');
 
 		const tables = {
-			'interfaces-table': { edit: id => this.editInterface(id), delete: id => this.deleteInterface(id) },
+			'interfaces-table': {
+				edit: id => this.editInterface(id),
+				restart: id => this.restartInterface(id),
+				delete: id => this.deleteInterface(id)
+			},
 			'wireless-table': { edit: id => this.editWireless(id), delete: id => this.deleteWireless(id) },
 			'firewall-table': { edit: id => this.editForward(id), delete: id => this.deleteForward(id) },
 			'fw-rules-table': { edit: id => this.editFirewallRule(id), delete: id => this.deleteFirewallRule(id) },
@@ -211,11 +215,16 @@ export default class NetworkModule {
 					<td>${iface.up ? this.core.renderBadge('success', 'UP') : this.core.renderBadge('error', 'DOWN')}</td>
 					<td>${this.core.escapeHtml(ipv4)}</td>
 					<td>${rx} / ${tx}</td>
-					<td>${this.core.renderActionButtons(iface.interface)}</td>
+					<td>${this.renderInterfaceActionButtons(iface.interface)}</td>
 				</tr>`;
 				})
 				.join('');
 		});
+	}
+
+	renderInterfaceActionButtons(id) {
+		const eid = this.core.escapeHtml(id);
+		return `<button class="action-btn-sm" data-action="edit" data-id="${eid}" style="font-size:11px;padding:4px 8px;line-height:1.2">EDIT</button><button class="action-btn-sm warning" data-action="restart" data-id="${eid}" style="font-size:11px;padding:4px 8px;line-height:1.2">RESTART</button><button class="action-btn-sm danger" data-action="delete" data-id="${eid}" style="font-size:11px;padding:4px 8px;line-height:1.2">DELETE</button>`;
 	}
 
 	async readProcNetDevMap() {
@@ -324,6 +333,25 @@ export default class NetworkModule {
 		} catch {
 			this.core.showToast('Failed to delete interface', 'error');
 		}
+	}
+
+	async restartInterface(id) {
+		try {
+			const command = `ifdown ${this.shellQuote(id)} 2>/dev/null || true; sleep 1; ifup ${this.shellQuote(id)}`;
+			const [status] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', command]
+			});
+			if (status !== 0) throw new Error('restart failed');
+			this.core.showToast(`Interface ${id} restarted`, 'success');
+			setTimeout(() => this.loadInterfaces(), 800);
+		} catch {
+			this.core.showToast(`Failed to restart ${id}`, 'error');
+		}
+	}
+
+	shellQuote(value) {
+		return `'${String(value).replace(/'/g, `'\\''`)}'`;
 	}
 
 	async loadWireless() {
