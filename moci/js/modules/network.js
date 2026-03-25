@@ -1347,7 +1347,7 @@ export default class NetworkModule {
 					<td>${this.core.escapeHtml(row.proto || 'all')}</td>
 					<td>${this.core.escapeHtml(row.chain || 'prerouting')}</td>
 					<td>${this.core.escapeHtml(row.interface || 'wan')}</td>
-					<td><button class="action-btn-sm ${row.enabled ? 'success' : 'danger'}" type="button" disabled>${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
+					<td><button class="action-btn-sm status-indicator-btn ${row.enabled ? 'success' : 'danger'}" type="button" disabled>${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
 					<td>${this.core.renderActionButtons(row.id)}</td>
 				</tr>`
 					)
@@ -1363,7 +1363,7 @@ export default class NetworkModule {
 					<td>${this.core.escapeHtml(row.name)}</td>
 					<td>${this.core.escapeHtml(row.src_addr || 'N/A')}</td>
 					<td>${this.core.escapeHtml(row.dest_dns || 'N/A')}</td>
-					<td><button class="action-btn-sm ${row.enabled ? 'success' : 'danger'}" type="button" disabled>${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
+					<td><button class="action-btn-sm status-indicator-btn ${row.enabled ? 'success' : 'danger'}" type="button" disabled>${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
 					<td>${this.core.renderActionButtons(row.id)}</td>
 				</tr>`
 					)
@@ -1377,7 +1377,7 @@ export default class NetworkModule {
 					.map(
 						row => `<tr>
 					<td>${this.core.escapeHtml(row.path || 'N/A')}</td>
-					<td><button class="action-btn-sm ${row.enabled ? 'success' : 'danger'}" type="button" disabled>${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
+					<td><button class="action-btn-sm status-indicator-btn ${row.enabled ? 'success' : 'danger'}" type="button" disabled>${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
 					<td><div class="action-buttons">
 						<button class="action-btn-sm" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">${row.enabled ? 'DISABLE' : 'ENABLE'}</button>
 						<button class="action-btn-sm danger" data-action="delete" data-id="${this.core.escapeHtml(row.id)}">DELETE</button>
@@ -1525,6 +1525,7 @@ export default class NetworkModule {
 			const selectedInterface = String(cfg.interface || 'wan');
 			await this.populatePbrInterfaceOptions(selectedInterface);
 			document.getElementById('edit-pbr-policy-section').value = String(section);
+			document.getElementById('edit-pbr-policy-enabled').value = this.isEnabledValue(cfg.enabled ?? '1') ? '1' : '0';
 			document.getElementById('edit-pbr-policy-name').value = String(cfg.name || '');
 			document.getElementById('edit-pbr-policy-src-addr').value = String(cfg.src_addr || '');
 			document.getElementById('edit-pbr-policy-src-port').value = String(cfg.src_port || '');
@@ -1577,7 +1578,7 @@ export default class NetworkModule {
 		const get = id => String(document.getElementById(id)?.value || '').trim();
 		const prefix = editMode ? 'edit-' : '';
 		const values = {
-			enabled: '1',
+			enabled: editMode ? get(`${prefix}pbr-policy-enabled`) || '1' : '1',
 			name: get(`${prefix}pbr-policy-name`),
 			src_addr: get(`${prefix}pbr-policy-src-addr`),
 			src_port: get(`${prefix}pbr-policy-src-port`),
