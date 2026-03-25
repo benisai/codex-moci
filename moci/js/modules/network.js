@@ -1523,7 +1523,6 @@ export default class NetworkModule {
 			const selectedInterface = String(cfg.interface || 'wan');
 			await this.populatePbrInterfaceOptions(selectedInterface);
 			document.getElementById('edit-pbr-policy-section').value = String(section);
-			document.getElementById('edit-pbr-policy-enabled').value = this.isEnabledValue(cfg.enabled ?? '1') ? '1' : '0';
 			document.getElementById('edit-pbr-policy-name').value = String(cfg.name || '');
 			document.getElementById('edit-pbr-policy-src-addr').value = String(cfg.src_addr || '');
 			document.getElementById('edit-pbr-policy-src-port').value = String(cfg.src_port || '');
@@ -1576,7 +1575,7 @@ export default class NetworkModule {
 		const get = id => String(document.getElementById(id)?.value || '').trim();
 		const prefix = editMode ? 'edit-' : '';
 		const values = {
-			enabled: get(`${prefix}pbr-policy-enabled`) || '1',
+			enabled: '1',
 			name: get(`${prefix}pbr-policy-name`),
 			src_addr: get(`${prefix}pbr-policy-src-addr`),
 			src_port: get(`${prefix}pbr-policy-src-port`) || '0-65535',
@@ -1594,7 +1593,6 @@ export default class NetworkModule {
 			const el = document.getElementById(id);
 			if (el) el.value = value;
 		};
-		resetValue('pbr-policy-enabled', '1');
 		resetValue('pbr-policy-name', '');
 		resetValue('pbr-policy-src-addr', '');
 		resetValue('pbr-policy-src-port', '0-65535');
