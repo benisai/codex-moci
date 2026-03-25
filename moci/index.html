@@ -1496,6 +1496,83 @@
 
 						<div class="tab-content hidden" id="tab-pbr" data-feature="pbr">
 							<div class="stat-card">
+								<div class="section-title">POLICIES</div>
+								<div class="form-group">
+									<label class="form-label">ENABLED</label>
+									<select id="pbr-policy-enabled" class="form-input">
+										<option value="1">Enabled</option>
+										<option value="0">Disabled</option>
+									</select>
+								</div>
+								<div class="form-group">
+									<label class="form-label">NAME</label>
+									<input type="text" id="pbr-policy-name" class="form-input" placeholder="Kids Safe Browsing" />
+								</div>
+								<div class="form-group">
+									<label class="form-label">LOCAL ADDRESSES / DEVICES</label>
+									<input type="text" id="pbr-policy-src-addr" class="form-input" placeholder="192.168.1.50 or aa:bb:cc:dd:ee:ff" />
+								</div>
+								<div class="form-group">
+									<label class="form-label">LOCAL PORTS</label>
+									<input type="text" id="pbr-policy-src-port" class="form-input" value="0-65535" placeholder="0-65535" />
+								</div>
+								<div class="form-group">
+									<label class="form-label">REMOTE ADDRESSES / DOMAINS</label>
+									<input type="text" id="pbr-policy-dest-addr" class="form-input" placeholder="example.com or 0.0.0.0/0" />
+								</div>
+								<div class="form-group">
+									<label class="form-label">REMOTE PORTS</label>
+									<input type="text" id="pbr-policy-dest-port" class="form-input" value="0-65535" placeholder="0-65535" />
+								</div>
+								<div class="form-group">
+									<label class="form-label">PROTOCOL</label>
+									<select id="pbr-policy-proto" class="form-input">
+										<option value="all">all</option>
+										<option value="tcp">tcp</option>
+										<option value="udp">udp</option>
+										<option value="icmp">icmp</option>
+									</select>
+								</div>
+								<div class="form-group">
+									<label class="form-label">CHAIN</label>
+									<select id="pbr-policy-chain" class="form-input">
+										<option value="prerouting">prerouting</option>
+										<option value="output">output</option>
+									</select>
+								</div>
+								<div class="form-group">
+									<label class="form-label">INTERFACE</label>
+									<input type="text" id="pbr-policy-interface" class="form-input" value="wan" placeholder="wan" />
+								</div>
+								<div class="quick-actions" style="margin-bottom: 16px">
+									<button class="action-btn" id="add-pbr-policy-btn">ADD POLICY</button>
+								</div>
+								<table class="data-table" id="pbr-policies-table">
+									<thead>
+										<tr>
+											<th>NAME</th>
+											<th>LOCAL ADDR/DEV</th>
+											<th>LOCAL PORTS</th>
+											<th>REMOTE ADDR/DOMAINS</th>
+											<th>REMOTE PORTS</th>
+											<th>PROTOCOL</th>
+											<th>CHAIN</th>
+											<th>INTERFACE</th>
+											<th>STATUS</th>
+											<th>ACTIONS</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td colspan="10" style="text-align: center; color: var(--steel-muted)">
+												Loading...
+											</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+
+							<div class="stat-card" style="margin-top: 24px">
 								<div class="section-title">DNS POLICIES</div>
 								<div class="form-group">
 									<label class="form-label">POLICY NAME</label>
@@ -1547,7 +1624,7 @@
 							</div>
 
 							<div class="stat-card" style="margin-top: 24px">
-								<div class="section-title">CUSTOM USER FILES</div>
+								<div class="section-title">LIST</div>
 								<div class="form-group">
 									<label class="form-label">FILE PATH</label>
 									<input
@@ -1737,6 +1814,70 @@
 								<div class="modal-footer">
 									<button class="action-btn" id="cancel-pbr-dns-policy-btn">CANCEL</button>
 									<button class="action-btn" id="save-pbr-dns-policy-btn">SAVE POLICY</button>
+								</div>
+							</div>
+						</div>
+
+						<div class="modal hidden" id="pbr-policy-modal">
+							<div class="modal-backdrop"></div>
+							<div class="modal-content">
+								<div class="modal-header">
+									<h3 class="modal-title">EDIT POLICY</h3>
+									<button class="modal-close" id="close-pbr-policy-modal">&times;</button>
+								</div>
+								<div class="modal-body">
+									<input type="hidden" id="edit-pbr-policy-section" />
+									<div class="form-group">
+										<label class="form-label">ENABLED</label>
+										<select id="edit-pbr-policy-enabled" class="form-input">
+											<option value="1">Enabled</option>
+											<option value="0">Disabled</option>
+										</select>
+									</div>
+									<div class="form-group">
+										<label class="form-label">NAME</label>
+										<input type="text" id="edit-pbr-policy-name" class="form-input" />
+									</div>
+									<div class="form-group">
+										<label class="form-label">LOCAL ADDRESSES / DEVICES</label>
+										<input type="text" id="edit-pbr-policy-src-addr" class="form-input" />
+									</div>
+									<div class="form-group">
+										<label class="form-label">LOCAL PORTS</label>
+										<input type="text" id="edit-pbr-policy-src-port" class="form-input" />
+									</div>
+									<div class="form-group">
+										<label class="form-label">REMOTE ADDRESSES / DOMAINS</label>
+										<input type="text" id="edit-pbr-policy-dest-addr" class="form-input" />
+									</div>
+									<div class="form-group">
+										<label class="form-label">REMOTE PORTS</label>
+										<input type="text" id="edit-pbr-policy-dest-port" class="form-input" />
+									</div>
+									<div class="form-group">
+										<label class="form-label">PROTOCOL</label>
+										<select id="edit-pbr-policy-proto" class="form-input">
+											<option value="all">all</option>
+											<option value="tcp">tcp</option>
+											<option value="udp">udp</option>
+											<option value="icmp">icmp</option>
+										</select>
+									</div>
+									<div class="form-group">
+										<label class="form-label">CHAIN</label>
+										<select id="edit-pbr-policy-chain" class="form-input">
+											<option value="prerouting">prerouting</option>
+											<option value="output">output</option>
+										</select>
+									</div>
+									<div class="form-group">
+										<label class="form-label">INTERFACE</label>
+										<input type="text" id="edit-pbr-policy-interface" class="form-input" />
+									</div>
+								</div>
+								<div class="modal-footer">
+									<button class="action-btn" id="cancel-pbr-policy-btn">CANCEL</button>
+									<button class="action-btn" id="save-pbr-policy-btn">SAVE POLICY</button>
 								</div>
 							</div>
 						</div>
