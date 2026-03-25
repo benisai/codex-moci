@@ -793,31 +793,36 @@ export default class MonitoringModule {
 		const innerW = width - padLeft - padRight;
 		const innerH = height - padTop - padBottom;
 		const maxVal = Math.max(10, ...points.map(p => Math.max(p.download || 0, p.upload || 0)));
-
-		const makeX = index => {
-			if (points.length === 1) return padLeft + innerW / 2;
-			return padLeft + (innerW * index) / (points.length - 1);
-		};
+		const groups = points.length;
+		const groupWidth = innerW / Math.max(groups, 1);
+		const barWidth = Math.max(6, Math.min(18, groupWidth * 0.32));
 		const makeY = value => padTop + innerH - (Math.max(0, value) / maxVal) * innerH;
-
-		const downloadPath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${makeX(i)} ${makeY(p.download || 0)}`).join(' ');
-		const uploadPath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${makeX(i)} ${makeY(p.upload || 0)}`).join(' ');
 
 		const grid = [0.25, 0.5, 0.75].map(step => {
 			const y = padTop + innerH * step;
 			return `<line x1="${padLeft}" y1="${y}" x2="${padLeft + innerW}" y2="${y}" class="monitoring-speedtest-grid" />`;
 		});
-
-		const circles = points
+		const bars = points
 			.map((p, i) => {
-				const x = makeX(i);
-				const yd = makeY(p.download || 0);
-				const yu = makeY(p.upload || 0);
-				const tipD = `${this.formatDate(p.ts)} download ${p.download.toFixed(1)} Mbps`;
-				const tipU = `${this.formatDate(p.ts)} upload ${p.upload.toFixed(1)} Mbps`;
+				const groupX = padLeft + i * groupWidth;
+				const centerX = groupX + groupWidth / 2;
+				const dl = Number(p.download || 0);
+				const ul = Number(p.upload || 0);
+				const dlHeight = (dl / maxVal) * innerH;
+				const ulHeight = (ul / maxVal) * innerH;
+				const dlY = makeY(dl);
+				const ulY = makeY(ul);
+				const dlX = centerX - barWidth - 2;
+				const ulX = centerX + 2;
+				const tipD = `${this.formatDate(p.ts)} download ${dl.toFixed(1)} Mbps`;
+				const tipU = `${this.formatDate(p.ts)} upload ${ul.toFixed(1)} Mbps`;
 				return `
-					<circle cx="${x}" cy="${yd}" r="3" class="monitoring-speedtest-point-download" style="fill: ${palette.download}"><title>${this.core.escapeHtml(tipD)}</title></circle>
-					<circle cx="${x}" cy="${yu}" r="3" class="monitoring-speedtest-point-upload" style="fill: ${palette.upload}"><title>${this.core.escapeHtml(tipU)}</title></circle>
+					<rect x="${dlX}" y="${dlY}" width="${barWidth}" height="${dlHeight}" rx="1.5" style="fill: ${palette.download}">
+						<title>${this.core.escapeHtml(tipD)}</title>
+					</rect>
+					<rect x="${ulX}" y="${ulY}" width="${barWidth}" height="${ulHeight}" rx="1.5" style="fill: ${palette.upload}">
+						<title>${this.core.escapeHtml(tipU)}</title>
+					</rect>
 				`;
 			})
 			.join('');
@@ -825,9 +830,7 @@ export default class MonitoringModule {
 		svg.innerHTML = `
 			<rect x="0" y="0" width="${width}" height="${height}" fill="transparent" />
 			${grid.join('')}
-			<path d="${downloadPath}" class="monitoring-speedtest-line-download" style="stroke: ${palette.download}" />
-			<path d="${uploadPath}" class="monitoring-speedtest-line-upload" style="stroke: ${palette.upload}" />
-			${circles}
+			${bars}
 			<text x="${padLeft}" y="${height - 10}" class="monitoring-speedtest-legend">${legendText}</text>
 		`;
 
