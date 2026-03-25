@@ -363,6 +363,18 @@ body {
 	border: 1px solid rgba(180, 155, 72, 0.32);
 }
 
+.badge-interface-up {
+	background: rgba(255, 255, 255, 0.02);
+	color: var(--starship-steel);
+	border: 1px solid rgba(144, 238, 144, 0.35);
+}
+
+.badge-interface-down {
+	background: rgba(255, 255, 255, 0.02);
+	color: var(--starship-steel);
+	border: 1px solid rgba(255, 125, 125, 0.45);
+}
+
 .monitoring-excellent-soft {
 	background: rgba(255, 255, 255, 0.02);
 	color: #bfecc0;

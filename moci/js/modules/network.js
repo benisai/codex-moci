@@ -501,7 +501,7 @@ export default class NetworkModule {
 					return `<tr>
 					<td>${this.core.escapeHtml(iface.interface)}</td>
 					<td>${this.core.escapeHtml(iface.proto || 'none').toUpperCase()}</td>
-					<td>${iface.up ? this.core.renderBadge('success', 'UP') : this.core.renderBadge('error', 'DOWN')}</td>
+					<td>${this.renderInterfaceStatusBadge(Boolean(iface.up))}</td>
 					<td>${this.core.escapeHtml(ipv4)}</td>
 					<td>${rx} / ${tx}</td>
 					<td>${this.renderInterfaceActionButtons(iface.interface)}</td>
@@ -509,6 +509,10 @@ export default class NetworkModule {
 				})
 				.join('');
 		});
+	}
+
+	renderInterfaceStatusBadge(isUp) {
+		return `<span class="badge ${isUp ? 'badge-interface-up' : 'badge-interface-down'}">${isUp ? 'UP' : 'DOWN'}</span>`;
 	}
 
 	renderInterfaceActionButtons(id) {
