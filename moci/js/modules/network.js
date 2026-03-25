@@ -133,6 +133,14 @@ export default class NetworkModule {
 			saveHandler: () => this.savePbrPolicy()
 		});
 
+		this.core.setupModal({
+			modalId: 'pbr-include-modal',
+			closeBtnId: 'close-pbr-include-modal',
+			cancelBtnId: 'cancel-pbr-include-btn',
+			saveBtnId: 'save-pbr-include-btn',
+			saveHandler: () => this.savePbrInclude()
+		});
+
 		const addBtn = (id, modalId) => {
 			document.getElementById(id)?.addEventListener('click', () => {
 				this.core.resetModal(modalId);
@@ -216,7 +224,7 @@ export default class NetworkModule {
 		if (pbrDnsCleanup) this.cleanups.push(pbrDnsCleanup);
 
 		const pbrIncludeCleanup = this.core.delegateActions('pbr-includes-table', {
-			toggle: id => this.togglePbrInclude(id),
+			edit: id => this.editPbrInclude(id),
 			delete: id => this.deletePbrInclude(id)
 		});
 		if (pbrIncludeCleanup) this.cleanups.push(pbrIncludeCleanup);
@@ -1381,7 +1389,7 @@ export default class NetworkModule {
 					<td>${this.core.escapeHtml(row.path || 'N/A')}</td>
 					<td><button class="action-btn-sm status-indicator-btn ${row.enabled ? 'success' : 'danger'}" type="button" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
 					<td><div class="action-buttons">
-						<button class="action-btn-sm" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">${row.enabled ? 'DISABLE' : 'ENABLE'}</button>
+						<button class="action-btn-sm" data-action="edit" data-id="${this.core.escapeHtml(row.id)}">EDIT</button>
 						<button class="action-btn-sm danger" data-action="delete" data-id="${this.core.escapeHtml(row.id)}">DELETE</button>
 					</div></td>
 				</tr>`
@@ -1780,6 +1788,45 @@ export default class NetworkModule {
 			await this.loadPBR();
 		} catch {
 			this.core.showToast('Failed to toggle DNS policy status', 'error');
+		}
+	}
+
+	async editPbrInclude(section) {
+		if (!section) return;
+		try {
+			const [status, result] = await this.core.uciGet('pbr', String(section));
+			if (status !== 0 || !result?.values) throw new Error('Include section not found');
+			const cfg = result.values;
+			document.getElementById('edit-pbr-include-section').value = String(section);
+			document.getElementById('edit-pbr-include-path').value = String(cfg.path || '');
+			document.getElementById('edit-pbr-include-enabled').value = this.isEnabledValue(cfg.enabled ?? '1')
+				? '1'
+				: '0';
+			this.core.openModal('pbr-include-modal');
+		} catch {
+			this.core.showToast('Failed to load list entry', 'error');
+		}
+	}
+
+	async savePbrInclude() {
+		const section = String(document.getElementById('edit-pbr-include-section')?.value || '').trim();
+		const path = String(document.getElementById('edit-pbr-include-path')?.value || '').trim();
+		const enabled = String(document.getElementById('edit-pbr-include-enabled')?.value || '1') === '1' ? '1' : '0';
+
+		if (!section || !path) {
+			this.core.showToast('File path is required', 'error');
+			return;
+		}
+
+		try {
+			await this.core.uciSet('pbr', section, { path, enabled });
+			await this.core.uciCommit('pbr');
+			await this.runPbrServiceAction('restart', false);
+			this.core.closeModal('pbr-include-modal');
+			this.core.showToast('List entry updated', 'success');
+			await this.loadPBR();
+		} catch {
+			this.core.showToast('Failed to update list entry', 'error');
 		}
 	}
 
