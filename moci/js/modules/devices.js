@@ -113,6 +113,9 @@ export default class DevicesModule {
 	}
 
 	async fetchNetifyFeatureFlag() {
+		if (this.core.isFeatureEnabled && !this.core.isFeatureEnabled('netify')) {
+			return false;
+		}
 		try {
 			const [status, result] = await this.core.uciGet('moci', 'features');
 			if (status === 0 && result?.values) {
@@ -418,7 +421,7 @@ export default class DevicesModule {
 		if (!state || state.loading) {
 			return `<div style="padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 6px;">
 				${nlbwSection}
-				<div style="color: var(--steel-muted); font-size: 12px">Loading Netify data...</div>
+				<div style="color: var(--steel-muted); font-size: 12px">Loading additional data...</div>
 			</div>`;
 		}
 		if (state.error) {
