@@ -202,12 +202,14 @@ export default class NetworkModule {
 		if (adblockCleanup) this.cleanups.push(adblockCleanup);
 
 		const pbrPolicyCleanup = this.core.delegateActions('pbr-policies-table', {
+			toggle: id => this.togglePbrPolicy(id),
 			edit: id => this.editPbrPolicy(id),
 			delete: id => this.deletePbrPolicy(id)
 		});
 		if (pbrPolicyCleanup) this.cleanups.push(pbrPolicyCleanup);
 
 		const pbrDnsCleanup = this.core.delegateActions('pbr-dns-policies-table', {
+			toggle: id => this.togglePbrDnsPolicy(id),
 			edit: id => this.editPbrDnsPolicy(id),
 			delete: id => this.deletePbrDnsPolicy(id)
 		});
@@ -1347,7 +1349,7 @@ export default class NetworkModule {
 					<td>${this.core.escapeHtml(row.proto || 'all')}</td>
 					<td>${this.core.escapeHtml(row.chain || 'prerouting')}</td>
 					<td>${this.core.escapeHtml(row.interface || 'wan')}</td>
-					<td><button class="action-btn-sm status-indicator-btn ${row.enabled ? 'success' : 'danger'}" type="button" disabled>${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
+					<td><button class="action-btn-sm status-indicator-btn ${row.enabled ? 'success' : 'danger'}" type="button" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
 					<td>${this.core.renderActionButtons(row.id)}</td>
 				</tr>`
 					)
@@ -1363,7 +1365,7 @@ export default class NetworkModule {
 					<td>${this.core.escapeHtml(row.name)}</td>
 					<td>${this.core.escapeHtml(row.src_addr || 'N/A')}</td>
 					<td>${this.core.escapeHtml(row.dest_dns || 'N/A')}</td>
-					<td><button class="action-btn-sm status-indicator-btn ${row.enabled ? 'success' : 'danger'}" type="button" disabled>${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
+					<td><button class="action-btn-sm status-indicator-btn ${row.enabled ? 'success' : 'danger'}" type="button" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
 					<td>${this.core.renderActionButtons(row.id)}</td>
 				</tr>`
 					)
@@ -1377,7 +1379,7 @@ export default class NetworkModule {
 					.map(
 						row => `<tr>
 					<td>${this.core.escapeHtml(row.path || 'N/A')}</td>
-					<td><button class="action-btn-sm status-indicator-btn ${row.enabled ? 'success' : 'danger'}" type="button" disabled>${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
+					<td><button class="action-btn-sm status-indicator-btn ${row.enabled ? 'success' : 'danger'}" type="button" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
 					<td><div class="action-buttons">
 						<button class="action-btn-sm" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">${row.enabled ? 'DISABLE' : 'ENABLE'}</button>
 						<button class="action-btn-sm danger" data-action="delete" data-id="${this.core.escapeHtml(row.id)}">DELETE</button>
@@ -1574,6 +1576,23 @@ export default class NetworkModule {
 		}
 	}
 
+	async togglePbrPolicy(section) {
+		if (!section) return;
+		try {
+			const [status, result] = await this.core.uciGet('pbr', String(section));
+			if (status !== 0 || !result?.values) throw new Error('Policy section not found');
+			const current = this.isEnabledValue(result.values.enabled ?? '1') ? '1' : '0';
+			const next = current === '1' ? '0' : '1';
+			await this.core.uciSet('pbr', String(section), { enabled: next });
+			await this.core.uciCommit('pbr');
+			await this.runPbrServiceAction('restart', false);
+			this.core.showToast(`Policy ${next === '1' ? 'enabled' : 'disabled'}`, 'success');
+			await this.loadPBR();
+		} catch {
+			this.core.showToast('Failed to toggle policy status', 'error');
+		}
+	}
+
 	readPbrPolicyFormValues(editMode = false) {
 		const get = id => String(document.getElementById(id)?.value || '').trim();
 		const prefix = editMode ? 'edit-' : '';
@@ -1744,6 +1763,23 @@ export default class NetworkModule {
 			await this.loadPBR();
 		} catch {
 			this.core.showToast('Failed to delete DNS policy', 'error');
+		}
+	}
+
+	async togglePbrDnsPolicy(section) {
+		if (!section) return;
+		try {
+			const [status, result] = await this.core.uciGet('pbr', String(section));
+			if (status !== 0 || !result?.values) throw new Error('DNS policy section not found');
+			const current = this.isEnabledValue(result.values.enabled ?? '1') ? '1' : '0';
+			const next = current === '1' ? '0' : '1';
+			await this.core.uciSet('pbr', String(section), { enabled: next });
+			await this.core.uciCommit('pbr');
+			await this.runPbrServiceAction('restart', false);
+			this.core.showToast(`DNS policy ${next === '1' ? 'enabled' : 'disabled'}`, 'success');
+			await this.loadPBR();
+		} catch {
+			this.core.showToast('Failed to toggle DNS policy status', 'error');
 		}
 	}
 
