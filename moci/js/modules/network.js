@@ -2007,7 +2007,7 @@ export default class NetworkModule {
 	}
 
 	async loadDDNS() {
-		await this.core.loadResource('ddns-table', 7, 'ddns', async () => {
+		await this.core.loadResource('ddns-table', 6, 'ddns', async () => {
 			const [status, result] = await this.core.uciGet('ddns');
 			if (status !== 0 || !result?.values) throw new Error('No data');
 			const services = Object.entries(result.values)
@@ -2018,26 +2018,18 @@ export default class NetworkModule {
 			const tbody = document.querySelector('#ddns-table tbody');
 			if (!tbody) return;
 			if (services.length === 0) {
-				this.core.renderEmptyTable(tbody, 7, 'No DDNS services configured');
+				this.core.renderEmptyTable(tbody, 6, 'No DDNS services configured');
 				return;
 			}
 			tbody.innerHTML = services
 				.map(s => {
 					const enabled = String(s.enabled || '0') === '1';
 					const runtime = runtimeBySection.get(String(s.section)) || { state: 'UNKNOWN', ip: '' };
-					const effectiveState = enabled ? runtime.state : 'DISABLED';
-					const stateBadge =
-						effectiveState === 'RUNNING'
-							? this.core.renderBadge('success', 'RUNNING')
-							: effectiveState === 'STOPPED' || effectiveState === 'DISABLED'
-								? this.core.renderBadge('error', effectiveState)
-								: this.core.renderBadge('warning', 'UNKNOWN');
 					return `<tr>
 				<td>${this.core.escapeHtml(s.section)}</td>
 				<td>${this.core.escapeHtml(s.lookup_host || s.domain || 'N/A')}</td>
 				<td>${this.core.escapeHtml(s.service_name || 'Custom')}</td>
 				<td>${this.core.escapeHtml(runtime.ip || 'N/A')}</td>
-				<td>${stateBadge}</td>
 				<td><button class="action-btn-sm status-indicator-btn ${enabled ? 'success' : 'danger'}" type="button" data-action="toggle" data-id="${this.core.escapeHtml(s.section)}">${enabled ? 'ENABLED' : 'DISABLED'}</button></td>
 				<td>${this.core.renderActionButtons(s.section)}</td>
 			</tr>`;
