@@ -1309,7 +1309,7 @@ export default class NetworkModule {
 					row => `<tr>
 				<td>${this.core.escapeHtml(row.name)}</td>
 				<td>${this.core.escapeHtml(row.url || 'N/A')}</td>
-				<td>${row.enabled ? this.core.renderBadge('success', 'ENABLED') : this.core.renderBadge('error', 'DISABLED')}</td>
+				<td>${this.renderAdblockStatusBadge(row.enabled)}</td>
 				<td><div class="action-buttons">
 					<button class="action-btn-sm" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">${row.enabled ? 'DISABLE' : 'ENABLE'}</button>
 					<button class="action-btn-sm danger" data-action="delete" data-id="${this.core.escapeHtml(row.id)}">DELETE</button>
@@ -1318,6 +1318,15 @@ export default class NetworkModule {
 				)
 				.join('');
 		});
+	}
+
+	renderAdblockStatusBadge(enabled) {
+		const isEnabled = Boolean(enabled);
+		if (!this.core.isFeatureEnabled('colorful_graphs')) {
+			return this.core.renderBadge(isEnabled ? 'success' : 'error', isEnabled ? 'ENABLED' : 'DISABLED');
+		}
+		const cls = isEnabled ? 'badge-interface-up' : 'badge-interface-down';
+		return `<span class="badge ${cls}">${isEnabled ? 'ENABLED' : 'DISABLED'}</span>`;
 	}
 
 	async readAdblockFastConfig() {
