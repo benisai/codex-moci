@@ -1347,7 +1347,7 @@ export default class NetworkModule {
 					<td>${this.core.escapeHtml(row.proto || 'all')}</td>
 					<td>${this.core.escapeHtml(row.chain || 'prerouting')}</td>
 					<td>${this.core.escapeHtml(row.interface || 'wan')}</td>
-					<td>${row.enabled ? this.core.renderBadge('success', 'ENABLED') : this.core.renderBadge('error', 'DISABLED')}</td>
+					<td><button class="action-btn-sm ${row.enabled ? 'success' : 'danger'}" type="button" disabled>${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
 					<td>${this.core.renderActionButtons(row.id)}</td>
 				</tr>`
 					)
