@@ -235,6 +235,9 @@ export default class NetworkModule {
 		document.getElementById('pbr-list-toggle-btn')?.addEventListener('click', () =>
 			this.togglePbrSectionPanel('list')
 		);
+		document.getElementById('network-connections-refresh-btn')?.addEventListener('click', () =>
+			this.refreshConnectionsManually()
+		);
 		document.getElementById('add-pbr-policy-btn')?.addEventListener('click', async () => {
 			this.core.resetModal('pbr-policy-add-modal');
 			await this.populatePbrInterfaceOptions();
@@ -2557,6 +2560,16 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 				this.isRefreshingConnections = false;
 			}
 		}, 5000);
+	}
+
+	async refreshConnectionsManually() {
+		if (this.isRefreshingConnections) return;
+		this.isRefreshingConnections = true;
+		try {
+			await this.renderConnectionsTable();
+		} finally {
+			this.isRefreshingConnections = false;
+		}
 	}
 
 	stopConnectionsAutoRefresh() {
