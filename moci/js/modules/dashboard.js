@@ -222,10 +222,12 @@ export default class DashboardModule {
 		if (usage !== null) {
 			if (cpuEl) cpuEl.textContent = usage + '%';
 			if (cpuBarEl) cpuBarEl.style.width = usage + '%';
-			this.applyUsageStyling(cpuEl, cpuBarEl, usage);
+			if (cpuEl) cpuEl.style.color = '';
+			this.applyUsageStyling(null, cpuBarEl, usage);
 		} else {
 			if (cpuEl) cpuEl.textContent = 'N/A';
-			this.applyUsageStyling(cpuEl, cpuBarEl, null);
+			if (cpuEl) cpuEl.style.color = '';
+			this.applyUsageStyling(null, cpuBarEl, null);
 		}
 	}
 
