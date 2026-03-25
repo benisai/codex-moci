@@ -1342,7 +1342,7 @@ export default class NetworkModule {
 				const missingMsg = 'PBR config not found. Install pbr/luci-app-pbr first.';
 				this.core.renderEmptyTable(policyTbody, 10, missingMsg);
 				this.core.renderEmptyTable(dnsTbody, 5, missingMsg);
-				this.core.renderEmptyTable(includeTbody, 3, missingMsg);
+				this.core.renderEmptyTable(includeTbody, 2, missingMsg);
 				this.setPbrStatusBadges('MISSING', 'MISSING');
 				return;
 			}
@@ -1384,8 +1384,7 @@ export default class NetworkModule {
 				if (type === 'include') {
 					includeRows.push({
 						id: section,
-						path: String(cfg.path || ''),
-						enabled: this.isEnabledValue(cfg.enabled ?? '1')
+						path: String(cfg.path || '')
 					});
 				}
 			}
@@ -1437,13 +1436,12 @@ export default class NetworkModule {
 			}
 
 			if (includeRows.length === 0) {
-				this.core.renderEmptyTable(includeTbody, 3, 'No custom user files configured');
+				this.core.renderEmptyTable(includeTbody, 2, 'No custom user files configured');
 			} else {
 				includeTbody.innerHTML = includeRows
 					.map(
 						row => `<tr>
 					<td>${this.core.escapeHtml(row.path || 'N/A')}</td>
-					<td><button class="action-btn-sm status-indicator-btn ${row.enabled ? 'success' : 'danger'}" type="button" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
 					<td><div class="action-buttons">
 						<button class="action-btn-sm" data-action="edit" data-id="${this.core.escapeHtml(row.id)}">EDIT</button>
 						<button class="action-btn-sm danger" data-action="delete" data-id="${this.core.escapeHtml(row.id)}">DELETE</button>
@@ -1855,9 +1853,6 @@ export default class NetworkModule {
 			const cfg = result.values;
 			document.getElementById('edit-pbr-include-section').value = String(section);
 			document.getElementById('edit-pbr-include-path').value = String(cfg.path || '');
-			document.getElementById('edit-pbr-include-enabled').value = this.isEnabledValue(cfg.enabled ?? '1')
-				? '1'
-				: '0';
 			this.core.openModal('pbr-include-modal');
 		} catch {
 			this.core.showToast('Failed to load list entry', 'error');
@@ -1867,7 +1862,6 @@ export default class NetworkModule {
 	async savePbrInclude() {
 		const section = String(document.getElementById('edit-pbr-include-section')?.value || '').trim();
 		const path = String(document.getElementById('edit-pbr-include-path')?.value || '').trim();
-		const enabled = String(document.getElementById('edit-pbr-include-enabled')?.value || '1') === '1' ? '1' : '0';
 
 		if (!section || !path) {
 			this.core.showToast('File path is required', 'error');
@@ -1875,7 +1869,7 @@ export default class NetworkModule {
 		}
 
 		try {
-			await this.core.uciSet('pbr', section, { path, enabled });
+			await this.core.uciSet('pbr', section, { path, enabled: '1' });
 			await this.core.uciCommit('pbr');
 			await this.runPbrServiceAction('restart', false);
 			this.core.closeModal('pbr-include-modal');
@@ -1888,7 +1882,6 @@ export default class NetworkModule {
 
 	async addPbrInclude() {
 		const path = String(document.getElementById('pbr-include-path')?.value || '').trim();
-		const enabled = String(document.getElementById('pbr-include-enabled')?.value || '1') === '1' ? '1' : '0';
 
 		if (!path) {
 			this.core.showToast('Custom user file path is required', 'error');
@@ -1900,33 +1893,15 @@ export default class NetworkModule {
 			if (status !== 0 || !result?.section) throw new Error('Unable to create include section');
 			await this.core.uciSet('pbr', result.section, {
 				path,
-				enabled
+				enabled: '1'
 			});
 			await this.core.uciCommit('pbr');
 			await this.runPbrServiceAction('restart', false);
 			document.getElementById('pbr-include-path').value = '';
-			document.getElementById('pbr-include-enabled').value = '1';
 			this.core.showToast('Custom user file added', 'success');
 			await this.loadPBR();
 		} catch {
 			this.core.showToast('Failed to add custom user file', 'error');
-		}
-	}
-
-	async togglePbrInclude(section) {
-		if (!section) return;
-		try {
-			const [status, result] = await this.core.uciGet('pbr', String(section));
-			if (status !== 0 || !result?.values) throw new Error('Include section not found');
-			const current = this.isEnabledValue(result.values.enabled ?? '1') ? '1' : '0';
-			const next = current === '1' ? '0' : '1';
-			await this.core.uciSet('pbr', String(section), { enabled: next });
-			await this.core.uciCommit('pbr');
-			await this.runPbrServiceAction('restart', false);
-			this.core.showToast(`Custom user file ${next === '1' ? 'enabled' : 'disabled'}`, 'success');
-			await this.loadPBR();
-		} catch {
-			this.core.showToast('Failed to toggle custom user file', 'error');
 		}
 	}
 
