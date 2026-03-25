@@ -1597,6 +1597,16 @@ export default class NetworkModule {
 	}
 
 	async addPbrPolicy() {
+		const addModal = document.getElementById('pbr-policy-add-modal');
+		const addModalOpen = !!addModal && !addModal.classList.contains('hidden');
+		if (!addModalOpen) {
+			this.core.resetModal('pbr-policy-add-modal');
+			await this.populatePbrInterfaceOptions();
+			this.resetPbrPolicyAddForm();
+			this.core.openModal('pbr-policy-add-modal');
+			return;
+		}
+
 		const values = this.readPbrPolicyFormValues(false);
 		if (!values.name) {
 			this.core.showToast('Policy name is required', 'error');
@@ -1776,6 +1786,15 @@ export default class NetworkModule {
 	}
 
 	async addPbrDnsPolicy() {
+		const addModal = document.getElementById('pbr-dns-policy-add-modal');
+		const addModalOpen = !!addModal && !addModal.classList.contains('hidden');
+		if (!addModalOpen) {
+			this.core.resetModal('pbr-dns-policy-add-modal');
+			this.resetPbrDnsPolicyAddForm();
+			this.core.openModal('pbr-dns-policy-add-modal');
+			return;
+		}
+
 		const name = String(document.getElementById('pbr-dns-name')?.value || '').trim();
 		const srcAddr = String(document.getElementById('pbr-dns-src-addr')?.value || '').trim();
 		const destDns = String(document.getElementById('pbr-dns-dest-dns')?.value || '').trim();
@@ -1920,6 +1939,15 @@ export default class NetworkModule {
 	}
 
 	async addPbrInclude() {
+		const addModal = document.getElementById('pbr-include-add-modal');
+		const addModalOpen = !!addModal && !addModal.classList.contains('hidden');
+		if (!addModalOpen) {
+			this.core.resetModal('pbr-include-add-modal');
+			this.resetPbrIncludeAddForm();
+			this.core.openModal('pbr-include-add-modal');
+			return;
+		}
+
 		const path = String(document.getElementById('pbr-include-path')?.value || '').trim();
 
 		if (!path) {
