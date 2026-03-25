@@ -809,11 +809,12 @@ export default class MonitoringModule {
 				const ulY = makeY(ul);
 				const dlX = centerX - barWidth - 2;
 				const ulX = centerX + 2;
-				const tipD = `${this.formatDateTime(p.ts)} download ${dl.toFixed(1)} Mbps`;
-				const tipU = `${this.formatDateTime(p.ts)} upload ${ul.toFixed(1)} Mbps`;
+				const tipTime = this.formatDateTime(p.ts);
+				const tipDl = `${dl.toFixed(1)} Mbps`;
+				const tipUl = `${ul.toFixed(1)} Mbps`;
 				return `
-					<rect x="${dlX}" y="${dlY}" width="${barWidth}" height="${dlHeight}" rx="1.5" style="fill: ${palette.download}" data-tip="${this.core.escapeHtml(tipD)}"></rect>
-					<rect x="${ulX}" y="${ulY}" width="${barWidth}" height="${ulHeight}" rx="1.5" style="fill: ${palette.upload}" data-tip="${this.core.escapeHtml(tipU)}"></rect>
+					<rect x="${dlX}" y="${dlY}" width="${barWidth}" height="${dlHeight}" rx="1.5" style="fill: ${palette.download}" data-tip-time="${this.core.escapeHtml(tipTime)}" data-tip-dl="${this.core.escapeHtml(tipDl)}" data-tip-ul="${this.core.escapeHtml(tipUl)}"></rect>
+					<rect x="${ulX}" y="${ulY}" width="${barWidth}" height="${ulHeight}" rx="1.5" style="fill: ${palette.upload}" data-tip-time="${this.core.escapeHtml(tipTime)}" data-tip-dl="${this.core.escapeHtml(tipDl)}" data-tip-ul="${this.core.escapeHtml(tipUl)}"></rect>
 				`;
 			})
 			.join('');
@@ -843,8 +844,12 @@ export default class MonitoringModule {
 			wrap.appendChild(tooltip);
 		}
 
-		const show = (text, event) => {
-			tooltip.textContent = text;
+		const show = (time, download, upload, event) => {
+			tooltip.innerHTML = `
+				<div class="monitoring-speedtest-tooltip-title">${this.core.escapeHtml(time || 'Unknown time')}</div>
+				<div>Download: ${this.core.escapeHtml(download || 'N/A')}</div>
+				<div>Upload: ${this.core.escapeHtml(upload || 'N/A')}</div>
+			`;
 			tooltip.classList.remove('hidden');
 			const rect = wrap.getBoundingClientRect();
 			const left = Math.max(8, Math.min(event.clientX - rect.left + 12, rect.width - (tooltip.offsetWidth || 180) - 8));
@@ -862,13 +867,15 @@ export default class MonitoringModule {
 		}
 
 		this._speedtestTooltipMoveHandler = event => {
-			const tipTarget = event.target?.closest?.('[data-tip]');
-			const text = tipTarget?.getAttribute?.('data-tip');
-			if (!text) {
+			const tipTarget = event.target?.closest?.('[data-tip-time]');
+			const time = tipTarget?.getAttribute?.('data-tip-time');
+			const download = tipTarget?.getAttribute?.('data-tip-dl');
+			const upload = tipTarget?.getAttribute?.('data-tip-ul');
+			if (!time) {
 				hide();
 				return;
 			}
-			show(text, event);
+			show(time, download, upload, event);
 		};
 		this._speedtestTooltipLeaveHandler = () => hide();
 

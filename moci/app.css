@@ -1543,7 +1543,7 @@ select.form-input {
 	border: 1px solid var(--glass-border);
 }
 
-.monitoring-speedtest-chart [data-tip] {
+.monitoring-speedtest-chart [data-tip-time] {
 	cursor: crosshair;
 }
 
@@ -1599,7 +1599,15 @@ select.form-input {
 	font-size: 11px;
 	color: var(--starship-steel);
 	pointer-events: none;
-	white-space: nowrap;
+	white-space: normal;
+	line-height: 1.35;
+	min-width: 170px;
+}
+
+.monitoring-speedtest-tooltip-title {
+	font-weight: 700;
+	color: var(--starship-steel);
+	margin-bottom: 4px;
 }
 
 .netify-fqdn-ellipsis {
