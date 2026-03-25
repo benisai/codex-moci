@@ -126,6 +126,30 @@ export default class NetworkModule {
 		});
 
 		this.core.setupModal({
+			modalId: 'pbr-policy-add-modal',
+			closeBtnId: 'close-pbr-policy-add-modal',
+			cancelBtnId: 'cancel-pbr-policy-add-btn',
+			saveBtnId: 'save-pbr-policy-add-btn',
+			saveHandler: () => this.addPbrPolicy()
+		});
+
+		this.core.setupModal({
+			modalId: 'pbr-dns-policy-add-modal',
+			closeBtnId: 'close-pbr-dns-policy-add-modal',
+			cancelBtnId: 'cancel-pbr-dns-policy-add-btn',
+			saveBtnId: 'save-pbr-dns-policy-add-btn',
+			saveHandler: () => this.addPbrDnsPolicy()
+		});
+
+		this.core.setupModal({
+			modalId: 'pbr-include-add-modal',
+			closeBtnId: 'close-pbr-include-add-modal',
+			cancelBtnId: 'cancel-pbr-include-add-btn',
+			saveBtnId: 'save-pbr-include-add-btn',
+			saveHandler: () => this.addPbrInclude()
+		});
+
+		this.core.setupModal({
 			modalId: 'pbr-policy-modal',
 			closeBtnId: 'close-pbr-policy-modal',
 			cancelBtnId: 'cancel-pbr-policy-btn',
@@ -207,9 +231,22 @@ export default class NetworkModule {
 		document.getElementById('pbr-list-toggle-btn')?.addEventListener('click', () =>
 			this.togglePbrSectionPanel('list')
 		);
-		document.getElementById('add-pbr-policy-btn')?.addEventListener('click', () => this.addPbrPolicy());
-		document.getElementById('add-pbr-dns-policy-btn')?.addEventListener('click', () => this.addPbrDnsPolicy());
-		document.getElementById('add-pbr-include-btn')?.addEventListener('click', () => this.addPbrInclude());
+		document.getElementById('add-pbr-policy-btn')?.addEventListener('click', async () => {
+			this.core.resetModal('pbr-policy-add-modal');
+			await this.populatePbrInterfaceOptions();
+			this.resetPbrPolicyAddForm();
+			this.core.openModal('pbr-policy-add-modal');
+		});
+		document.getElementById('add-pbr-dns-policy-btn')?.addEventListener('click', () => {
+			this.core.resetModal('pbr-dns-policy-add-modal');
+			this.resetPbrDnsPolicyAddForm();
+			this.core.openModal('pbr-dns-policy-add-modal');
+		});
+		document.getElementById('add-pbr-include-btn')?.addEventListener('click', () => {
+			this.core.resetModal('pbr-include-add-modal');
+			this.resetPbrIncludeAddForm();
+			this.core.openModal('pbr-include-add-modal');
+		});
 		this.syncPbrSettingsPanel();
 		this.syncAllPbrSectionPanels();
 
@@ -1572,6 +1609,7 @@ export default class NetworkModule {
 			await this.core.uciSet('pbr', result.section, values);
 			await this.core.uciCommit('pbr');
 			await this.runPbrServiceAction('restart', false);
+			this.core.closeModal('pbr-policy-add-modal');
 			this.resetPbrPolicyAddForm();
 			this.core.showToast('PBR policy added', 'success');
 			await this.loadPBR();
@@ -1758,6 +1796,7 @@ export default class NetworkModule {
 			});
 			await this.core.uciCommit('pbr');
 			await this.runPbrServiceAction('restart', false);
+			this.core.closeModal('pbr-dns-policy-add-modal');
 			document.getElementById('pbr-dns-name').value = '';
 			document.getElementById('pbr-dns-src-addr').value = '';
 			document.getElementById('pbr-dns-dest-dns').value = '';
@@ -1897,12 +1936,28 @@ export default class NetworkModule {
 			});
 			await this.core.uciCommit('pbr');
 			await this.runPbrServiceAction('restart', false);
+			this.core.closeModal('pbr-include-add-modal');
 			document.getElementById('pbr-include-path').value = '';
 			this.core.showToast('Custom user file added', 'success');
 			await this.loadPBR();
 		} catch {
 			this.core.showToast('Failed to add custom user file', 'error');
 		}
+	}
+
+	resetPbrDnsPolicyAddForm() {
+		const resetValue = (id, value) => {
+			const el = document.getElementById(id);
+			if (el) el.value = value;
+		};
+		resetValue('pbr-dns-name', '');
+		resetValue('pbr-dns-src-addr', '');
+		resetValue('pbr-dns-dest-dns', '');
+	}
+
+	resetPbrIncludeAddForm() {
+		const el = document.getElementById('pbr-include-path');
+		if (el) el.value = '';
 	}
 
 	async deletePbrInclude(section) {
