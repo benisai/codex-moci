@@ -19,6 +19,7 @@ export default class NetworkModule {
 					dhcp: () => this.loadDHCP(),
 					dns: () => this.loadDNS(),
 					adblock: () => this.loadAdblock(),
+					pbr: () => this.loadPBR(),
 					ddns: () => this.loadDDNS(),
 					qos: () => this.loadQoS(),
 					vpn: () => this.loadVPN(),
@@ -116,6 +117,14 @@ export default class NetworkModule {
 			saveHandler: () => this.saveWgPeer()
 		});
 
+		this.core.setupModal({
+			modalId: 'pbr-dns-policy-modal',
+			closeBtnId: 'close-pbr-dns-policy-modal',
+			cancelBtnId: 'cancel-pbr-dns-policy-btn',
+			saveBtnId: 'save-pbr-dns-policy-btn',
+			saveHandler: () => this.savePbrDnsPolicy()
+		});
+
 		const addBtn = (id, modalId) => {
 			document.getElementById(id)?.addEventListener('click', () => {
 				this.core.resetModal(modalId);
@@ -163,12 +172,33 @@ export default class NetworkModule {
 		document.getElementById('save-adblock-settings-btn')?.addEventListener('click', () => this.saveAdblockSettings());
 		document.getElementById('refresh-adblock-btn')?.addEventListener('click', () => this.loadAdblock());
 		document.getElementById('add-adblock-list-btn')?.addEventListener('click', () => this.addAdblockTargetList());
+		document.getElementById('save-pbr-settings-btn')?.addEventListener('click', () => this.savePbrSettings());
+		document.getElementById('refresh-pbr-btn')?.addEventListener('click', () => this.loadPBR());
+		document.getElementById('pbr-start-btn')?.addEventListener('click', () => this.runPbrServiceAction('start'));
+		document.getElementById('pbr-stop-btn')?.addEventListener('click', () => this.runPbrServiceAction('stop'));
+		document.getElementById('pbr-restart-btn')?.addEventListener('click', () => this.runPbrServiceAction('restart'));
+		document.getElementById('pbr-enable-btn')?.addEventListener('click', () => this.runPbrServiceAction('enable'));
+		document.getElementById('pbr-disable-btn')?.addEventListener('click', () => this.runPbrServiceAction('disable'));
+		document.getElementById('add-pbr-dns-policy-btn')?.addEventListener('click', () => this.addPbrDnsPolicy());
+		document.getElementById('add-pbr-include-btn')?.addEventListener('click', () => this.addPbrInclude());
 
 		const adblockCleanup = this.core.delegateActions('adblock-targets-table', {
 			toggle: id => this.toggleAdblockTargetList(id),
 			delete: id => this.deleteAdblockTargetList(id)
 		});
 		if (adblockCleanup) this.cleanups.push(adblockCleanup);
+
+		const pbrDnsCleanup = this.core.delegateActions('pbr-dns-policies-table', {
+			edit: id => this.editPbrDnsPolicy(id),
+			delete: id => this.deletePbrDnsPolicy(id)
+		});
+		if (pbrDnsCleanup) this.cleanups.push(pbrDnsCleanup);
+
+		const pbrIncludeCleanup = this.core.delegateActions('pbr-includes-table', {
+			toggle: id => this.togglePbrInclude(id),
+			delete: id => this.deletePbrInclude(id)
+		});
+		if (pbrIncludeCleanup) this.cleanups.push(pbrIncludeCleanup);
 	}
 
 	setupDiagnostics() {
@@ -1171,6 +1201,354 @@ export default class NetworkModule {
 					'/etc/init.d/adblock-fast start 2>/dev/null || true'
 			]
 		});
+	}
+
+	async loadPBR() {
+		await this.core.loadResource('pbr-dns-policies-table', 5, null, async () => {
+			const dnsTbody = document.querySelector('#pbr-dns-policies-table tbody');
+			const includeTbody = document.querySelector('#pbr-includes-table tbody');
+			if (!dnsTbody || !includeTbody) return;
+
+			const config = await this.readPbrConfig();
+			if (!config || !config.values) {
+				document.getElementById('pbr-enabled').value = '0';
+				document.getElementById('pbr-strict-enforcement').value = '0';
+				const missingMsg = 'PBR config not found. Install pbr/luci-app-pbr first.';
+				this.core.renderEmptyTable(dnsTbody, 5, missingMsg);
+				this.core.renderEmptyTable(includeTbody, 3, missingMsg);
+				this.setPbrStatusBadges('MISSING', 'MISSING');
+				return;
+			}
+
+			const dnsRows = [];
+			const includeRows = [];
+			let mainSection = null;
+
+			for (const [section, cfg] of Object.entries(config.values)) {
+				const type = String(cfg?.['.type'] || '');
+				if ((type === 'pbr' || section === 'config') && !mainSection) {
+					mainSection = { id: section, values: cfg };
+					continue;
+				}
+				if (type === 'dns_policy') {
+					dnsRows.push({
+						id: section,
+						name: String(cfg.name || section),
+						src_addr: String(cfg.src_addr || ''),
+						dest_dns: String(cfg.dest_dns || ''),
+						enabled: this.isEnabledValue(cfg.enabled ?? '1')
+					});
+				}
+				if (type === 'include') {
+					includeRows.push({
+						id: section,
+						path: String(cfg.path || ''),
+						enabled: this.isEnabledValue(cfg.enabled ?? '1')
+					});
+				}
+			}
+
+			document.getElementById('pbr-enabled').value = this.isEnabledValue(mainSection?.values?.enabled ?? '0')
+				? '1'
+				: '0';
+			document.getElementById('pbr-strict-enforcement').value = this.isEnabledValue(
+				mainSection?.values?.strict_enforcement ?? '0'
+			)
+				? '1'
+				: '0';
+
+			if (dnsRows.length === 0) {
+				this.core.renderEmptyTable(dnsTbody, 5, 'No DNS policies configured');
+			} else {
+				dnsTbody.innerHTML = dnsRows
+					.map(
+						row => `<tr>
+					<td>${this.core.escapeHtml(row.name)}</td>
+					<td>${this.core.escapeHtml(row.src_addr || 'N/A')}</td>
+					<td>${this.core.escapeHtml(row.dest_dns || 'N/A')}</td>
+					<td>${row.enabled ? this.core.renderBadge('success', 'ENABLED') : this.core.renderBadge('error', 'DISABLED')}</td>
+					<td>${this.core.renderActionButtons(row.id)}</td>
+				</tr>`
+					)
+					.join('');
+			}
+
+			if (includeRows.length === 0) {
+				this.core.renderEmptyTable(includeTbody, 3, 'No custom user files configured');
+			} else {
+				includeTbody.innerHTML = includeRows
+					.map(
+						row => `<tr>
+					<td>${this.core.escapeHtml(row.path || 'N/A')}</td>
+					<td>${row.enabled ? this.core.renderBadge('success', 'ENABLED') : this.core.renderBadge('error', 'DISABLED')}</td>
+					<td><div class="action-buttons">
+						<button class="action-btn-sm" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">${row.enabled ? 'DISABLE' : 'ENABLE'}</button>
+						<button class="action-btn-sm danger" data-action="delete" data-id="${this.core.escapeHtml(row.id)}">DELETE</button>
+					</div></td>
+				</tr>`
+					)
+					.join('');
+			}
+
+			await this.refreshPbrServiceStatus();
+		});
+	}
+
+	async readPbrConfig() {
+		try {
+			const [status, result] = await this.core.uciGet('pbr');
+			if (status === 0 && result?.values) return result;
+		} catch {}
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', 'uci -q show pbr 2>/dev/null || true']
+			});
+			if (status !== 0 || !result?.stdout) return null;
+			return { values: this.parseUciShowToConfig(String(result.stdout || ''), 'pbr') || null };
+		} catch {
+			return null;
+		}
+	}
+
+	setPbrStatusBadges(serviceState, bootState) {
+		const serviceEl = document.getElementById('pbr-service-status');
+		const bootEl = document.getElementById('pbr-boot-status');
+		if (serviceEl) {
+			serviceEl.innerHTML =
+				serviceState === 'RUNNING'
+					? this.core.renderBadge('success', 'RUNNING')
+					: serviceState === 'STOPPED'
+						? this.core.renderBadge('error', 'STOPPED')
+						: this.core.renderBadge('warning', serviceState || 'UNKNOWN');
+		}
+		if (bootEl) {
+			bootEl.innerHTML =
+				bootState === 'ENABLED'
+					? this.core.renderBadge('success', 'ENABLED')
+					: bootState === 'DISABLED'
+						? this.core.renderBadge('error', 'DISABLED')
+						: this.core.renderBadge('warning', bootState || 'UNKNOWN');
+		}
+	}
+
+	async refreshPbrServiceStatus() {
+		const [status, result] = await this.core.ubusCall('file', 'exec', {
+			command: '/bin/sh',
+			params: [
+				'-c',
+				`if [ ! -x /etc/init.d/pbr ]; then echo "SERVICE=MISSING"; echo "BOOT=MISSING"; exit 0; fi
+/etc/init.d/pbr status >/dev/null 2>&1 && echo "SERVICE=RUNNING" || echo "SERVICE=STOPPED"
+/etc/init.d/pbr enabled >/dev/null 2>&1 && echo "BOOT=ENABLED" || echo "BOOT=DISABLED"`
+			]
+		});
+
+		if (status !== 0) {
+			this.setPbrStatusBadges('UNKNOWN', 'UNKNOWN');
+			return;
+		}
+
+		const out = String(result?.stdout || '');
+		const serviceState = out.match(/SERVICE=([A-Z]+)/)?.[1] || 'UNKNOWN';
+		const bootState = out.match(/BOOT=([A-Z]+)/)?.[1] || 'UNKNOWN';
+		this.setPbrStatusBadges(serviceState, bootState);
+	}
+
+	async ensurePbrConfigSection() {
+		let section = 'config';
+		const [status, result] = await this.core.uciGet('pbr', section);
+		if (status === 0 && result?.values) return section;
+		const [addStatus, addResult] = await this.core.uciAdd('pbr', 'pbr', 'config');
+		if (addStatus !== 0 || !addResult?.section) throw new Error('Unable to create pbr config section');
+		section = addResult.section;
+		return section;
+	}
+
+	async savePbrSettings() {
+		const enabled = String(document.getElementById('pbr-enabled')?.value || '0') === '1' ? '1' : '0';
+		const strictEnforcement =
+			String(document.getElementById('pbr-strict-enforcement')?.value || '0') === '1' ? '1' : '0';
+		try {
+			const section = await this.ensurePbrConfigSection();
+			await this.core.uciSet('pbr', section, {
+				enabled,
+				strict_enforcement: strictEnforcement
+			});
+			await this.core.uciCommit('pbr');
+			await this.runPbrServiceAction('restart', false);
+			this.core.showToast('PBR settings saved', 'success');
+			await this.loadPBR();
+		} catch {
+			this.core.showToast('Failed to save PBR settings', 'error');
+		}
+	}
+
+	async runPbrServiceAction(action, showToast = true) {
+		if (!action) return;
+		try {
+			const [status] = await this.core.ubusCall('file', 'exec', {
+				command: '/etc/init.d/pbr',
+				params: [String(action)]
+			});
+			if (status !== 0) throw new Error('service action failed');
+			if (showToast) this.core.showToast(`PBR ${action} completed`, 'success');
+			await this.refreshPbrServiceStatus();
+		} catch {
+			if (showToast) this.core.showToast(`Failed to ${action} PBR service`, 'error');
+		}
+	}
+
+	async addPbrDnsPolicy() {
+		const name = String(document.getElementById('pbr-dns-name')?.value || '').trim();
+		const srcAddr = String(document.getElementById('pbr-dns-src-addr')?.value || '').trim();
+		const destDns = String(document.getElementById('pbr-dns-dest-dns')?.value || '').trim();
+		const enabled = String(document.getElementById('pbr-dns-enabled')?.value || '1') === '1' ? '1' : '0';
+
+		if (!name || !srcAddr || !destDns) {
+			this.core.showToast('Name, source and DNS resolver are required', 'error');
+			return;
+		}
+
+		try {
+			const [status, result] = await this.core.uciAdd('pbr', 'dns_policy');
+			if (status !== 0 || !result?.section) throw new Error('Unable to create dns policy');
+			await this.core.uciSet('pbr', result.section, {
+				'.type': 'dns_policy',
+				name,
+				src_addr: srcAddr,
+				dest_dns: destDns,
+				enabled
+			});
+			await this.core.uciCommit('pbr');
+			await this.runPbrServiceAction('restart', false);
+			document.getElementById('pbr-dns-name').value = '';
+			document.getElementById('pbr-dns-src-addr').value = '';
+			document.getElementById('pbr-dns-dest-dns').value = '';
+			document.getElementById('pbr-dns-enabled').value = '1';
+			this.core.showToast('DNS policy added', 'success');
+			await this.loadPBR();
+		} catch {
+			this.core.showToast('Failed to add DNS policy', 'error');
+		}
+	}
+
+	async editPbrDnsPolicy(section) {
+		if (!section) return;
+		try {
+			const [status, result] = await this.core.uciGet('pbr', String(section));
+			if (status !== 0 || !result?.values) throw new Error('Policy not found');
+			const cfg = result.values;
+			document.getElementById('edit-pbr-dns-policy-section').value = String(section);
+			document.getElementById('edit-pbr-dns-name').value = String(cfg.name || '');
+			document.getElementById('edit-pbr-dns-src-addr').value = String(cfg.src_addr || '');
+			document.getElementById('edit-pbr-dns-dest-dns').value = String(cfg.dest_dns || '');
+			document.getElementById('edit-pbr-dns-enabled').value = this.isEnabledValue(cfg.enabled ?? '1') ? '1' : '0';
+			this.core.openModal('pbr-dns-policy-modal');
+		} catch {
+			this.core.showToast('Failed to load DNS policy', 'error');
+		}
+	}
+
+	async savePbrDnsPolicy() {
+		const section = String(document.getElementById('edit-pbr-dns-policy-section')?.value || '').trim();
+		const name = String(document.getElementById('edit-pbr-dns-name')?.value || '').trim();
+		const srcAddr = String(document.getElementById('edit-pbr-dns-src-addr')?.value || '').trim();
+		const destDns = String(document.getElementById('edit-pbr-dns-dest-dns')?.value || '').trim();
+		const enabled = String(document.getElementById('edit-pbr-dns-enabled')?.value || '1') === '1' ? '1' : '0';
+
+		if (!section || !name || !srcAddr || !destDns) {
+			this.core.showToast('Name, source and DNS resolver are required', 'error');
+			return;
+		}
+
+		try {
+			await this.core.uciSet('pbr', section, {
+				name,
+				src_addr: srcAddr,
+				dest_dns: destDns,
+				enabled
+			});
+			await this.core.uciCommit('pbr');
+			await this.runPbrServiceAction('restart', false);
+			this.core.closeModal('pbr-dns-policy-modal');
+			this.core.showToast('DNS policy updated', 'success');
+			await this.loadPBR();
+		} catch {
+			this.core.showToast('Failed to update DNS policy', 'error');
+		}
+	}
+
+	async deletePbrDnsPolicy(section) {
+		if (!section) return;
+		if (!confirm('Delete this DNS policy?')) return;
+		try {
+			await this.core.uciDelete('pbr', String(section));
+			await this.core.uciCommit('pbr');
+			await this.runPbrServiceAction('restart', false);
+			this.core.showToast('DNS policy deleted', 'success');
+			await this.loadPBR();
+		} catch {
+			this.core.showToast('Failed to delete DNS policy', 'error');
+		}
+	}
+
+	async addPbrInclude() {
+		const path = String(document.getElementById('pbr-include-path')?.value || '').trim();
+		const enabled = String(document.getElementById('pbr-include-enabled')?.value || '1') === '1' ? '1' : '0';
+
+		if (!path) {
+			this.core.showToast('Custom user file path is required', 'error');
+			return;
+		}
+
+		try {
+			const [status, result] = await this.core.uciAdd('pbr', 'include');
+			if (status !== 0 || !result?.section) throw new Error('Unable to create include section');
+			await this.core.uciSet('pbr', result.section, {
+				'.type': 'include',
+				path,
+				enabled
+			});
+			await this.core.uciCommit('pbr');
+			await this.runPbrServiceAction('restart', false);
+			document.getElementById('pbr-include-path').value = '';
+			document.getElementById('pbr-include-enabled').value = '1';
+			this.core.showToast('Custom user file added', 'success');
+			await this.loadPBR();
+		} catch {
+			this.core.showToast('Failed to add custom user file', 'error');
+		}
+	}
+
+	async togglePbrInclude(section) {
+		if (!section) return;
+		try {
+			const [status, result] = await this.core.uciGet('pbr', String(section));
+			if (status !== 0 || !result?.values) throw new Error('Include section not found');
+			const current = this.isEnabledValue(result.values.enabled ?? '1') ? '1' : '0';
+			const next = current === '1' ? '0' : '1';
+			await this.core.uciSet('pbr', String(section), { enabled: next });
+			await this.core.uciCommit('pbr');
+			await this.runPbrServiceAction('restart', false);
+			this.core.showToast(`Custom user file ${next === '1' ? 'enabled' : 'disabled'}`, 'success');
+			await this.loadPBR();
+		} catch {
+			this.core.showToast('Failed to toggle custom user file', 'error');
+		}
+	}
+
+	async deletePbrInclude(section) {
+		if (!section) return;
+		if (!confirm('Delete this custom user file include?')) return;
+		try {
+			await this.core.uciDelete('pbr', String(section));
+			await this.core.uciCommit('pbr');
+			await this.runPbrServiceAction('restart', false);
+			this.core.showToast('Custom user file removed', 'success');
+			await this.loadPBR();
+		} catch {
+			this.core.showToast('Failed to delete custom user file', 'error');
+		}
 	}
 
 	async loadDDNS() {

@@ -468,6 +468,28 @@ body {
 	box-shadow: 0 0 12px rgba(255, 51, 51, 0.2);
 }
 
+.action-btn.success {
+	border-color: rgba(144, 238, 144, 0.35);
+}
+
+.action-btn.success:hover {
+	border-color: rgba(144, 238, 144, 0.65);
+	color: #c9f2ca;
+	box-shadow: 0 0 12px rgba(144, 238, 144, 0.2);
+	background: rgba(144, 238, 144, 0.08);
+}
+
+.action-btn.warning {
+	border-color: rgba(255, 184, 0, 0.35);
+}
+
+.action-btn.warning:hover {
+	border-color: rgba(255, 184, 0, 0.75);
+	color: #ffcc7a;
+	box-shadow: 0 0 12px rgba(255, 184, 0, 0.2);
+	background: rgba(255, 184, 0, 0.08);
+}
+
 .action-btn-sm {
 	padding: 6px 10px;
 	background: rgba(255, 255, 255, 0.05);
