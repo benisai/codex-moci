@@ -399,6 +399,12 @@ body {
 	border: 1px solid rgba(132, 210, 255, 0.45);
 }
 
+.badge-adblock-disabled-soft {
+	background: rgba(255, 255, 255, 0.01);
+	color: var(--starship-steel);
+	border: 1px solid rgba(255, 125, 125, 0.28);
+}
+
 .monitoring-excellent-soft {
 	background: rgba(255, 255, 255, 0.02);
 	color: #bfecc0;

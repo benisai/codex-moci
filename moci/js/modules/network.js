@@ -1337,7 +1337,7 @@ export default class NetworkModule {
 		if (!this.core.isFeatureEnabled('colorful_graphs')) {
 			return this.core.renderBadge(isEnabled ? 'success' : 'error', isEnabled ? 'ENABLED' : 'DISABLED');
 		}
-		const cls = isEnabled ? 'badge-interface-up' : 'badge-interface-down';
+		const cls = isEnabled ? 'badge-interface-up' : 'badge-adblock-disabled-soft';
 		return `<span class="badge ${cls}">${isEnabled ? 'ENABLED' : 'DISABLED'}</span>`;
 	}
 
