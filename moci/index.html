@@ -1495,8 +1495,14 @@
 						</div>
 
 						<div class="tab-content hidden" id="tab-pbr" data-feature="pbr">
-							<div class="stat-card">
-								<div class="section-title">POLICIES</div>
+							<div class="stat-card netify-collapsible-card">
+								<div class="netify-collapsible-header">
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">POLICIES</div>
+									<button class="netify-toggle-btn" id="pbr-policies-toggle-btn" type="button" aria-expanded="true">
+										<span id="pbr-policies-toggle-icon">▾</span>
+									</button>
+								</div>
+								<div id="pbr-policies-body" style="margin-top: 16px; display: block">
 								<div class="form-group">
 									<label class="form-label">NAME</label>
 									<input type="text" id="pbr-policy-name" class="form-input" placeholder="Kids Safe Browsing" />
@@ -1565,10 +1571,17 @@
 										</tr>
 									</tbody>
 								</table>
+								</div>
 							</div>
 
-							<div class="stat-card" style="margin-top: 24px">
-								<div class="section-title">DNS POLICIES</div>
+							<div class="stat-card netify-collapsible-card" style="margin-top: 24px">
+								<div class="netify-collapsible-header">
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">DNS POLICIES</div>
+									<button class="netify-toggle-btn" id="pbr-dns-toggle-btn" type="button" aria-expanded="true">
+										<span id="pbr-dns-toggle-icon">▾</span>
+									</button>
+								</div>
+								<div id="pbr-dns-body" style="margin-top: 16px; display: block">
 								<div class="form-group">
 									<label class="form-label">POLICY NAME</label>
 									<input
@@ -1617,10 +1630,17 @@
 										</tr>
 									</tbody>
 								</table>
+								</div>
 							</div>
 
-							<div class="stat-card" style="margin-top: 24px">
-								<div class="section-title">LIST</div>
+							<div class="stat-card netify-collapsible-card" style="margin-top: 24px">
+								<div class="netify-collapsible-header">
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">LIST</div>
+									<button class="netify-toggle-btn" id="pbr-list-toggle-btn" type="button" aria-expanded="true">
+										<span id="pbr-list-toggle-icon">▾</span>
+									</button>
+								</div>
+								<div id="pbr-list-body" style="margin-top: 16px; display: block">
 								<div class="form-group">
 									<label class="form-label">FILE PATH</label>
 									<input
@@ -1656,6 +1676,7 @@
 										</tr>
 									</tbody>
 								</table>
+								</div>
 							</div>
 
 							<div class="stat-card netify-collapsible-card" style="margin-top: 24px">
