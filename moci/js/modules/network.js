@@ -1340,9 +1340,9 @@ export default class NetworkModule {
 						row => `<tr>
 					<td>${this.core.escapeHtml(row.name)}</td>
 					<td>${this.core.escapeHtml(row.src_addr || 'Any')}</td>
-					<td>${this.core.escapeHtml(row.src_port || '0-65535')}</td>
+					<td>${this.core.escapeHtml(row.src_port || '')}</td>
 					<td>${this.core.escapeHtml(row.dest_addr || 'Any')}</td>
-					<td>${this.core.escapeHtml(row.dest_port || '0-65535')}</td>
+					<td>${this.core.escapeHtml(row.dest_port || '')}</td>
 					<td>${this.core.escapeHtml(row.proto || 'all')}</td>
 					<td>${this.core.escapeHtml(row.chain || 'prerouting')}</td>
 					<td>${this.core.escapeHtml(row.interface || 'wan')}</td>
@@ -1578,9 +1578,9 @@ export default class NetworkModule {
 			enabled: '1',
 			name: get(`${prefix}pbr-policy-name`),
 			src_addr: get(`${prefix}pbr-policy-src-addr`),
-			src_port: get(`${prefix}pbr-policy-src-port`) || '0-65535',
+			src_port: get(`${prefix}pbr-policy-src-port`),
 			dest_addr: get(`${prefix}pbr-policy-dest-addr`),
-			dest_port: get(`${prefix}pbr-policy-dest-port`) || '0-65535',
+			dest_port: get(`${prefix}pbr-policy-dest-port`),
 			proto: get(`${prefix}pbr-policy-proto`) || 'all',
 			chain: get(`${prefix}pbr-policy-chain`) || 'prerouting',
 			interface: get(`${prefix}pbr-policy-interface`) || 'wan'
@@ -1595,9 +1595,9 @@ export default class NetworkModule {
 		};
 		resetValue('pbr-policy-name', '');
 		resetValue('pbr-policy-src-addr', '');
-		resetValue('pbr-policy-src-port', '0-65535');
+		resetValue('pbr-policy-src-port', '');
 		resetValue('pbr-policy-dest-addr', '');
-		resetValue('pbr-policy-dest-port', '0-65535');
+		resetValue('pbr-policy-dest-port', '');
 		resetValue('pbr-policy-proto', 'all');
 		resetValue('pbr-policy-chain', 'prerouting');
 		resetValue('pbr-policy-interface', 'wan');
