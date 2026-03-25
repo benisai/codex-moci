@@ -512,6 +512,9 @@ export default class NetworkModule {
 	}
 
 	renderInterfaceStatusBadge(isUp) {
+		if (!this.core.isFeatureEnabled('colorful_graphs')) {
+			return this.core.renderBadge(isUp ? 'success' : 'error', isUp ? 'UP' : 'DOWN');
+		}
 		return `<span class="badge ${isUp ? 'badge-interface-up' : 'badge-interface-down'}">${isUp ? 'UP' : 'DOWN'}</span>`;
 	}
 
