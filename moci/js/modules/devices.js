@@ -12,6 +12,8 @@ export default class DevicesModule {
 		this.deviceSqlChunkSize = 200;
 		this.deviceSqlChunkCalls = 15;
 		this.deviceMaxRows = 3000;
+		this.nlbwAvailable = false;
+		this.netifyFeatureEnabled = true;
 
 		this.core.registerRoute('/devices', async () => {
 			const pageElement = document.getElementById('devices-page');
@@ -58,14 +60,17 @@ export default class DevicesModule {
 		if (!tbody) return;
 
 		try {
-			const [leases, arpMacs, usage, staticByMac] = await Promise.all([
+			const [leases, arpMacs, usage, staticByMac, netifyEnabled] = await Promise.all([
 				this.fetchLeases(),
 				this.fetchArpMacs(),
 				this.fetchNlbwmonUsage(),
-				this.fetchStaticLeasesByMac()
+				this.fetchStaticLeasesByMac(),
+				this.fetchNetifyFeatureFlag()
 			]);
 
 			this.staticByMac = staticByMac;
+			this.nlbwAvailable = Boolean(usage.available);
+			this.netifyFeatureEnabled = Boolean(netifyEnabled);
 			this.renderSourceStatus();
 			const rows = this.mergeRows(leases, arpMacs, usage.totalsByClient, staticByMac);
 			this.deviceRows = rows;
@@ -105,6 +110,16 @@ export default class DevicesModule {
 			}
 		} catch {}
 		return map;
+	}
+
+	async fetchNetifyFeatureFlag() {
+		try {
+			const [status, result] = await this.core.uciGet('moci', 'features');
+			if (status === 0 && result?.values) {
+				return String(result.values.netify ?? '1') === '1';
+			}
+		} catch {}
+		return this.core.isFeatureEnabled ? this.core.isFeatureEnabled('netify') : true;
 	}
 
 	normalizeMac(value) {
@@ -183,6 +198,7 @@ export default class DevicesModule {
 
 		const macIdx = colIndex('mac');
 		const ipIdx = colIndex('ip');
+		const layer7Idx = colIndex('layer7');
 		const rxIdx = colIndex('rx_bytes');
 		const txIdx = colIndex('tx_bytes');
 		if (rxIdx < 0 || txIdx < 0) return empty;
@@ -198,11 +214,15 @@ export default class DevicesModule {
 
 			const rx = Number(row[rxIdx]) || 0;
 			const tx = Number(row[txIdx]) || 0;
-			const current = totalsByClient.get(key) || { mac, ip, rx: 0, tx: 0 };
+			const appName = layer7Idx >= 0 ? String(row[layer7Idx] || '').trim() : '';
+			const current = totalsByClient.get(key) || { mac, ip, rx: 0, tx: 0, appBytes: new Map() };
 			current.rx += rx;
 			current.tx += tx;
 			if (!current.mac) current.mac = mac;
 			if (!current.ip) current.ip = ip;
+			if (appName && appName !== 'Unknown') {
+				current.appBytes.set(appName, (current.appBytes.get(appName) || 0) + rx + tx);
+			}
 			totalsByClient.set(key, current);
 		}
 
@@ -226,6 +246,7 @@ export default class DevicesModule {
 				mac: mac || 'N/A',
 				tx: usage ? usage.tx : null,
 				rx: usage ? usage.rx : null,
+				nlbwTopApps: this.extractTopNlbwApps(usage),
 				online: mac ? arpMacs.has(mac) : false,
 				pinned: Boolean(pin?.ip),
 				staticSection: pin?.section || ''
@@ -246,6 +267,7 @@ export default class DevicesModule {
 				mac: mac || 'N/A',
 				tx: usage.tx,
 				rx: usage.rx,
+				nlbwTopApps: this.extractTopNlbwApps(usage),
 				online: mac ? arpMacs.has(mac) : false,
 				pinned: Boolean(pin?.ip),
 				staticSection: pin?.section || ''
@@ -257,6 +279,14 @@ export default class DevicesModule {
 			const bTotal = (b.rx || 0) + (b.tx || 0);
 			return bTotal - aTotal;
 		});
+	}
+
+	extractTopNlbwApps(usage) {
+		if (!usage?.appBytes || !(usage.appBytes instanceof Map)) return [];
+		return Array.from(usage.appBytes.entries())
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, 10)
+			.map(([name, bytes]) => ({ name, bytes }));
 	}
 
 	renderRows(rows) {
@@ -334,22 +364,68 @@ export default class DevicesModule {
 		}
 
 		this.expandedMac = normalizedMac;
-		if (!this.netifyByMac.has(normalizedMac)) {
+		if (this.netifyFeatureEnabled && !this.netifyByMac.has(normalizedMac)) {
 			this.netifyByMac.set(normalizedMac, { loading: true });
 		}
 		this.renderRows(this.deviceRows);
 
-		await this.loadNetifyDetails(normalizedMac);
-		if (this.expandedMac === normalizedMac) this.renderRows(this.deviceRows);
+		if (this.netifyFeatureEnabled) {
+			await this.loadNetifyDetails(normalizedMac);
+			if (this.expandedMac === normalizedMac) this.renderRows(this.deviceRows);
+		}
 	}
 
 	renderNetifyDetail(mac) {
+		const row = this.rowsByMac.get(mac);
+		const nlbwApps = Array.isArray(row?.nlbwTopApps) ? row.nlbwTopApps : [];
+		const nlbwRows =
+			nlbwApps.length > 0
+				? nlbwApps
+						.map(
+							item => `<tr>
+					<td>${this.core.escapeHtml(item.name)}</td>
+					<td>${this.core.escapeHtml(this.core.formatBytes(item.bytes || 0))}</td>
+				</tr>`
+						)
+						.join('')
+				: `<tr><td colspan="2" style="text-align:center;color:var(--steel-muted)">No nlbw Layer7 data for this device</td></tr>`;
+
+		const nlbwSection = `<div style="margin-bottom: 14px;">
+			<div style="display:flex; flex-wrap:wrap; gap:14px; margin-bottom:10px; font-size:11px; font-family:var(--font-mono); color:var(--steel-light)">
+				<span>NLBW UPLOAD: ${this.core.escapeHtml(row?.tx == null ? 'N/A' : this.core.formatBytes(row.tx || 0))}</span>
+				<span>NLBW DOWNLOAD: ${this.core.escapeHtml(row?.rx == null ? 'N/A' : this.core.formatBytes(row.rx || 0))}</span>
+			</div>
+			<div style="margin-bottom:10px; font-size:11px; color:var(--steel-muted); font-family:var(--font-mono)">NLBW TOP APPLICATIONS (10)</div>
+			<table class="data-table" style="margin-top:0">
+				<thead>
+					<tr>
+						<th>APPLICATION</th>
+						<th>TOTAL BYTES</th>
+					</tr>
+				</thead>
+				<tbody>${nlbwRows}</tbody>
+			</table>
+		</div>`;
+
+		if (!this.netifyFeatureEnabled) {
+			return `<div style="padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 6px;">
+				${nlbwSection}
+				<div style="font-size: 12px; color: var(--steel-muted); font-family: var(--font-mono)">Netify details are disabled (moci.features.netify=0).</div>
+			</div>`;
+		}
+
 		const state = this.netifyByMac.get(mac);
 		if (!state || state.loading) {
-			return '<div style="color: var(--steel-muted); font-size: 12px">Loading Netify data...</div>';
+			return `<div style="padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 6px;">
+				${nlbwSection}
+				<div style="color: var(--steel-muted); font-size: 12px">Loading Netify data...</div>
+			</div>`;
 		}
 		if (state.error) {
-			return `<div style="color: var(--steel-muted); font-size: 12px">Netify data unavailable: ${this.core.escapeHtml(state.error)}</div>`;
+			return `<div style="padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 6px;">
+				${nlbwSection}
+				<div style="color: var(--steel-muted); font-size: 12px">Netify data unavailable: ${this.core.escapeHtml(state.error)}</div>
+			</div>`;
 		}
 
 		const summary = state.summary || {
@@ -374,6 +450,7 @@ export default class DevicesModule {
 				: `<tr><td colspan="2" style="text-align:center;color:var(--steel-muted)">No application data for this device</td></tr>`;
 
 		return `<div style="padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 6px;">
+			${nlbwSection}
 			<div style="display:flex; flex-wrap:wrap; gap:14px; margin-bottom:10px; font-size:11px; font-family:var(--font-mono); color:var(--steel-light)">
 				<span>FLOWS: ${this.core.escapeHtml(String(summary.flows))}</span>
 				<span>APPLICATIONS: ${this.core.escapeHtml(String(summary.apps))}</span>
@@ -640,6 +717,8 @@ export default class DevicesModule {
 	renderSourceStatus() {
 		const el = document.getElementById('devices-source-status');
 		if (!el) return;
-		el.textContent = '';
+		const nlbwText = this.nlbwAvailable ? 'NLBWMON: READY' : 'NLBWMON: UNAVAILABLE';
+		const netifyText = this.netifyFeatureEnabled ? 'NETIFY DETAILS: ENABLED' : 'NETIFY DETAILS: DISABLED';
+		el.textContent = `${nlbwText} | ${netifyText}`;
 	}
 }
