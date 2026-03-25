@@ -1377,7 +1377,7 @@ export default class NetworkModule {
 					.map(
 						row => `<tr>
 					<td>${this.core.escapeHtml(row.path || 'N/A')}</td>
-					<td>${row.enabled ? this.core.renderBadge('success', 'ENABLED') : this.core.renderBadge('error', 'DISABLED')}</td>
+					<td><button class="action-btn-sm ${row.enabled ? 'success' : 'danger'}" type="button" disabled>${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
 					<td><div class="action-buttons">
 						<button class="action-btn-sm" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">${row.enabled ? 'DISABLE' : 'ENABLE'}</button>
 						<button class="action-btn-sm danger" data-action="delete" data-id="${this.core.escapeHtml(row.id)}">DELETE</button>
