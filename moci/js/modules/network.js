@@ -179,8 +179,12 @@ export default class NetworkModule {
 		document.getElementById('pbr-restart-btn')?.addEventListener('click', () => this.runPbrServiceAction('restart'));
 		document.getElementById('pbr-enable-btn')?.addEventListener('click', () => this.runPbrServiceAction('enable'));
 		document.getElementById('pbr-disable-btn')?.addEventListener('click', () => this.runPbrServiceAction('disable'));
+		document.getElementById('pbr-settings-toggle-btn')?.addEventListener('click', () =>
+			this.togglePbrSettingsPanel()
+		);
 		document.getElementById('add-pbr-dns-policy-btn')?.addEventListener('click', () => this.addPbrDnsPolicy());
 		document.getElementById('add-pbr-include-btn')?.addEventListener('click', () => this.addPbrInclude());
+		this.syncPbrSettingsPanel();
 
 		const adblockCleanup = this.core.delegateActions('adblock-targets-table', {
 			toggle: id => this.toggleAdblockTargetList(id),
@@ -206,6 +210,44 @@ export default class NetworkModule {
 		document.getElementById('traceroute-btn')?.addEventListener('click', () => this.runDiagnostic('traceroute'));
 		document.getElementById('nslookup-btn')?.addEventListener('click', () => this.runDiagnostic('nslookup'));
 		document.getElementById('wol-btn')?.addEventListener('click', () => this.runWoL());
+	}
+
+	togglePbrSettingsPanel() {
+		const body = document.getElementById('pbr-settings-body');
+		const icon = document.getElementById('pbr-settings-toggle-icon');
+		const btn = document.getElementById('pbr-settings-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const isHidden = body.style.display === 'none' || body.style.display === '';
+		if (isHidden) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+			localStorage.setItem('pbr_settings_expanded', '1');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+			localStorage.setItem('pbr_settings_expanded', '0');
+		}
+	}
+
+	syncPbrSettingsPanel() {
+		const body = document.getElementById('pbr-settings-body');
+		const icon = document.getElementById('pbr-settings-toggle-icon');
+		const btn = document.getElementById('pbr-settings-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const expanded = localStorage.getItem('pbr_settings_expanded') === '1';
+		if (expanded) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+		}
 	}
 
 	cleanup() {
@@ -1205,6 +1247,7 @@ export default class NetworkModule {
 
 	async loadPBR() {
 		await this.core.loadResource('pbr-dns-policies-table', 5, null, async () => {
+			this.syncPbrSettingsPanel();
 			const dnsTbody = document.querySelector('#pbr-dns-policies-table tbody');
 			const includeTbody = document.querySelector('#pbr-includes-table tbody');
 			if (!dnsTbody || !includeTbody) return;

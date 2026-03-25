@@ -1496,43 +1496,6 @@
 
 						<div class="tab-content hidden" id="tab-pbr">
 							<div class="stat-card">
-								<div class="section-title">POLICY-BASED ROUTING</div>
-								<div class="stats-grid" style="margin-bottom: 16px">
-									<div class="stat-card">
-										<div class="stat-label">SERVICE STATUS</div>
-										<div class="stat-value" id="pbr-service-status"></div>
-									</div>
-									<div class="stat-card">
-										<div class="stat-label">BOOT STATUS</div>
-										<div class="stat-value" id="pbr-boot-status"></div>
-									</div>
-								</div>
-								<div class="form-group">
-									<label class="form-label">ENABLE PBR</label>
-									<select id="pbr-enabled" class="form-input">
-										<option value="0">Disabled</option>
-										<option value="1">Enabled</option>
-									</select>
-								</div>
-								<div class="form-group">
-									<label class="form-label">STRICT ENFORCEMENT</label>
-									<select id="pbr-strict-enforcement" class="form-input">
-										<option value="0">Disabled</option>
-										<option value="1">Enabled</option>
-									</select>
-								</div>
-								<div class="quick-actions">
-									<button class="action-btn" id="save-pbr-settings-btn">SAVE SETTINGS</button>
-									<button class="action-btn" id="refresh-pbr-btn">REFRESH</button>
-									<button class="action-btn success" id="pbr-start-btn">START</button>
-									<button class="action-btn danger" id="pbr-stop-btn">STOP</button>
-									<button class="action-btn warning" id="pbr-restart-btn">RESTART</button>
-									<button class="action-btn" id="pbr-enable-btn">ENABLE ON BOOT</button>
-									<button class="action-btn" id="pbr-disable-btn">DISABLE ON BOOT</button>
-								</div>
-							</div>
-
-							<div class="stat-card" style="margin-top: 24px">
 								<div class="section-title">DNS POLICIES</div>
 								<div class="form-group">
 									<label class="form-label">POLICY NAME</label>
@@ -1628,6 +1591,52 @@
 										</tr>
 									</tbody>
 								</table>
+							</div>
+
+							<div class="stat-card netify-collapsible-card" style="margin-top: 24px">
+								<div class="netify-collapsible-header">
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">
+										POLICY-BASED ROUTING
+									</div>
+									<button class="netify-toggle-btn" id="pbr-settings-toggle-btn" type="button" aria-expanded="false">
+										<span id="pbr-settings-toggle-icon">▸</span>
+									</button>
+								</div>
+								<div id="pbr-settings-body" style="margin-top: 16px; display: none">
+									<div class="stats-grid" style="margin-bottom: 16px">
+										<div class="stat-card">
+											<div class="stat-label">SERVICE STATUS</div>
+											<div class="stat-value" id="pbr-service-status"></div>
+										</div>
+										<div class="stat-card">
+											<div class="stat-label">BOOT STATUS</div>
+											<div class="stat-value" id="pbr-boot-status"></div>
+										</div>
+									</div>
+									<div class="form-group">
+										<label class="form-label">ENABLE PBR</label>
+										<select id="pbr-enabled" class="form-input">
+											<option value="0">Disabled</option>
+											<option value="1">Enabled</option>
+										</select>
+									</div>
+									<div class="form-group">
+										<label class="form-label">STRICT ENFORCEMENT</label>
+										<select id="pbr-strict-enforcement" class="form-input">
+											<option value="0">Disabled</option>
+											<option value="1">Enabled</option>
+										</select>
+									</div>
+									<div class="quick-actions">
+										<button class="action-btn" id="save-pbr-settings-btn">SAVE SETTINGS</button>
+										<button class="action-btn" id="refresh-pbr-btn">REFRESH</button>
+										<button class="action-btn success" id="pbr-start-btn">START</button>
+										<button class="action-btn danger" id="pbr-stop-btn">STOP</button>
+										<button class="action-btn warning" id="pbr-restart-btn">RESTART</button>
+										<button class="action-btn" id="pbr-enable-btn">ENABLE ON BOOT</button>
+										<button class="action-btn" id="pbr-disable-btn">DISABLE ON BOOT</button>
+									</div>
+								</div>
 							</div>
 						</div>
 
