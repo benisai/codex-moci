@@ -506,7 +506,7 @@ body {
 
 .action-btn-sm.warning {
 	border-color: rgba(255, 184, 0, 0.35);
-	color: #ffd79a;
+	color: var(--starship-steel);
 }
 
 .action-btn-sm.warning:hover {
