@@ -1531,6 +1531,7 @@ select.form-input {
 
 .monitoring-speedtest-chart-wrap {
 	margin-top: 14px;
+	position: relative;
 }
 
 .monitoring-speedtest-chart {
@@ -1540,6 +1541,10 @@ select.form-input {
 	border-radius: 10px;
 	background: rgba(255, 255, 255, 0.03);
 	border: 1px solid var(--glass-border);
+}
+
+.monitoring-speedtest-chart [data-tip] {
+	cursor: crosshair;
 }
 
 .monitoring-speedtest-grid {
@@ -1581,6 +1586,20 @@ select.form-input {
 	font-family: var(--font-mono);
 	font-size: 10px;
 	color: var(--steel-muted);
+}
+
+.monitoring-speedtest-tooltip {
+	position: absolute;
+	z-index: 5;
+	background: rgba(10, 10, 12, 0.95);
+	border: 1px solid var(--glass-border);
+	border-radius: 6px;
+	padding: 8px 10px;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	color: var(--starship-steel);
+	pointer-events: none;
+	white-space: nowrap;
 }
 
 .netify-fqdn-ellipsis {

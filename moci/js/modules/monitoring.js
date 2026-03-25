@@ -812,12 +812,8 @@ export default class MonitoringModule {
 				const tipD = `${this.formatDateTime(p.ts)} download ${dl.toFixed(1)} Mbps`;
 				const tipU = `${this.formatDateTime(p.ts)} upload ${ul.toFixed(1)} Mbps`;
 				return `
-					<rect x="${dlX}" y="${dlY}" width="${barWidth}" height="${dlHeight}" rx="1.5" style="fill: ${palette.download}">
-						<title>${this.core.escapeHtml(tipD)}</title>
-					</rect>
-					<rect x="${ulX}" y="${ulY}" width="${barWidth}" height="${ulHeight}" rx="1.5" style="fill: ${palette.upload}">
-						<title>${this.core.escapeHtml(tipU)}</title>
-					</rect>
+					<rect x="${dlX}" y="${dlY}" width="${barWidth}" height="${dlHeight}" rx="1.5" style="fill: ${palette.download}" data-tip="${this.core.escapeHtml(tipD)}"></rect>
+					<rect x="${ulX}" y="${ulY}" width="${barWidth}" height="${ulHeight}" rx="1.5" style="fill: ${palette.upload}" data-tip="${this.core.escapeHtml(tipU)}"></rect>
 				`;
 			})
 			.join('');
@@ -832,6 +828,52 @@ export default class MonitoringModule {
 		labels.innerHTML = points
 			.map(p => `<span>${this.core.escapeHtml(this.formatDate(p.ts, true))}</span>`)
 			.join('');
+		this.bindSpeedtestBarTooltips();
+	}
+
+	bindSpeedtestBarTooltips() {
+		const svg = document.getElementById('monitoring-speedtest-chart');
+		const wrap = svg?.closest('.monitoring-speedtest-chart-wrap');
+		if (!svg || !wrap) return;
+
+		let tooltip = wrap.querySelector('.monitoring-speedtest-tooltip');
+		if (!tooltip) {
+			tooltip = document.createElement('div');
+			tooltip.className = 'monitoring-speedtest-tooltip hidden';
+			wrap.appendChild(tooltip);
+		}
+
+		const show = (text, event) => {
+			tooltip.textContent = text;
+			tooltip.classList.remove('hidden');
+			const rect = wrap.getBoundingClientRect();
+			const left = Math.max(8, Math.min(event.clientX - rect.left + 12, rect.width - (tooltip.offsetWidth || 180) - 8));
+			const top = Math.max(8, event.clientY - rect.top - 36);
+			tooltip.style.left = `${left}px`;
+			tooltip.style.top = `${top}px`;
+		};
+		const hide = () => {
+			tooltip.classList.add('hidden');
+		};
+
+		if (this._speedtestTooltipMoveHandler) {
+			svg.removeEventListener('pointermove', this._speedtestTooltipMoveHandler);
+			svg.removeEventListener('pointerleave', this._speedtestTooltipLeaveHandler);
+		}
+
+		this._speedtestTooltipMoveHandler = event => {
+			const tipTarget = event.target?.closest?.('[data-tip]');
+			const text = tipTarget?.getAttribute?.('data-tip');
+			if (!text) {
+				hide();
+				return;
+			}
+			show(text, event);
+		};
+		this._speedtestTooltipLeaveHandler = () => hide();
+
+		svg.addEventListener('pointermove', this._speedtestTooltipMoveHandler);
+		svg.addEventListener('pointerleave', this._speedtestTooltipLeaveHandler);
 	}
 
 	renderSpeedtestTable(rows = []) {
