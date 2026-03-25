@@ -1275,7 +1275,7 @@ export default class NetworkModule {
 				document.getElementById('pbr-strict-enforcement').value = '0';
 				const missingMsg = 'PBR config not found. Install pbr/luci-app-pbr first.';
 				this.core.renderEmptyTable(policyTbody, 10, missingMsg);
-				this.core.renderEmptyTable(dnsTbody, 4, missingMsg);
+				this.core.renderEmptyTable(dnsTbody, 5, missingMsg);
 				this.core.renderEmptyTable(includeTbody, 3, missingMsg);
 				this.setPbrStatusBadges('MISSING', 'MISSING');
 				return;
@@ -1311,7 +1311,8 @@ export default class NetworkModule {
 						id: section,
 						name: String(cfg.name || section),
 						src_addr: String(cfg.src_addr || ''),
-						dest_dns: String(cfg.dest_dns || '')
+						dest_dns: String(cfg.dest_dns || ''),
+						enabled: this.isEnabledValue(cfg.enabled ?? '1')
 					});
 				}
 				if (type === 'include') {
@@ -1354,7 +1355,7 @@ export default class NetworkModule {
 			}
 
 			if (dnsRows.length === 0) {
-				this.core.renderEmptyTable(dnsTbody, 4, 'No DNS policies configured');
+				this.core.renderEmptyTable(dnsTbody, 5, 'No DNS policies configured');
 			} else {
 				dnsTbody.innerHTML = dnsRows
 					.map(
@@ -1362,6 +1363,7 @@ export default class NetworkModule {
 					<td>${this.core.escapeHtml(row.name)}</td>
 					<td>${this.core.escapeHtml(row.src_addr || 'N/A')}</td>
 					<td>${this.core.escapeHtml(row.dest_dns || 'N/A')}</td>
+					<td><button class="action-btn-sm ${row.enabled ? 'success' : 'danger'}" type="button" disabled>${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
 					<td>${this.core.renderActionButtons(row.id)}</td>
 				</tr>`
 					)
@@ -1669,7 +1671,8 @@ export default class NetworkModule {
 			await this.core.uciSet('pbr', result.section, {
 				name,
 				src_addr: srcAddr,
-				dest_dns: destDns
+				dest_dns: destDns,
+				enabled: '1'
 			});
 			await this.core.uciCommit('pbr');
 			await this.runPbrServiceAction('restart', false);
@@ -1693,6 +1696,7 @@ export default class NetworkModule {
 			document.getElementById('edit-pbr-dns-name').value = String(cfg.name || '');
 			document.getElementById('edit-pbr-dns-src-addr').value = String(cfg.src_addr || '');
 			document.getElementById('edit-pbr-dns-dest-dns').value = String(cfg.dest_dns || '');
+			document.getElementById('edit-pbr-dns-enabled').value = this.isEnabledValue(cfg.enabled ?? '1') ? '1' : '0';
 			this.core.openModal('pbr-dns-policy-modal');
 		} catch {
 			this.core.showToast('Failed to load DNS policy', 'error');
@@ -1704,6 +1708,7 @@ export default class NetworkModule {
 		const name = String(document.getElementById('edit-pbr-dns-name')?.value || '').trim();
 		const srcAddr = String(document.getElementById('edit-pbr-dns-src-addr')?.value || '').trim();
 		const destDns = String(document.getElementById('edit-pbr-dns-dest-dns')?.value || '').trim();
+		const enabled = String(document.getElementById('edit-pbr-dns-enabled')?.value || '1') === '1' ? '1' : '0';
 
 		if (!section || !name || !srcAddr || !destDns) {
 			this.core.showToast('Name, source and DNS resolver are required', 'error');
@@ -1714,7 +1719,8 @@ export default class NetworkModule {
 			await this.core.uciSet('pbr', section, {
 				name,
 				src_addr: srcAddr,
-				dest_dns: destDns
+				dest_dns: destDns,
+				enabled
 			});
 			await this.core.uciCommit('pbr');
 			await this.runPbrServiceAction('restart', false);

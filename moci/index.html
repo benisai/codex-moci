@@ -1605,12 +1605,13 @@
 											<th>NAME</th>
 											<th>SOURCE</th>
 											<th>DEST DNS</th>
+											<th>STATUS</th>
 											<th>ACTIONS</th>
 										</tr>
 									</thead>
 									<tbody>
 										<tr>
-											<td colspan="4" style="text-align: center; color: var(--steel-muted)">
+											<td colspan="5" style="text-align: center; color: var(--steel-muted)">
 												Loading...
 											</td>
 										</tr>
@@ -1804,6 +1805,13 @@
 									<div class="form-group">
 										<label class="form-label">DNS TARGET (DEST_DNS)</label>
 										<input type="text" id="edit-pbr-dns-dest-dns" class="form-input" />
+									</div>
+									<div class="form-group">
+										<label class="form-label">STATUS</label>
+										<select id="edit-pbr-dns-enabled" class="form-input">
+											<option value="1">Enabled</option>
+											<option value="0">Disabled</option>
+										</select>
 									</div>
 								</div>
 								<div class="modal-footer">
