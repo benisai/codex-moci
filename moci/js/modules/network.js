@@ -2781,9 +2781,25 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 
 	renderConntrackStateBadge(state) {
 		const s = String(state || 'ACTIVE').toUpperCase();
-		if (s === 'ESTABLISHED' || s === 'ASSURED') return this.core.renderBadge('success', s);
-		if (s === 'UNREPLIED' || s === 'SYN_SENT' || s === 'SYN_RECV') return this.core.renderBadge('warning', s);
-		return this.core.renderBadge('info', s);
+		if (!this.core.isFeatureEnabled('colorful_graphs')) {
+			if (s === 'ESTABLISHED' || s === 'ASSURED') return this.core.renderBadge('success', s);
+			if (s === 'UNREPLIED' || s === 'SYN_SENT' || s === 'SYN_RECV') return this.core.renderBadge('warning', s);
+			return this.core.renderBadge('info', s);
+		}
+
+		if (s === 'ESTABLISHED' || s === 'ASSURED') {
+			return `<span class="badge badge-conntrack-good">${this.core.escapeHtml(s)}</span>`;
+		}
+
+		if (s === 'UNREPLIED' || s === 'SYN_SENT' || s === 'SYN_RECV' || s === 'TIME_WAIT') {
+			return `<span class="badge badge-conntrack-warn">${this.core.escapeHtml(s)}</span>`;
+		}
+
+		if (s === 'CLOSE' || s === 'CLOSE_WAIT' || s === 'FIN_WAIT' || s === 'LAST_ACK' || s === 'CLOSING') {
+			return `<span class="badge badge-conntrack-bad">${this.core.escapeHtml(s)}</span>`;
+		}
+
+		return `<span class="badge badge-conntrack-info">${this.core.escapeHtml(s)}</span>`;
 	}
 
 	async runDiagnostic(type) {
