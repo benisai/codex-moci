@@ -546,6 +546,7 @@ export default class MonitoringModule {
 	}
 
 	async runSpeedtestNow() {
+		this.setSpeedtestRunNowBusy(true);
 		try {
 			await this.exec('/usr/bin/moci-speedtest-monitor', ['--once'], { timeout: 240000 });
 			await this.refresh();
@@ -553,7 +554,18 @@ export default class MonitoringModule {
 		} catch (err) {
 			console.error('Failed to run speedtest now:', err);
 			this.core.showToast('Failed to run speedtest', 'error');
+		} finally {
+			this.setSpeedtestRunNowBusy(false);
 		}
+	}
+
+	setSpeedtestRunNowBusy(busy) {
+		const btn = document.getElementById('monitoring-speedtest-run-now-btn');
+		if (!btn) return;
+		btn.disabled = Boolean(busy);
+		btn.style.opacity = busy ? '0.55' : '1';
+		btn.style.cursor = busy ? 'not-allowed' : '';
+		btn.textContent = busy ? 'RUNNING...' : 'RUN SPEEDTEST NOW';
 	}
 
 	async clearSpeedtestHistory() {
