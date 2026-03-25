@@ -1453,7 +1453,6 @@ export default class NetworkModule {
 			const [status, result] = await this.core.uciAdd('pbr', 'dns_policy');
 			if (status !== 0 || !result?.section) throw new Error('Unable to create dns policy');
 			await this.core.uciSet('pbr', result.section, {
-				'.type': 'dns_policy',
 				name,
 				src_addr: srcAddr,
 				dest_dns: destDns
@@ -1540,7 +1539,6 @@ export default class NetworkModule {
 			const [status, result] = await this.core.uciAdd('pbr', 'include');
 			if (status !== 0 || !result?.section) throw new Error('Unable to create include section');
 			await this.core.uciSet('pbr', result.section, {
-				'.type': 'include',
 				path,
 				enabled
 			});
