@@ -216,6 +216,21 @@ export default class NetworkModule {
 		document.getElementById('save-adblock-settings-btn')?.addEventListener('click', () => this.saveAdblockSettings());
 		document.getElementById('refresh-adblock-btn')?.addEventListener('click', () => this.loadAdblock());
 		document.getElementById('add-adblock-list-btn')?.addEventListener('click', () => this.addAdblockTargetList());
+		document.getElementById('adblock-settings-toggle-btn')?.addEventListener('click', () =>
+			this.toggleAdblockSettingsPanel()
+		);
+		document
+			.getElementById('adblock-enabled-on-btn')
+			?.addEventListener('click', () => this.setAdblockSettingValue('enabled', '1'));
+		document
+			.getElementById('adblock-enabled-off-btn')
+			?.addEventListener('click', () => this.setAdblockSettingValue('enabled', '0'));
+		document
+			.getElementById('adblock-config-update-on-btn')
+			?.addEventListener('click', () => this.setAdblockSettingValue('config_update', '1'));
+		document
+			.getElementById('adblock-config-update-off-btn')
+			?.addEventListener('click', () => this.setAdblockSettingValue('config_update', '0'));
 		document.getElementById('save-pbr-settings-btn')?.addEventListener('click', () => this.savePbrSettings());
 		document.getElementById('refresh-pbr-btn')?.addEventListener('click', () => this.loadPBR());
 		document.getElementById('pbr-start-btn')?.addEventListener('click', () => this.runPbrServiceAction('start'));
@@ -254,6 +269,8 @@ export default class NetworkModule {
 			this.resetPbrIncludeAddForm();
 			this.core.openModal('pbr-include-add-modal');
 		});
+		this.syncAdblockSettingsPanel();
+		this.syncAdblockSettingsButtons();
 		this.syncPbrSettingsPanel();
 		this.syncAllPbrSectionPanels();
 
@@ -289,6 +306,82 @@ export default class NetworkModule {
 		document.getElementById('traceroute-btn')?.addEventListener('click', () => this.runDiagnostic('traceroute'));
 		document.getElementById('nslookup-btn')?.addEventListener('click', () => this.runDiagnostic('nslookup'));
 		document.getElementById('wol-btn')?.addEventListener('click', () => this.runWoL());
+	}
+
+	toggleAdblockSettingsPanel() {
+		const body = document.getElementById('adblock-settings-body');
+		const icon = document.getElementById('adblock-settings-toggle-icon');
+		const btn = document.getElementById('adblock-settings-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const isHidden = body.style.display === 'none' || body.style.display === '';
+		if (isHidden) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+			localStorage.setItem('adblock_settings_expanded', '1');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+			localStorage.setItem('adblock_settings_expanded', '0');
+		}
+	}
+
+	syncAdblockSettingsPanel() {
+		const body = document.getElementById('adblock-settings-body');
+		const icon = document.getElementById('adblock-settings-toggle-icon');
+		const btn = document.getElementById('adblock-settings-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const expanded = localStorage.getItem('adblock_settings_expanded') === '1';
+		if (expanded) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+		}
+	}
+
+	setAdblockSettingValue(setting, value, options = {}) {
+		const next = String(value) === '1' ? '1' : '0';
+		if (setting === 'enabled') {
+			const input = document.getElementById('adblock-enabled');
+			if (input) input.value = next;
+		} else if (setting === 'config_update') {
+			const input = document.getElementById('adblock-config-update');
+			if (input) input.value = next;
+		}
+		this.syncAdblockSettingsButtons();
+		if (options.syncOnly) return;
+	}
+
+	syncAdblockSettingsButtons() {
+		const enabledValue = String(document.getElementById('adblock-enabled')?.value || '0') === '1';
+		const configUpdateValue = String(document.getElementById('adblock-config-update')?.value || '0') === '1';
+		this.syncAdblockTogglePair('adblock-enabled-on-btn', 'adblock-enabled-off-btn', enabledValue);
+		this.syncAdblockTogglePair(
+			'adblock-config-update-on-btn',
+			'adblock-config-update-off-btn',
+			configUpdateValue
+		);
+	}
+
+	syncAdblockTogglePair(onId, offId, isEnabled) {
+		const onBtn = document.getElementById(onId);
+		const offBtn = document.getElementById(offId);
+		if (!onBtn || !offBtn) return;
+
+		onBtn.classList.toggle('success', Boolean(isEnabled));
+		onBtn.classList.toggle('danger', false);
+		offBtn.classList.toggle('danger', !isEnabled);
+		offBtn.classList.toggle('success', false);
+
+		onBtn.setAttribute('aria-pressed', isEnabled ? 'true' : 'false');
+		offBtn.setAttribute('aria-pressed', isEnabled ? 'false' : 'true');
 	}
 
 	togglePbrSettingsPanel() {
@@ -1147,13 +1240,14 @@ export default class NetworkModule {
 
 	async loadAdblock() {
 		await this.core.loadResource('adblock-targets-table', 4, 'adblock', async () => {
+			this.syncAdblockSettingsPanel();
 			const tbody = document.querySelector('#adblock-targets-table tbody');
 			if (!tbody) return;
 
 			const config = await this.readAdblockFastConfig();
 			if (!config || !config.values) {
-				document.getElementById('adblock-enabled').value = '0';
-				document.getElementById('adblock-config-update').value = '0';
+				this.setAdblockSettingValue('enabled', '0', { syncOnly: true });
+				this.setAdblockSettingValue('config_update', '0', { syncOnly: true });
 				this.core.renderEmptyTable(
 					tbody,
 					4,
@@ -1178,16 +1272,16 @@ export default class NetworkModule {
 				}
 			}
 
-			document.getElementById('adblock-enabled').value = this.isEnabledValue(
-				mainSection?.values?.enabled ?? '0'
-			)
-				? '1'
-				: '0';
-			document.getElementById('adblock-config-update').value = this.isEnabledValue(
-				mainSection?.values?.config_update_enabled ?? '0'
-			)
-				? '1'
-				: '0';
+			this.setAdblockSettingValue(
+				'enabled',
+				this.isEnabledValue(mainSection?.values?.enabled ?? '0') ? '1' : '0',
+				{ syncOnly: true }
+			);
+			this.setAdblockSettingValue(
+				'config_update',
+				this.isEnabledValue(mainSection?.values?.config_update_enabled ?? '0') ? '1' : '0',
+				{ syncOnly: true }
+			);
 
 			if (rows.length === 0) {
 				this.core.renderEmptyTable(tbody, 4, 'No target lists configured');
