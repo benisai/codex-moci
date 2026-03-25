@@ -778,12 +778,7 @@ export default class MonitoringModule {
 			return;
 		}
 
-		const dailyMap = new Map();
-		for (const row of validRows) {
-			const key = this.dayKey(row.ts);
-			dailyMap.set(key, row);
-		}
-		const points = Array.from(dailyMap.values()).slice(-14);
+		const points = [...validRows].slice(-24);
 		const width = 860;
 		const height = 240;
 		const padLeft = 42;
@@ -814,8 +809,8 @@ export default class MonitoringModule {
 				const ulY = makeY(ul);
 				const dlX = centerX - barWidth - 2;
 				const ulX = centerX + 2;
-				const tipD = `${this.formatDate(p.ts)} download ${dl.toFixed(1)} Mbps`;
-				const tipU = `${this.formatDate(p.ts)} upload ${ul.toFixed(1)} Mbps`;
+				const tipD = `${this.formatDateTime(p.ts)} download ${dl.toFixed(1)} Mbps`;
+				const tipU = `${this.formatDateTime(p.ts)} upload ${ul.toFixed(1)} Mbps`;
 				return `
 					<rect x="${dlX}" y="${dlY}" width="${barWidth}" height="${dlHeight}" rx="1.5" style="fill: ${palette.download}">
 						<title>${this.core.escapeHtml(tipD)}</title>
@@ -834,7 +829,9 @@ export default class MonitoringModule {
 			<text x="${padLeft}" y="${height - 10}" class="monitoring-speedtest-legend">${legendText}</text>
 		`;
 
-		labels.innerHTML = points.map(p => `<span>${this.core.escapeHtml(this.formatDate(p.ts, true))}</span>`).join('');
+		labels.innerHTML = points
+			.map(p => `<span>${this.core.escapeHtml(this.formatDate(p.ts, true))}</span>`)
+			.join('');
 	}
 
 	renderSpeedtestTable(rows = []) {
