@@ -1603,14 +1603,14 @@
 									</button>
 								</div>
 								<div id="pbr-settings-body" style="margin-top: 16px; display: none">
-									<div class="stats-grid" style="margin-bottom: 16px">
-										<div class="stat-card">
-											<div class="stat-label">SERVICE STATUS</div>
-											<div class="stat-value" id="pbr-service-status"></div>
+									<div class="stats-grid" style="grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px">
+										<div>
+											<div class="stat-label">SERVICE</div>
+											<div id="pbr-service-status" style="margin-top: 8px">Loading...</div>
 										</div>
-										<div class="stat-card">
-											<div class="stat-label">BOOT STATUS</div>
-											<div class="stat-value" id="pbr-boot-status"></div>
+										<div>
+											<div class="stat-label">BOOT</div>
+											<div id="pbr-boot-status" style="margin-top: 8px">Loading...</div>
 										</div>
 									</div>
 									<div class="form-group">
