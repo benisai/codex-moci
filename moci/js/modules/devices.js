@@ -320,9 +320,7 @@ export default class DevicesModule {
 						? '-'
 						: `<button class="action-btn-sm devices-action-btn" data-action="pin" data-id="${this.core.escapeHtml(row.mac)}" title="Device settings">ACTION</button>`;
 
-				const ipText = row.pinned
-					? `${this.core.escapeHtml(row.ip)} ${this.core.renderBadge('info', 'Static')}`
-					: this.core.escapeHtml(row.ip);
+				const ipText = this.renderDeviceIp(row.ip, row.pinned);
 
 				const mainRow = `<tr ${isExpandable ? `class="devices-row-expandable" data-device-mac="${this.core.escapeHtml(row.mac)}"` : ''}>
 					<td>${this.core.escapeHtml(`${marker}${row.hostname}`)}</td>
@@ -345,6 +343,23 @@ export default class DevicesModule {
 		tbody.querySelectorAll('tr[data-device-mac]').forEach(tr => {
 			tr.addEventListener('click', event => this.handleRowClick(event));
 		});
+	}
+
+	renderDeviceIp(ipValue, pinned) {
+		const fullIp = String(ipValue || 'N/A');
+		const shortIp = this.truncateIpv6(fullIp);
+		const displayIp =
+			shortIp !== fullIp
+				? `<span title="${this.core.escapeHtml(fullIp)}">${this.core.escapeHtml(shortIp)}</span>`
+				: this.core.escapeHtml(fullIp);
+		return pinned ? `${displayIp} ${this.core.renderBadge('info', 'Static')}` : displayIp;
+	}
+
+	truncateIpv6(ipValue) {
+		const ip = String(ipValue || '');
+		if (!ip.includes(':')) return ip;
+		if (ip.length <= 18) return ip;
+		return `${ip.slice(0, 6)}...${ip.slice(-5)}`;
 	}
 
 	handleRowClick(event) {
