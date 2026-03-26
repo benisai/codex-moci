@@ -557,7 +557,7 @@ export default class MonitoringModule {
 		this.setSpeedtestRunNowBusy(true);
 		this.appendSpeedtestDebug(`Run now requested; launching ${this.speedtestLastLogFile}`);
 		try {
-			await this.loadSpeedtestSamples();
+			await this.readSpeedtestFile();
 			const beforeTs = this.getLatestSpeedtestSampleTs();
 			this.appendSpeedtestDebug(`Latest sample before run: ${beforeTs || 'none'}`);
 
@@ -598,7 +598,7 @@ export default class MonitoringModule {
 	async waitForNewSpeedtestSample(previousTs, attempts = 24, delayMs = 2500) {
 		for (let i = 0; i < attempts; i += 1) {
 			await new Promise(resolve => setTimeout(resolve, delayMs));
-			await this.loadSpeedtestSamples();
+			await this.readSpeedtestFile();
 			if (this.getLatestSpeedtestSampleTs() > Number(previousTs || 0)) {
 				return true;
 			}
