@@ -19,6 +19,10 @@ export default class MonitoringModule {
 		this.speedtestOutputFile = '/tmp/moci-speedtest-monitor.txt';
 		this.speedtestMaxLines = 365;
 		this.speedtestSamples = [];
+		this.speedtestLastLogFile = '/tmp/moci-speedtest-monitor.last.log';
+		this.speedtestLastLogText = '';
+		this.speedtestDebugLog = [];
+		this.speedtestDebugLimit = 120;
 
 		this.core.registerRoute('/monitoring', async (path, subPaths) => {
 			const pageElement = document.getElementById('monitoring-page');
@@ -66,6 +70,8 @@ export default class MonitoringModule {
 		document.getElementById('monitoring-speedtest-disable-btn')?.addEventListener('click', () => this.applySpeedtestSettings(false));
 		document.getElementById('monitoring-speedtest-run-now-btn')?.addEventListener('click', () => this.runSpeedtestNow());
 		document.getElementById('monitoring-speedtest-clear-btn')?.addEventListener('click', () => this.clearSpeedtestHistory());
+		document.getElementById('monitoring-speedtest-debug-refresh-btn')?.addEventListener('click', () => this.refreshSpeedtestLogPanel(true));
+		document.getElementById('monitoring-speedtest-debug-clear-btn')?.addEventListener('click', () => this.clearSpeedtestDebugLog());
 		document
 			.getElementById('monitoring-settings-toggle-btn')
 			?.addEventListener('click', () => this.toggleSettingsPanel());
@@ -399,7 +405,9 @@ export default class MonitoringModule {
 			await this.updateServiceStatus();
 			await this.readPingFile();
 			await this.readSpeedtestFile();
+			await this.readSpeedtestExecutionLog();
 			this.renderAll();
+			this.renderSpeedtestDebugLog();
 		} catch (err) {
 			console.error('Monitoring refresh failed:', err);
 		}
@@ -547,26 +555,34 @@ export default class MonitoringModule {
 
 	async runSpeedtestNow() {
 		this.setSpeedtestRunNowBusy(true);
+		this.appendSpeedtestDebug(`Run now requested; launching ${this.speedtestLastLogFile}`);
 		try {
 			await this.loadSpeedtestSamples();
 			const beforeTs = this.getLatestSpeedtestSampleTs();
+			this.appendSpeedtestDebug(`Latest sample before run: ${beforeTs || 'none'}`);
 
 			// Run in background to avoid ubus/rpcd request timeout on long speedtests.
 			await this.exec('/bin/sh', [
 				'-c',
 				'/usr/bin/moci-speedtest-monitor --once >/tmp/moci-speedtest-monitor.last.log 2>&1 &'
 			]);
+			this.appendSpeedtestDebug('Background speedtest process started');
 
 			const completed = await this.waitForNewSpeedtestSample(beforeTs, 24, 2500);
 			if (completed) {
 				await this.refresh();
+				this.appendSpeedtestDebug('Speedtest completed and new sample loaded');
 				this.core.showToast('Speedtest captured', 'success');
 			} else {
+				this.appendSpeedtestDebug('No new sample detected yet; check execution log below');
 				this.core.showToast('Speedtest started; result will appear shortly', 'warning');
 				await this.refresh();
 			}
 		} catch (err) {
 			console.error('Failed to run speedtest now:', err);
+			this.appendSpeedtestDebug(`Run failed: ${err?.message || 'unknown error'}`);
+			await this.readSpeedtestExecutionLog();
+			this.renderSpeedtestDebugLog();
 			this.core.showToast('Failed to run speedtest', 'error');
 		} finally {
 			this.setSpeedtestRunNowBusy(false);
@@ -603,11 +619,62 @@ export default class MonitoringModule {
 		try {
 			await this.core.ubusCall('file', 'write', { path: this.speedtestOutputFile, data: '' });
 			await this.refresh();
+			this.appendSpeedtestDebug('Speedtest history file cleared');
 			this.core.showToast('Speedtest history cleared', 'success');
 		} catch (err) {
 			console.error('Failed to clear speedtest history:', err);
+			this.appendSpeedtestDebug(`Clear history failed: ${err?.message || 'unknown error'}`);
 			this.core.showToast('Failed to clear speedtest history', 'error');
 		}
+	}
+
+	async refreshSpeedtestLogPanel(showToast = false) {
+		await this.readSpeedtestExecutionLog();
+		this.renderSpeedtestDebugLog();
+		if (showToast) this.core.showToast('Speedtest debug log refreshed', 'success');
+	}
+
+	appendSpeedtestDebug(message) {
+		const ts = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+		this.speedtestDebugLog.push(`[${ts}] ${message}`);
+		if (this.speedtestDebugLog.length > this.speedtestDebugLimit) {
+			this.speedtestDebugLog = this.speedtestDebugLog.slice(-this.speedtestDebugLimit);
+		}
+		this.renderSpeedtestDebugLog();
+	}
+
+	async readSpeedtestExecutionLog() {
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'read', { path: this.speedtestLastLogFile });
+			if (status !== 0 || typeof result?.data !== 'string') {
+				this.speedtestLastLogText = '';
+				return;
+			}
+			const lines = String(result.data || '')
+				.split('\n')
+				.map(line => line.trimEnd())
+				.filter(Boolean);
+			this.speedtestLastLogText = lines.slice(-80).join('\n');
+		} catch {
+			this.speedtestLastLogText = '';
+		}
+	}
+
+	clearSpeedtestDebugLog() {
+		this.speedtestDebugLog = [];
+		this.speedtestLastLogText = '';
+		this.renderSpeedtestDebugLog();
+		this.core.showToast('Speedtest debug log cleared', 'success');
+	}
+
+	renderSpeedtestDebugLog() {
+		const el = document.getElementById('monitoring-speedtest-debug-log');
+		if (!el) return;
+
+		const uiLog = this.speedtestDebugLog.length > 0 ? this.speedtestDebugLog.join('\n') : '[no ui events yet]';
+		const runLog = this.speedtestLastLogText ? this.speedtestLastLogText : '[no execution log found yet]';
+		el.textContent = `${uiLog}\n\n--- /tmp/moci-speedtest-monitor.last.log ---\n${runLog}`;
+		el.scrollTop = el.scrollHeight;
 	}
 
 	renderAll() {
