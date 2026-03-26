@@ -1444,10 +1444,8 @@ export default class NetworkModule {
 			const [status, result] = await this.core.uciAdd('adblock-fast', 'file_url');
 			if (status !== 0 || !result?.section) throw new Error('Unable to create adblock-fast target list');
 			await this.core.uciSet('adblock-fast', result.section, {
-				'.type': 'file_url',
 				name,
 				url,
-				action: 'block',
 				enabled
 			});
 			await this.core.uciCommit('adblock-fast');
