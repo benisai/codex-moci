@@ -110,7 +110,8 @@ export default class SystemModule {
 		if (sshCleanup) this.cleanups.push(sshCleanup);
 
 		const servicesCleanup = this.core.delegateActions('services-table', {
-			toggle: id => this.toggleService(id)
+			toggle: id => this.toggleService(id),
+			restart: id => this.restartService(id)
 		});
 		if (servicesCleanup) this.cleanups.push(servicesCleanup);
 
@@ -601,6 +602,9 @@ export default class SystemModule {
 						<button class="action-btn" data-action="toggle" data-id="${this.core.escapeHtml(s.name)}" style="font-size:11px;padding:4px 8px">
 							${s.running ? 'STOP' : 'START'}
 						</button>
+						<button class="action-btn warning" data-action="restart" data-id="${this.core.escapeHtml(s.name)}" style="font-size:11px;padding:4px 8px">
+							RESTART
+						</button>
 					</div>
 				</td>
 			</tr>`
@@ -619,16 +623,36 @@ export default class SystemModule {
 			const info = result?.[name];
 			const running = info?.instances && Object.keys(info.instances).length > 0;
 			const action = running ? 'stop' : 'start';
-
-			await this.core.ubusCall('file', 'exec', {
-				command: `/etc/init.d/${name}`,
-				params: [action]
-			});
+			await this.runInitServiceAction(name, action);
 			const pastTense = action === 'stop' ? 'stopped' : `${action}ed`;
 			this.core.showToast(`Service ${name} ${pastTense}`, 'success');
 			this.loadStartup();
 		} catch {
 			this.core.showToast(`Failed to toggle service ${name}`, 'error');
+		}
+	}
+
+	async restartService(name) {
+		if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+			this.core.showToast('Invalid service name', 'error');
+			return;
+		}
+		try {
+			await this.runInitServiceAction(name, 'restart');
+			this.core.showToast(`Service ${name} restarted`, 'success');
+			this.loadStartup();
+		} catch {
+			this.core.showToast(`Failed to restart service ${name}`, 'error');
+		}
+	}
+
+	async runInitServiceAction(name, action) {
+		const [status, result] = await this.core.ubusCall('file', 'exec', {
+			command: `/etc/init.d/${name}`,
+			params: [action]
+		});
+		if (status !== 0 || Number(result?.code ?? 1) !== 0) {
+			throw new Error(`${name} ${action} failed`);
 		}
 	}
 
