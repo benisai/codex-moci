@@ -189,6 +189,7 @@ set_uci moci.ping_monitor.max_lines "2000"
 set_uci moci.speedtest_monitor.enabled "1"
 set_uci moci.speedtest_monitor.run_hour "3"
 set_uci moci.speedtest_monitor.run_minute "15"
+set_uci moci.speedtest_monitor.bin "/usr/bin/speedtest"
 set_uci moci.speedtest_monitor.output_file "/tmp/moci-speedtest-monitor.txt"
 set_uci moci.speedtest_monitor.max_lines "365"
 uci commit moci

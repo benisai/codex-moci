@@ -186,7 +186,7 @@ The frontend reads data via `ubus` (`file.read`, `file.exec`, `uci.get`) and doe
 1. UI stores daily schedule in UCI (`moci.speedtest_monitor.*`).
 2. UI applies/removes a managed root cron entry (`# MOCI_SPEEDTEST_MONITOR`).
 3. Cron runs `/usr/bin/moci-speedtest-monitor --once` once per day.
-4. Script runs `speedtestcpp`, parses download/upload, and appends rows to:
+4. Script runs configured speedtest binary (`moci.speedtest_monitor.bin`, default `/usr/bin/speedtest`) with fallback auto-detection, parses download/upload, and appends rows to:
    - `/tmp/moci-speedtest-monitor.txt`
 5. Monitoring UI reads this file and renders:
    - last download/upload cards
@@ -201,6 +201,7 @@ The frontend reads data via `ubus` (`file.read`, `file.exec`, `uci.get`) and doe
 - `option enabled '1'`
 - `option run_hour '3'`
 - `option run_minute '15'`
+- `option bin '/usr/bin/speedtest'`
 - `option output_file '/tmp/moci-speedtest-monitor.txt'`
 - `option max_lines '365'`
 
