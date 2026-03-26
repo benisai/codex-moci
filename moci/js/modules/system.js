@@ -623,7 +623,21 @@ export default class SystemModule {
 			return;
 		}
 		try {
-			await this.runInitServiceAction(name, 'start');
+			const before = await this.getServiceRunningState(name);
+			if (before === true) {
+				this.core.showToast(`Service ${name} is already running`, 'info');
+				return;
+			}
+			let started = false;
+			try {
+				await this.runInitServiceAction(name, 'start');
+				started = true;
+			} catch {
+				// Some services (e.g. procd wrappers) return non-zero on start even when usable via restart.
+				await this.runInitServiceAction(name, 'restart');
+				started = true;
+			}
+			if (!started) throw new Error('start failed');
 			this.core.showToast(`Service ${name} started`, 'success');
 			this.loadStartup();
 		} catch {
@@ -637,6 +651,11 @@ export default class SystemModule {
 			return;
 		}
 		try {
+			const before = await this.getServiceRunningState(name);
+			if (before === false) {
+				this.core.showToast(`Service ${name} is already stopped`, 'info');
+				return;
+			}
 			await this.runInitServiceAction(name, 'stop');
 			this.core.showToast(`Service ${name} stopped`, 'success');
 			this.loadStartup();
@@ -667,6 +686,35 @@ export default class SystemModule {
 		if (status !== 0 || Number(result?.code ?? 1) !== 0) {
 			throw new Error(`${name} ${action} failed`);
 		}
+	}
+
+	async getServiceRunningState(name) {
+		try {
+			const [status, result] = await this.core.ubusCall('service', 'list', {});
+			if (status === 0 && result && Object.prototype.hasOwnProperty.call(result, name)) {
+				const info = result[name];
+				const running = info?.instances && Object.keys(info.instances).length > 0;
+				return Boolean(running);
+			}
+		} catch {}
+
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', `/etc/init.d/${this.shellQuote(name)} status >/dev/null 2>&1 && echo RUNNING || echo STOPPED`]
+			});
+			if (status === 0) {
+				const value = String(result?.stdout || '').trim();
+				if (value === 'RUNNING') return true;
+				if (value === 'STOPPED') return false;
+			}
+		} catch {}
+
+		return null;
+	}
+
+	shellQuote(value) {
+		return String(value || '').replace(/'/g, "'\\''");
 	}
 
 	async loadCron() {
