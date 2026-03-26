@@ -1296,11 +1296,12 @@ export default class NetworkModule {
 				if ((type === 'adblock-fast' || section === 'config') && !mainSection) {
 					mainSection = { id: section, values: cfg };
 				} else if (type === 'file_url') {
+					const hasEnabled = Object.prototype.hasOwnProperty.call(cfg || {}, 'enabled');
 					rows.push({
 						id: section,
 						name: String(cfg.name || section),
 						url: String(cfg.url || ''),
-						enabled: this.isEnabledValue(cfg.enabled)
+						enabled: hasEnabled ? this.isEnabledValue(cfg.enabled) : true
 					});
 				}
 			}
@@ -1487,7 +1488,7 @@ export default class NetworkModule {
 		try {
 			const [status, result] = await this.core.uciGet('adblock-fast', String(section));
 			if (status !== 0 || !result?.values) throw new Error('Target list section not found');
-			const current = this.isEnabledValue(result.values.enabled ?? '0') ? '1' : '0';
+			const current = this.isEnabledValue(result.values.enabled ?? '1') ? '1' : '0';
 			const next = current === '1' ? '0' : '1';
 			await this.core.uciSet('adblock-fast', String(section), { enabled: next });
 			await this.core.uciCommit('adblock-fast');
