@@ -834,7 +834,12 @@ export default class NetworkModule {
 		if (!this.core.isFeatureEnabled('colorful_graphs')) {
 			return this.core.renderBadge(action === 'ACCEPT' ? 'success' : 'error', action);
 		}
-		const cls = action === 'ACCEPT' ? 'badge-interface-up' : 'badge-interface-down';
+		const cls =
+			action === 'ACCEPT'
+				? 'badge-fw-target-accept'
+				: action === 'REJECT' || action === 'DROP'
+					? 'badge-fw-target-block'
+					: 'badge-fw-target-other';
 		return `<span class="badge ${cls}">${this.core.escapeHtml(action)}</span>`;
 	}
 

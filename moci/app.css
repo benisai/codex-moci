@@ -409,6 +409,24 @@ body {
 	padding: 3px 7px;
 }
 
+.badge-fw-target-accept {
+	background: rgba(255, 255, 255, 0.02);
+	color: #ffffff;
+	border: 1px solid rgba(144, 238, 144, 0.35);
+}
+
+.badge-fw-target-block {
+	background: rgba(255, 255, 255, 0.02);
+	color: #ffffff;
+	border: 1px solid rgba(255, 125, 125, 0.38);
+}
+
+.badge-fw-target-other {
+	background: rgba(255, 255, 255, 0.02);
+	color: #ffffff;
+	border: 1px solid rgba(132, 210, 255, 0.4);
+}
+
 .monitoring-excellent-soft {
 	background: rgba(255, 255, 255, 0.02);
 	color: #bfecc0;
