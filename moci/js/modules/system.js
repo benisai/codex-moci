@@ -581,10 +581,15 @@ export default class SystemModule {
 			const [status, result] = await this.core.ubusCall('service', 'list', {});
 			if (status !== 0 || !result) throw new Error('No data');
 
-			const services = Object.entries(result).map(([name, info]) => {
-				const running = info.instances && Object.keys(info.instances).length > 0;
-				return { name, running };
-			});
+			const initNames = await this.fetchInitScriptNames();
+			const nameSet = new Set([...Object.keys(result), ...initNames]);
+			const services = Array.from(nameSet)
+				.map(name => {
+					const info = result?.[name];
+					const running = Boolean(info?.instances && Object.keys(info.instances).length > 0);
+					return { name, running };
+				})
+				.sort((a, b) => a.name.localeCompare(b.name));
 
 			const tbody = document.querySelector('#services-table tbody');
 			if (!tbody) return;
@@ -615,6 +620,23 @@ export default class SystemModule {
 				)
 				.join('');
 		});
+	}
+
+	async fetchInitScriptNames() {
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', 'ls -1 /etc/init.d 2>/dev/null || true']
+			});
+			if (status !== 0) return [];
+			return String(result?.stdout || '')
+				.split('\n')
+				.map(v => v.trim())
+				.filter(Boolean)
+				.filter(v => /^[A-Za-z0-9._-]+$/.test(v));
+		} catch {
+			return [];
+		}
 	}
 
 	async startService(name) {
