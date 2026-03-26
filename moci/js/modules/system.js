@@ -679,12 +679,17 @@ export default class SystemModule {
 	}
 
 	async runInitServiceAction(name, action) {
+		const safeName = String(name || '').trim();
+		const safeAction = String(action || '').trim();
+		if (!/^[a-zA-Z0-9_-]+$/.test(safeName) || !/^(start|stop|restart|reload|enable|disable)$/.test(safeAction)) {
+			throw new Error('invalid init service action');
+		}
 		const [status, result] = await this.core.ubusCall('file', 'exec', {
-			command: `/etc/init.d/${name}`,
-			params: [action]
+			command: '/bin/sh',
+			params: ['-c', `/etc/init.d/${this.shellQuote(safeName)} ${this.shellQuote(safeAction)}`]
 		});
 		if (status !== 0 || Number(result?.code ?? 1) !== 0) {
-			throw new Error(`${name} ${action} failed`);
+			throw new Error(`${safeName} ${safeAction} failed`);
 		}
 	}
 
@@ -714,7 +719,7 @@ export default class SystemModule {
 	}
 
 	shellQuote(value) {
-		return String(value || '').replace(/'/g, "'\\''");
+		return `'${String(value || '').replace(/'/g, `'\\''`)}'`;
 	}
 
 	async loadCron() {
