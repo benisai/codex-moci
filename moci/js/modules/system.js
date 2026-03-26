@@ -110,7 +110,8 @@ export default class SystemModule {
 		if (sshCleanup) this.cleanups.push(sshCleanup);
 
 		const servicesCleanup = this.core.delegateActions('services-table', {
-			toggle: id => this.toggleService(id),
+			start: id => this.startService(id),
+			stop: id => this.stopService(id),
 			restart: id => this.restartService(id)
 		});
 		if (servicesCleanup) this.cleanups.push(servicesCleanup);
@@ -599,8 +600,11 @@ export default class SystemModule {
 				<td>${this.core.renderBadge('info', 'N/A')}</td>
 				<td>
 					<div class="action-buttons">
-						<button class="action-btn" data-action="toggle" data-id="${this.core.escapeHtml(s.name)}" style="font-size:11px;padding:4px 8px">
-							${s.running ? 'STOP' : 'START'}
+						<button class="action-btn success" data-action="start" data-id="${this.core.escapeHtml(s.name)}" style="font-size:11px;padding:4px 8px">
+							START
+						</button>
+						<button class="action-btn danger" data-action="stop" data-id="${this.core.escapeHtml(s.name)}" style="font-size:11px;padding:4px 8px">
+							STOP
 						</button>
 						<button class="action-btn warning" data-action="restart" data-id="${this.core.escapeHtml(s.name)}" style="font-size:11px;padding:4px 8px">
 							RESTART
@@ -613,22 +617,31 @@ export default class SystemModule {
 		});
 	}
 
-	async toggleService(name) {
+	async startService(name) {
 		if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
 			this.core.showToast('Invalid service name', 'error');
 			return;
 		}
 		try {
-			const [status, result] = await this.core.ubusCall('service', 'list', {});
-			const info = result?.[name];
-			const running = info?.instances && Object.keys(info.instances).length > 0;
-			const action = running ? 'stop' : 'start';
-			await this.runInitServiceAction(name, action);
-			const pastTense = action === 'stop' ? 'stopped' : `${action}ed`;
-			this.core.showToast(`Service ${name} ${pastTense}`, 'success');
+			await this.runInitServiceAction(name, 'start');
+			this.core.showToast(`Service ${name} started`, 'success');
 			this.loadStartup();
 		} catch {
-			this.core.showToast(`Failed to toggle service ${name}`, 'error');
+			this.core.showToast(`Failed to start service ${name}`, 'error');
+		}
+	}
+
+	async stopService(name) {
+		if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+			this.core.showToast('Invalid service name', 'error');
+			return;
+		}
+		try {
+			await this.runInitServiceAction(name, 'stop');
+			this.core.showToast(`Service ${name} stopped`, 'success');
+			this.loadStartup();
+		} catch {
+			this.core.showToast(`Failed to stop service ${name}`, 'error');
 		}
 	}
 
