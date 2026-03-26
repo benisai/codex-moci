@@ -133,6 +133,9 @@ for pkg in \
 	luci-app-vnstat2 \
 	nlbwmon \
 	luci-app-nlbwmon \
+	wireguard-tools \
+	kmod-wireguard \
+	luci-proto-wireguard \
 	adblock-fast \
 	luci-app-adblock-fast \
 	sqlite3-cli \
