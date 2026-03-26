@@ -135,6 +135,7 @@ for pkg in \
 	luci-app-nlbwmon \
 	adblock-fast \
 	luci-app-adblock-fast \
+	sqlite3-cli \
 	speedtestcpp
 do
 	install_pkg_if_available "$pkg"
