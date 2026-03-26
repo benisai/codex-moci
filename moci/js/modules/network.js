@@ -1295,13 +1295,23 @@ export default class NetworkModule {
 				const type = String(cfg?.['.type'] || '');
 				if ((type === 'adblock-fast' || section === 'config') && !mainSection) {
 					mainSection = { id: section, values: cfg };
-				} else if (type === 'file_url') {
+				} else if (type === 'file_url' || type === 'file' || type === 'source') {
 					const hasEnabled = Object.prototype.hasOwnProperty.call(cfg || {}, 'enabled');
+					const hasDisabled = Object.prototype.hasOwnProperty.call(cfg || {}, 'disabled');
+					const hasStatus = Object.prototype.hasOwnProperty.call(cfg || {}, 'status');
+					let enabled = true;
+					if (hasEnabled) {
+						enabled = this.isEnabledValue(cfg.enabled);
+					} else if (hasDisabled) {
+						enabled = !this.isEnabledValue(cfg.disabled);
+					} else if (hasStatus) {
+						enabled = this.isEnabledValue(cfg.status);
+					}
 					rows.push({
 						id: section,
-						name: String(cfg.name || section),
-						url: String(cfg.url || ''),
-						enabled: hasEnabled ? this.isEnabledValue(cfg.enabled) : true
+						name: String(cfg.name || cfg.label || cfg.title || section),
+						url: String(cfg.url || cfg.uri || cfg.source || cfg.file || ''),
+						enabled
 					});
 				}
 			}
@@ -1488,7 +1498,14 @@ export default class NetworkModule {
 		try {
 			const [status, result] = await this.core.uciGet('adblock-fast', String(section));
 			if (status !== 0 || !result?.values) throw new Error('Target list section not found');
-			const current = this.isEnabledValue(result.values.enabled ?? '1') ? '1' : '0';
+			let current = '1';
+			if (Object.prototype.hasOwnProperty.call(result.values, 'enabled')) {
+				current = this.isEnabledValue(result.values.enabled) ? '1' : '0';
+			} else if (Object.prototype.hasOwnProperty.call(result.values, 'disabled')) {
+				current = this.isEnabledValue(result.values.disabled) ? '0' : '1';
+			} else if (Object.prototype.hasOwnProperty.call(result.values, 'status')) {
+				current = this.isEnabledValue(result.values.status) ? '1' : '0';
+			}
 			const next = current === '1' ? '0' : '1';
 			await this.core.uciSet('adblock-fast', String(section), { enabled: next });
 			await this.core.uciCommit('adblock-fast');
