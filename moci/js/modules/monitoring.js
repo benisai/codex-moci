@@ -548,15 +548,46 @@ export default class MonitoringModule {
 	async runSpeedtestNow() {
 		this.setSpeedtestRunNowBusy(true);
 		try {
-			await this.exec('/usr/bin/moci-speedtest-monitor', ['--once'], { timeout: 240000 });
-			await this.refresh();
-			this.core.showToast('Speedtest captured', 'success');
+			await this.loadSpeedtestSamples();
+			const beforeTs = this.getLatestSpeedtestSampleTs();
+
+			// Run in background to avoid ubus/rpcd request timeout on long speedtests.
+			await this.exec('/bin/sh', [
+				'-c',
+				'/usr/bin/moci-speedtest-monitor --once >/tmp/moci-speedtest-monitor.last.log 2>&1 &'
+			]);
+
+			const completed = await this.waitForNewSpeedtestSample(beforeTs, 24, 2500);
+			if (completed) {
+				await this.refresh();
+				this.core.showToast('Speedtest captured', 'success');
+			} else {
+				this.core.showToast('Speedtest started; result will appear shortly', 'warning');
+				await this.refresh();
+			}
 		} catch (err) {
 			console.error('Failed to run speedtest now:', err);
 			this.core.showToast('Failed to run speedtest', 'error');
 		} finally {
 			this.setSpeedtestRunNowBusy(false);
 		}
+	}
+
+	getLatestSpeedtestSampleTs() {
+		const samples = Array.isArray(this.speedtestSamples) ? this.speedtestSamples : [];
+		if (samples.length === 0) return 0;
+		return Math.max(...samples.map(s => Number(s?.ts) || 0));
+	}
+
+	async waitForNewSpeedtestSample(previousTs, attempts = 24, delayMs = 2500) {
+		for (let i = 0; i < attempts; i += 1) {
+			await new Promise(resolve => setTimeout(resolve, delayMs));
+			await this.loadSpeedtestSamples();
+			if (this.getLatestSpeedtestSampleTs() > Number(previousTs || 0)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	setSpeedtestRunNowBusy(busy) {
