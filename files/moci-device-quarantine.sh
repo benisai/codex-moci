@@ -5,7 +5,7 @@
 
 set -u
 
-DEFAULT_INTERVAL=60
+DEFAULT_INTERVAL=15
 DEFAULT_LEASES_FILE="/tmp/dhcp.leases"
 DEFAULT_STATE_FILE="/tmp/moci-quarantine-known.txt"
 DEFAULT_RULE_PREFIX="moci_quarantine_"
@@ -91,8 +91,7 @@ rule_exists_by_name() {
 add_fw_rule() {
 	local name="$1"
 	local mac="$2"
-	local ip="$3"
-	local dest="$4"
+	local dest="$3"
 	local sid
 	sid="$(uci add firewall rule 2>/dev/null || true)"
 	[ -n "$sid" ] || return 1
@@ -104,9 +103,6 @@ add_fw_rule() {
 	uci set firewall."$sid".target="REJECT"
 	uci set firewall."$sid".family="any"
 	uci set firewall."$sid".enabled="1"
-	if echo "$ip" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-		uci set firewall."$sid".src_ip="$ip"
-	fi
 	return 0
 }
 
@@ -120,10 +116,10 @@ quarantine_new_device() {
 	wan="${base}_wan"
 
 	if ! rule_exists_by_name "$lan"; then
-		add_fw_rule "$lan" "$mac" "$ip" "lan" || true
+		add_fw_rule "$lan" "$mac" "lan" || true
 	fi
 	if ! rule_exists_by_name "$wan"; then
-		add_fw_rule "$wan" "$mac" "$ip" "wan" || true
+		add_fw_rule "$wan" "$mac" "wan" || true
 	fi
 
 	log "quarantined new device mac=$mac ip=$ip host=$host rules=[$lan,$wan]"

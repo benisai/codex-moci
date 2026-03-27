@@ -268,8 +268,12 @@ export default class NetworkModule {
 		);
 		document.getElementById('quarantine-enable-btn')?.addEventListener('click', () => this.saveQuarantineSettings(true));
 		document.getElementById('quarantine-disable-btn')?.addEventListener('click', () => this.saveQuarantineSettings(false));
+		document.getElementById('quarantine-save-btn')?.addEventListener('click', () => this.saveQuarantineInterval());
 		document.getElementById('quarantine-refresh-btn')?.addEventListener('click', () => this.loadQuarantine());
 		document.getElementById('quarantine-discover-btn')?.addEventListener('click', () => this.runQuarantineDiscovery());
+		document.getElementById('quarantine-settings-toggle-btn')?.addEventListener('click', () =>
+			this.toggleQuarantineSettingsPanel()
+		);
 		document.getElementById('add-pbr-policy-btn')?.addEventListener('click', async () => {
 			this.core.resetModal('pbr-policy-add-modal');
 			await this.populatePbrInterfaceOptions();
@@ -290,6 +294,7 @@ export default class NetworkModule {
 		this.syncAdblockSettingsButtons();
 		this.syncPbrSettingsPanel();
 		this.syncAllPbrSectionPanels();
+		this.syncQuarantineSettingsPanel();
 
 		const adblockCleanup = this.core.delegateActions('adblock-targets-table', {
 			toggle: id => this.toggleAdblockTargetList(id),
@@ -487,6 +492,44 @@ export default class NetworkModule {
 		this.syncPbrSectionPanel('policies', true);
 		this.syncPbrSectionPanel('dns', true);
 		this.syncPbrSectionPanel('list', true);
+	}
+
+	toggleQuarantineSettingsPanel() {
+		const body = document.getElementById('quarantine-settings-body');
+		const icon = document.getElementById('quarantine-settings-toggle-icon');
+		const btn = document.getElementById('quarantine-settings-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const isHidden = body.style.display === 'none' || body.style.display === '';
+		if (isHidden) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+			localStorage.setItem('quarantine_settings_expanded', '1');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+			localStorage.setItem('quarantine_settings_expanded', '0');
+		}
+	}
+
+	syncQuarantineSettingsPanel() {
+		const body = document.getElementById('quarantine-settings-body');
+		const icon = document.getElementById('quarantine-settings-toggle-icon');
+		const btn = document.getElementById('quarantine-settings-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const expanded = localStorage.getItem('quarantine_settings_expanded') === '1';
+		if (expanded) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+		}
 	}
 
 	cleanup() {
@@ -1282,7 +1325,7 @@ export default class NetworkModule {
 	}
 
 	async loadQuarantine() {
-		await this.core.loadResource('quarantine-table', 5, 'quarantine', async () => {
+		await this.core.loadResource('quarantine-table', 4, 'quarantine', async () => {
 			const intervalInput = document.getElementById('quarantine-interval');
 			const serviceEl = document.getElementById('quarantine-service-status');
 			const bootEl = document.getElementById('quarantine-boot-status');
@@ -1298,13 +1341,13 @@ export default class NetworkModule {
 			try {
 				const [status, result] = await this.core.uciGet('moci', 'quarantine');
 				if (status === 0 && result?.values) {
-					const interval = Number(result.values.interval || 60);
-					intervalInput.value = String(Number.isFinite(interval) ? Math.max(10, Math.min(3600, interval)) : 60);
+					const interval = Number(result.values.interval || 15);
+					intervalInput.value = String(Number.isFinite(interval) ? Math.max(10, Math.min(3600, interval)) : 15);
 				} else {
-					intervalInput.value = '60';
+					intervalInput.value = '15';
 				}
 			} catch {
-				intervalInput.value = '60';
+				intervalInput.value = '15';
 			}
 
 			try {
@@ -1335,7 +1378,7 @@ export default class NetworkModule {
 
 			const rows = await this.readQuarantineRules();
 			if (rows.length === 0) {
-				this.core.renderEmptyTable(tbody, 5, 'No quarantined devices');
+				this.core.renderEmptyTable(tbody, 4, 'No quarantined devices');
 				return;
 			}
 
@@ -1348,7 +1391,6 @@ export default class NetworkModule {
 					return `<tr>
 						<td>${this.core.escapeHtml(row.base || row.name || 'N/A')}</td>
 						<td>${this.core.escapeHtml(row.mac || 'N/A')}</td>
-						<td>${this.core.escapeHtml(row.srcIp || 'N/A')}</td>
 						<td>${statusBadge}</td>
 						<td><button class="action-btn-sm" data-action="release" data-id="${releaseId}">RELEASE</button></td>
 					</tr>`;
@@ -1390,18 +1432,14 @@ export default class NetworkModule {
 	}
 
 	async saveQuarantineSettings(enableFlag) {
-		const intervalInput = document.getElementById('quarantine-interval');
-		const interval = Number(intervalInput?.value || 60);
-		if (!Number.isFinite(interval) || interval < 10 || interval > 3600) {
-			this.core.showToast('Interval must be between 10 and 3600 seconds', 'error');
-			return;
-		}
+		const interval = this.getQuarantineIntervalValue();
+		if (interval == null) return;
 		const enabled = Boolean(enableFlag) ? '1' : '0';
 
 		try {
 			await this.core.uciSet('moci', 'quarantine', {
 				enabled,
-				interval: String(Math.round(interval))
+				interval: String(interval)
 			});
 			await this.core.uciCommit('moci');
 
@@ -1416,6 +1454,41 @@ export default class NetworkModule {
 			});
 
 			this.core.showToast(enableFlag ? 'Quarantine enabled' : 'Quarantine disabled', 'success');
+			await this.loadQuarantine();
+		} catch {
+			this.core.showToast('Failed to save quarantine settings', 'error');
+		}
+	}
+
+	getQuarantineIntervalValue() {
+		const intervalInput = document.getElementById('quarantine-interval');
+		const interval = Number(intervalInput?.value || 15);
+		if (!Number.isFinite(interval) || interval < 10 || interval > 3600) {
+			this.core.showToast('Interval must be between 10 and 3600 seconds', 'error');
+			return null;
+		}
+		return Math.round(interval);
+	}
+
+	async saveQuarantineInterval() {
+		const interval = this.getQuarantineIntervalValue();
+		if (interval == null) return;
+		try {
+			const [status, result] = await this.core.uciGet('moci', 'quarantine');
+			const currentEnabled =
+				status === 0 && result?.values ? (String(result.values.enabled ?? '0') === '1' ? '1' : '0') : '0';
+			await this.core.uciSet('moci', 'quarantine', {
+				enabled: currentEnabled,
+				interval: String(interval)
+			});
+			await this.core.uciCommit('moci');
+			if (currentEnabled === '1') {
+				await this.core.ubusCall('file', 'exec', {
+					command: '/bin/sh',
+					params: ['-c', '/etc/init.d/moci-device-quarantine restart 2>/dev/null || true']
+				});
+			}
+			this.core.showToast('Quarantine settings saved', 'success');
 			await this.loadQuarantine();
 		} catch {
 			this.core.showToast('Failed to save quarantine settings', 'error');

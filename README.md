@@ -262,12 +262,13 @@ The frontend reads data via `ubus` (`file.read`, `file.exec`, `uci.get`) and doe
 3. New (previously unseen) MACs are quarantined by adding firewall reject rules for:
    - `lan -> lan`
    - `lan -> wan`
+4. Quarantine matching is MAC-based (`src_mac`).
 4. Rules use prefix `moci_quarantine_` and appear in MoCI Network -> Quarantine.
 
 **Config keys (`/etc/config/moci`)**
 - `config quarantine 'quarantine'`
 - `option enabled '0'` (default disabled)
-- `option interval '60'`
+- `option interval '15'`
 - `option leases_file '/tmp/dhcp.leases'`
 - `option state_file '/tmp/moci-quarantine-known.txt'`
 - `option rule_prefix 'moci_quarantine_'`
