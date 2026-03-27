@@ -350,7 +350,8 @@ export default class DevicesModule {
 	}
 
 	sortRows(rows) {
-		const key = String(this.sortKey || 'traffic');
+		let key = String(this.sortKey || 'traffic');
+		if (key === 'upload' || key === 'download') key = 'traffic';
 		const dir = this.sortDir === 'asc' ? 1 : -1;
 		const list = Array.isArray(rows) ? [...rows] : [];
 		const rankStatus = row => (row?.parentalBlocked ? 2 : row?.online ? 1 : 0);
@@ -363,8 +364,6 @@ export default class DevicesModule {
 			if (key === 'hostname') cmp = strCmp(a.hostname, b.hostname);
 			else if (key === 'ip') cmp = strCmp(a.ip, b.ip);
 			else if (key === 'mac') cmp = strCmp(a.mac, b.mac);
-			else if (key === 'upload') cmp = numCmp(Number(a.tx || 0), Number(b.tx || 0));
-			else if (key === 'download') cmp = numCmp(Number(a.rx || 0), Number(b.rx || 0));
 			else if (key === 'online') cmp = numCmp(rankStatus(a), rankStatus(b));
 			else cmp = numCmp(totalTraffic(a), totalTraffic(b));
 			if (cmp !== 0) return cmp * dir;
