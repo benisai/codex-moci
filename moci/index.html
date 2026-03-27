@@ -280,12 +280,13 @@
 												</label>
 											</div>
 										</div>
-										<div class="form-group" style="margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--glass-border)">
-											<label class="form-label">PARENTAL CONTROL</label>
-											<input type="hidden" id="devices-parental-rule-section" />
-											<div
-												id="devices-parental-status"
-												style="font-family: var(--font-mono); font-size: 11px; color: var(--steel-muted); margin-bottom: 8px"
+											<div class="form-group" style="margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--glass-border)">
+												<label class="form-label">PARENTAL CONTROL</label>
+												<input type="hidden" id="devices-parental-rule-section" />
+												<input type="hidden" id="devices-quarantine-rule-base" />
+												<div
+													id="devices-parental-status"
+													style="font-family: var(--font-mono); font-size: 11px; color: var(--steel-muted); margin-bottom: 8px"
 											>
 												Status: Unknown
 											</div>
@@ -294,11 +295,12 @@
 											</div>
 										</div>
 									</div>
-									<div class="modal-footer">
-										<button class="action-btn danger" id="delete-devices-pin-btn">DELETE</button>
-										<button class="action-btn" id="cancel-devices-pin-btn">CANCEL</button>
-										<button class="action-btn" id="save-devices-pin-btn">SAVE</button>
-									</div>
+										<div class="modal-footer">
+											<button class="action-btn danger hidden" id="devices-release-quarantine-btn">QUARANTINED</button>
+											<button class="action-btn danger" id="delete-devices-pin-btn">DELETE</button>
+											<button class="action-btn" id="cancel-devices-pin-btn">CANCEL</button>
+											<button class="action-btn" id="save-devices-pin-btn">SAVE</button>
+										</div>
 								</div>
 							</div>
 						</div>

@@ -16,6 +16,8 @@ export default class DevicesModule {
 		this.netifyFeatureEnabled = true;
 		this.parentalByMac = new Map();
 		this.parentalRulePrefix = 'moci_parental_';
+		this.quarantineByMac = new Map();
+		this.quarantineRulePrefix = 'moci_quarantine_';
 		this.sortKey = 'online';
 		this.sortDir = 'desc';
 
@@ -45,6 +47,7 @@ export default class DevicesModule {
 		});
 		document.getElementById('devices-pin-static')?.addEventListener('change', () => this.syncStaticIpField());
 		document.getElementById('devices-parental-toggle-btn')?.addEventListener('click', () => this.toggleParentalControl());
+		document.getElementById('devices-release-quarantine-btn')?.addEventListener('click', () => this.releaseQuarantineFromDialog());
 		document.getElementById('delete-devices-pin-btn')?.addEventListener('click', () => this.deleteFromDialog());
 
 		this.core.delegateActions('devices-table', {
@@ -102,21 +105,23 @@ export default class DevicesModule {
 		if (!tbody) return;
 
 		try {
-			const [leases, arpMacs, usage, staticByMac, netifyEnabled, parentalByMac] = await Promise.all([
+			const [leases, arpMacs, usage, staticByMac, netifyEnabled, parentalByMac, quarantineByMac] = await Promise.all([
 				this.fetchLeases(),
 				this.fetchArpMacs(),
 				this.fetchNlbwmonUsage(),
 				this.fetchStaticLeasesByMac(),
 				this.fetchNetifyFeatureFlag(),
-				this.fetchParentalRulesByMac()
+				this.fetchParentalRulesByMac(),
+				this.fetchQuarantineRulesByMac()
 			]);
 
 			this.staticByMac = staticByMac;
 			this.nlbwAvailable = Boolean(usage.available);
 			this.netifyFeatureEnabled = Boolean(netifyEnabled);
 			this.parentalByMac = parentalByMac;
+			this.quarantineByMac = quarantineByMac;
 			this.renderSourceStatus();
-			const rows = this.mergeRows(leases, arpMacs, usage.totalsByClient, staticByMac, parentalByMac);
+			const rows = this.mergeRows(leases, arpMacs, usage.totalsByClient, staticByMac, parentalByMac, quarantineByMac);
 			if (fromAuto && this.expandedMac) return;
 			this.deviceRows = rows;
 			this.renderRows(this.sortRows(rows));
@@ -187,6 +192,38 @@ export default class DevicesModule {
 					section,
 					enabled
 				});
+			}
+		} catch {}
+		return map;
+	}
+
+	async fetchQuarantineRulesByMac() {
+		const map = new Map();
+		let prefix = this.quarantineRulePrefix;
+		try {
+			const [qs, qr] = await this.core.uciGet('moci', 'quarantine');
+			if (qs === 0 && qr?.values?.rule_prefix) {
+				const configured = String(qr.values.rule_prefix || '').trim();
+				if (configured) prefix = configured;
+			}
+		} catch {}
+		this.quarantineRulePrefix = prefix;
+
+		try {
+			const [status, result] = await this.core.uciGet('firewall');
+			if (status !== 0 || !result?.values) return map;
+
+			for (const [, cfg] of Object.entries(result.values)) {
+				if (String(cfg?.['.type'] || '') !== 'rule') continue;
+				const name = String(cfg?.name || '').trim();
+				if (!name.startsWith(prefix)) continue;
+				const mac = this.normalizeMac(cfg?.src_mac || cfg?.src_mac_address || '');
+				if (!mac) continue;
+				const base = name.replace(/_(lan|wan)$/i, '');
+				const current = map.get(mac) || { base, enabled: false };
+				current.base = current.base || base;
+				current.enabled = current.enabled || String(cfg?.enabled ?? '1') !== '0';
+				map.set(mac, current);
 			}
 		} catch {}
 		return map;
@@ -299,7 +336,7 @@ export default class DevicesModule {
 		return { available: true, totalsByClient };
 	}
 
-	mergeRows(leases, arpMacs, totalsByClient, staticByMac, parentalByMac) {
+	mergeRows(leases, arpMacs, totalsByClient, staticByMac, parentalByMac, quarantineByMac) {
 		const merged = [];
 		const seenMacs = new Set();
 
@@ -310,6 +347,7 @@ export default class DevicesModule {
 			const usage = totalsByClient.get(key) || totalsByClient.get(ip) || null;
 			const pin = mac ? staticByMac.get(mac) : null;
 			const parental = mac ? parentalByMac.get(mac) : null;
+			const quarantine = mac ? quarantineByMac.get(mac) : null;
 			merged.push({
 				hostname: lease.hostname || pin?.name || 'Unknown',
 				ip: pin?.ip || ip || 'N/A',
@@ -322,7 +360,9 @@ export default class DevicesModule {
 				pinned: Boolean(pin?.ip),
 				staticSection: pin?.section || '',
 				parentalSection: parental?.section || '',
-				parentalBlocked: Boolean(parental?.enabled)
+				parentalBlocked: Boolean(parental?.enabled),
+				quarantined: Boolean(quarantine?.enabled),
+				quarantineBase: quarantine?.base || ''
 			});
 			if (mac) seenMacs.add(mac);
 		}
@@ -331,6 +371,7 @@ export default class DevicesModule {
 			if (!mac || seenMacs.has(mac)) continue;
 			const usage = totalsByClient.get(mac) || totalsByClient.get(pin?.ip || '') || null;
 			const parental = parentalByMac.get(mac) || null;
+			const quarantine = quarantineByMac.get(mac) || null;
 			merged.push({
 				hostname: pin?.name || 'Unknown',
 				ip: pin?.ip || usage?.ip || 'N/A',
@@ -343,7 +384,9 @@ export default class DevicesModule {
 				pinned: Boolean(pin?.ip),
 				staticSection: pin?.section || '',
 				parentalSection: parental?.section || '',
-				parentalBlocked: Boolean(parental?.enabled)
+				parentalBlocked: Boolean(parental?.enabled),
+				quarantined: Boolean(quarantine?.enabled),
+				quarantineBase: quarantine?.base || ''
 			});
 			seenMacs.add(mac);
 		}
@@ -356,7 +399,7 @@ export default class DevicesModule {
 		if (key === 'upload' || key === 'download') key = 'traffic';
 		const dir = this.sortDir === 'asc' ? 1 : -1;
 		const list = Array.isArray(rows) ? [...rows] : [];
-		const rankStatus = row => (row?.parentalBlocked ? 2 : row?.online ? 1 : 0);
+		const rankStatus = row => (row?.quarantined ? 3 : row?.parentalBlocked ? 2 : row?.online ? 1 : 0);
 		const totalTraffic = row => Number(row?.rx || 0) + Number(row?.tx || 0);
 		const numCmp = (a, b) => (a === b ? 0 : a > b ? 1 : -1);
 		const strCmp = (a, b) => String(a || '').localeCompare(String(b || ''));
@@ -435,6 +478,9 @@ export default class DevicesModule {
 	}
 
 	renderDeviceStatusBadge(row) {
+		if (row?.quarantined) {
+			return this.core.renderBadge('error', 'QUARANTINED');
+		}
 		if (row?.parentalBlocked) {
 			return '<span class="badge badge-adblock-disabled-soft">BLOCKED</span>';
 		}
@@ -758,8 +804,10 @@ export default class DevicesModule {
 		if (staticCheckbox) staticCheckbox.checked = Boolean(row.pinned);
 		document.getElementById('devices-pin-ip').value = row.ip && row.ip !== 'N/A' ? row.ip : '';
 		document.getElementById('devices-parental-rule-section').value = row.parentalSection || '';
+		document.getElementById('devices-quarantine-rule-base').value = row.quarantineBase || '';
 		this.syncStaticIpField();
 		this.syncParentalControlUi(row);
+		this.syncQuarantineActionUi(row);
 		this.core.openModal('devices-pin-modal');
 	}
 
@@ -772,6 +820,13 @@ export default class DevicesModule {
 		toggleBtn.textContent = blocked ? 'UNBLOCK INTERNET' : 'BLOCK INTERNET';
 		toggleBtn.classList.toggle('danger', !blocked);
 		toggleBtn.classList.toggle('success', blocked);
+	}
+
+	syncQuarantineActionUi(row) {
+		const btn = document.getElementById('devices-release-quarantine-btn');
+		if (!btn) return;
+		const quarantined = Boolean(row?.quarantined);
+		btn.classList.toggle('hidden', !quarantined);
 	}
 
 	syncStaticIpField() {
@@ -944,6 +999,46 @@ export default class DevicesModule {
 
 		if (this.expandedMac === normalizedMac) this.expandedMac = '';
 		await this.loadDevices();
+	}
+
+	async releaseQuarantineFromDialog() {
+		const mac = this.normalizeMac(document.getElementById('devices-pin-mac')?.value || '');
+		if (!mac) {
+			this.core.showToast('Device MAC not available', 'error');
+			return;
+		}
+		const base = String(document.getElementById('devices-quarantine-rule-base')?.value || '').trim();
+		if (!base) {
+			this.core.showToast('Device is not quarantined', 'warning');
+			return;
+		}
+		if (!confirm('Release this device from quarantine?')) return;
+
+		try {
+			const [status, result] = await this.core.uciGet('firewall');
+			if (status !== 0 || !result?.values) throw new Error('Unable to read firewall config');
+
+			for (const [section, cfg] of Object.entries(result.values)) {
+				if (String(cfg?.['.type'] || '') !== 'rule') continue;
+				const name = String(cfg?.name || '').trim();
+				if (name === `${base}_lan` || name === `${base}_wan` || name === base) {
+					await this.core.uciDelete('firewall', section);
+				}
+			}
+			await this.core.uciCommit('firewall');
+			await this.exec('/bin/sh', [
+				'-c',
+				'/etc/init.d/firewall reload 2>/dev/null || /etc/init.d/firewall restart 2>/dev/null || true'
+			]);
+			this.core.showToast('Device released from quarantine', 'success');
+			await this.loadDevices();
+			const refreshed = this.rowsByMac.get(mac);
+			document.getElementById('devices-quarantine-rule-base').value = refreshed?.quarantineBase || '';
+			this.syncQuarantineActionUi(refreshed);
+		} catch (err) {
+			console.error('Failed to release quarantined device:', err);
+			this.core.showToast('Failed to release quarantined device', 'error');
+		}
 	}
 
 	async toggleParentalControl() {
