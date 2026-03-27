@@ -797,16 +797,32 @@ export default class DevicesModule {
 		const existingSection = String(sectionInput?.value || row?.parentalSection || '').trim();
 		const currentlyBlocked = Boolean(row?.parentalBlocked);
 		const targetEnabled = currentlyBlocked ? '0' : '1';
-		const ruleName = `${this.parentalRulePrefix}${mac.replace(/:/g, '')}`;
+		const ruleName = this.buildParentalRuleName(row, mac);
+		const sourceIp = this.resolveParentalSourceIp(row);
 
 		try {
 			if (existingSection) {
-				await this.core.uciSet('firewall', existingSection, { enabled: targetEnabled });
+				const updateValues = {
+					name: ruleName,
+					src: 'lan',
+					dest: 'wan',
+					src_mac: mac,
+					proto: 'all',
+					target: 'REJECT',
+					family: 'any',
+					enabled: targetEnabled
+				};
+				if (sourceIp) {
+					updateValues.src_ip = sourceIp;
+				} else {
+					await this.core.uciDelete('firewall', existingSection, 'src_ip').catch(() => {});
+				}
+				await this.core.uciSet('firewall', existingSection, updateValues);
 			} else {
 				const [, addResult] = await this.core.uciAdd('firewall', 'rule');
 				const newSection = addResult?.section;
 				if (!newSection) throw new Error('failed to create firewall rule');
-				await this.core.uciSet('firewall', newSection, {
+				const createValues = {
 					name: ruleName,
 					src: 'lan',
 					dest: 'wan',
@@ -815,7 +831,9 @@ export default class DevicesModule {
 					target: 'REJECT',
 					family: 'any',
 					enabled: '1'
-				});
+				};
+				if (sourceIp) createValues.src_ip = sourceIp;
+				await this.core.uciSet('firewall', newSection, createValues);
 			}
 
 			await this.core.uciCommit('firewall');
@@ -835,6 +853,27 @@ export default class DevicesModule {
 			console.error('Failed to toggle parental control:', err);
 			this.core.showToast('Failed to update parental control rule', 'error');
 		}
+	}
+
+	buildParentalRuleName(row, mac) {
+		const hostname = String(row?.hostname || '')
+			.trim()
+			.replace(/\s+/g, '_')
+			.replace(/[^A-Za-z0-9_.-]/g, '')
+			.slice(0, 32);
+		if (hostname && hostname.toLowerCase() !== 'unknown') {
+			return `${this.parentalRulePrefix}${hostname}`;
+		}
+		return `${this.parentalRulePrefix}${String(mac || '').replace(/:/g, '')}`;
+	}
+
+	resolveParentalSourceIp(row) {
+		const candidates = [row?.leaseIp, row?.ip];
+		for (const candidate of candidates) {
+			const ip = String(candidate || '').trim();
+			if (this.isValidIpv4(ip)) return ip;
+		}
+		return '';
 	}
 
 	renderSourceStatus() {
