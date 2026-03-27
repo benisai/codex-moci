@@ -16,7 +16,7 @@ export default class DevicesModule {
 		this.netifyFeatureEnabled = true;
 		this.parentalByMac = new Map();
 		this.parentalRulePrefix = 'moci_parental_';
-		this.sortKey = 'traffic';
+		this.sortKey = 'online';
 		this.sortDir = 'desc';
 
 		this.core.registerRoute('/devices', async () => {
@@ -89,6 +89,8 @@ export default class DevicesModule {
 		if (this.refreshTimer) return;
 		this.refreshTimer = setInterval(() => {
 			if (this.core.currentRoute?.startsWith('/devices')) {
+				// Keep row order stable while user is inspecting expanded details.
+				if (this.expandedMac) return;
 				this.loadDevices();
 			}
 		}, 15000);
