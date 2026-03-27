@@ -1264,7 +1264,7 @@ select.form-input {
 }
 
 .hero-card.online .hero-indicator {
-	color: var(--success-green);
+	color: #62b86a;
 }
 
 .hero-card.offline .hero-indicator {
