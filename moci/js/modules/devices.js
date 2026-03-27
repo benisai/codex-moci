@@ -45,10 +45,10 @@ export default class DevicesModule {
 		});
 		document.getElementById('devices-pin-static')?.addEventListener('change', () => this.syncStaticIpField());
 		document.getElementById('devices-parental-toggle-btn')?.addEventListener('click', () => this.toggleParentalControl());
+		document.getElementById('delete-devices-pin-btn')?.addEventListener('click', () => this.deleteFromDialog());
 
 		this.core.delegateActions('devices-table', {
-			pin: mac => this.openPinDialog(mac),
-			delete: mac => this.deleteDevice(mac)
+			pin: mac => this.openPinDialog(mac)
 		});
 		this.setupSortHeaders();
 	}
@@ -406,10 +406,7 @@ export default class DevicesModule {
 				const pinBtn =
 					row.mac === 'N/A'
 						? '-'
-						: `<div class="action-buttons">
-							<button class="action-btn-sm devices-action-btn" data-action="pin" data-id="${this.core.escapeHtml(row.mac)}" title="Device settings">ACTION</button>
-							<button class="action-btn-sm danger devices-action-btn" data-action="delete" data-id="${this.core.escapeHtml(row.mac)}" title="Delete device configuration">DELETE</button>
-						</div>`;
+						: `<button class="action-btn-sm devices-action-btn" data-action="pin" data-id="${this.core.escapeHtml(row.mac)}" title="Edit device settings">EDIT</button>`;
 
 				const ipText = this.renderDeviceIp(row.ip, row.pinned);
 
@@ -841,6 +838,16 @@ export default class DevicesModule {
 			console.error('Failed to save static lease:', err);
 			this.core.showToast('Failed to save static IP', 'error');
 		}
+	}
+
+	async deleteFromDialog() {
+		const mac = this.normalizeMac(document.getElementById('devices-pin-mac')?.value || '');
+		if (!mac) {
+			this.core.showToast('Device MAC not available', 'error');
+			return;
+		}
+		this.core.closeModal('devices-pin-modal');
+		await this.deleteDevice(mac);
 	}
 
 	async deleteDevice(mac) {
