@@ -123,10 +123,12 @@ What does the shell script do?:
   - `/usr/bin/moci-netify-collector`
   - `/usr/bin/moci-ping-monitor`
   - `/usr/bin/moci-speedtest-monitor`
+  - `/usr/bin/moci-state-sync`
   - `/etc/init.d/netify-collector`
   - `/etc/init.d/ping-monitor`
+  - `/etc/init.d/moci-state-sync`
 - installs `/etc/config/moci` defaults for Monitoring + Netify
-- enables/restarts `rpcd`, `uhttpd`, `netify-collector`, `ping-monitor`, `vnstat`, `nlbwmon`, `netifyd`
+- enables/restarts `rpcd`, `uhttpd`, `netify-collector`, `ping-monitor`, `moci-state-sync`, `vnstat`, `nlbwmon`, `netifyd`
 
 After running script, open:
 - `http://<router-lan-ip>/moci/`
@@ -240,6 +242,41 @@ The frontend reads data via `ubus` (`file.read`, `file.exec`, `uci.get`) and doe
 /etc/init.d/netify-collector enable
 /etc/init.d/netify-collector start
 /etc/init.d/netify-collector restart
+```
+
+### Runtime data persistence (safe checkpoints)
+
+MoCI keeps high-write data in `/tmp` to reduce flash wear, and checkpoints to persistent storage on a timer.
+
+**Service and scripts**
+- Init script: `files/moci-state-sync.init`
+- Worker: `files/moci-state-sync.sh`
+- Runtime command: `/usr/bin/moci-state-sync`
+
+**What is checkpointed**
+- Netify SQLite DB (`moci.collector.db_path`, default `/tmp/moci-netify.sqlite`)
+- Ping monitor file (`moci.ping_monitor.output_file`, default `/tmp/moci-ping-monitor.txt`)
+- Speedtest file (`moci.speedtest_monitor.output_file`, default `/tmp/moci-speedtest-monitor.txt`)
+- `vnstat` runtime directory (`/var/lib/vnstat`) when present
+
+**Flow**
+1. On boot, service restores previous checkpoint back into runtime locations.
+2. It installs a managed cron entry (`# MOCI_STATE_SYNC`).
+3. Cron runs `moci-state-sync save` at interval from UCI.
+4. On service stop, it performs a final save.
+
+**Config keys (`/etc/config/moci`)**
+- `config state_backup 'state_backup'`
+- `option backup_time '60'`  (minutes)
+- `option state_dir '/overlay/moci-state'`
+
+**Manual control**
+```bash
+/etc/init.d/moci-state-sync enable
+/etc/init.d/moci-state-sync start
+/usr/bin/moci-state-sync save
+/usr/bin/moci-state-sync restore
+/usr/bin/moci-state-sync sync-cron
 ```
 
 ### Local demo mode

@@ -101,8 +101,10 @@ set_uci() {
 require_file "$REPO_DIR/files/moci-netify-collector.sh"
 require_file "$REPO_DIR/files/moci-ping-monitor.sh"
 require_file "$REPO_DIR/files/moci-speedtest-monitor.sh"
+require_file "$REPO_DIR/files/moci-state-sync.sh"
 require_file "$REPO_DIR/files/netify-collector.init"
 require_file "$REPO_DIR/files/ping-monitor.init"
+require_file "$REPO_DIR/files/moci-state-sync.init"
 require_file "$REPO_DIR/files/moci.config"
 require_file "$REPO_DIR/rpcd-acl.json"
 require_file "$REPO_DIR/moci/index.html"
@@ -159,8 +161,10 @@ log "Installing backend workers and init scripts"
 install_file "$REPO_DIR/files/moci-netify-collector.sh" /usr/bin/moci-netify-collector 0755
 install_file "$REPO_DIR/files/moci-ping-monitor.sh" /usr/bin/moci-ping-monitor 0755
 install_file "$REPO_DIR/files/moci-speedtest-monitor.sh" /usr/bin/moci-speedtest-monitor 0755
+install_file "$REPO_DIR/files/moci-state-sync.sh" /usr/bin/moci-state-sync 0755
 install_file "$REPO_DIR/files/netify-collector.init" /etc/init.d/netify-collector 0755
 install_file "$REPO_DIR/files/ping-monitor.init" /etc/init.d/ping-monitor 0755
+install_file "$REPO_DIR/files/moci-state-sync.init" /etc/init.d/moci-state-sync 0755
 
 if [ -f /etc/config/moci ]; then
 	cp /etc/config/moci "/etc/config/moci.bak.$(date +%Y%m%d%H%M%S)"
@@ -192,6 +196,8 @@ set_uci moci.speedtest_monitor.run_minute "15"
 set_uci moci.speedtest_monitor.bin "/usr/bin/speedtest"
 set_uci moci.speedtest_monitor.output_file "/tmp/moci-speedtest-monitor.txt"
 set_uci moci.speedtest_monitor.max_lines "365"
+set_uci moci.state_backup.backup_time "60"
+set_uci moci.state_backup.state_dir "/overlay/moci-state"
 uci commit moci
 
 NETIFYD_CONF="/etc/netifyd.conf"
@@ -216,6 +222,8 @@ log "Initializing data files"
 /usr/bin/moci-netify-collector --init-db || true
 /usr/bin/moci-ping-monitor --once || true
 /usr/bin/moci-speedtest-monitor --init-file || true
+/usr/bin/moci-state-sync restore || true
+/usr/bin/moci-state-sync sync-cron || true
 
 if ! have_cmd nc; then
 	log "WARNING: nc command not found; netify collector will not ingest flows."
@@ -251,7 +259,7 @@ cp "$TMP_CRON" "$CRON_PATH"
 rm -f "$TMP_CRON"
 /bin/sh -c '/etc/init.d/cron reload 2>/dev/null || /etc/init.d/cron restart 2>/dev/null || /etc/init.d/crond reload 2>/dev/null || /etc/init.d/crond restart 2>/dev/null || killall -HUP crond 2>/dev/null || true'
 
-for svc in vnstat nlbwmon netifyd netify-collector ping-monitor; do
+for svc in vnstat nlbwmon netifyd netify-collector ping-monitor moci-state-sync; do
 	if [ -x "/etc/init.d/$svc" ]; then
 		/etc/init.d/"$svc" enable || true
 		/etc/init.d/"$svc" restart || true
