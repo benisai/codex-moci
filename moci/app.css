@@ -1373,7 +1373,7 @@ select.form-input {
 .dashboard-status-slim #bandwidth-down,
 .dashboard-status-slim #bandwidth-up {
 	display: inline-block;
-	width: 88px;
+	width: 86px;
 	text-align: left;
 	white-space: nowrap;
 }
