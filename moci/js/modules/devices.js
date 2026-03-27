@@ -1035,6 +1035,7 @@ export default class DevicesModule {
 			const refreshed = this.rowsByMac.get(mac);
 			document.getElementById('devices-quarantine-rule-base').value = refreshed?.quarantineBase || '';
 			this.syncQuarantineActionUi(refreshed);
+			this.core.closeModal('devices-pin-modal');
 		} catch (err) {
 			console.error('Failed to release quarantined device:', err);
 			this.core.showToast('Failed to release quarantined device', 'error');
