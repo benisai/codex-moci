@@ -124,6 +124,7 @@ save_state() {
 	save_sqlite "$netify_db" "$state_dir/moci-netify.sqlite"
 	save_copy "$ping_file" "$state_dir/moci-ping-monitor.txt"
 	save_copy "$speedtest_file" "$state_dir/moci-speedtest-monitor.txt"
+	save_copy "/etc/config/moci" "$state_dir/moci.config"
 	save_vnstat_dir "$state_dir"
 	date +%s >"$STATE_TS_FILE" 2>/dev/null || true
 }
@@ -139,6 +140,7 @@ restore_state() {
 	restore_copy "$state_dir/moci-netify.sqlite" "$netify_db"
 	restore_copy "$state_dir/moci-ping-monitor.txt" "$ping_file"
 	restore_copy "$state_dir/moci-speedtest-monitor.txt" "$speedtest_file"
+	restore_copy "$state_dir/moci.config" "/etc/config/moci"
 	restore_vnstat_dir "$state_dir"
 }
 

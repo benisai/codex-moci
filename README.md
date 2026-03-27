@@ -257,6 +257,7 @@ MoCI keeps high-write data in `/tmp` to reduce flash wear, and checkpoints to pe
 - Netify SQLite DB (`moci.collector.db_path`, default `/tmp/moci-netify.sqlite`)
 - Ping monitor file (`moci.ping_monitor.output_file`, default `/tmp/moci-ping-monitor.txt`)
 - Speedtest file (`moci.speedtest_monitor.output_file`, default `/tmp/moci-speedtest-monitor.txt`)
+- MoCI UCI config (`/etc/config/moci`)
 - `vnstat` runtime directory (`/var/lib/vnstat`) when present
 
 **Flow**
