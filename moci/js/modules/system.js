@@ -1108,6 +1108,7 @@ export default class SystemModule {
 			const configured = await this.readConfiguredMounts();
 			const runtime = await this.readRuntimeMounts();
 			const usageByMountPoint = await this.readMountUsageByMountPoint();
+			const colorful = this.core.isFeatureEnabled('colorful_graphs');
 
 			const mounts = this.buildMountRows(configured, runtime, usageByMountPoint);
 
@@ -1119,15 +1120,24 @@ export default class SystemModule {
 						'<div style="padding:12px;background:var(--slate-bg);border-radius:6px;color:var(--steel-muted);font-size:12px">No mounted storage devices detected.</div>';
 				} else {
 					charts.innerHTML = chartRows
-						.map(
-							m => `<div style="padding:12px;background:var(--slate-bg);border-radius:6px">
-						<div style="font-weight:600;font-size:12px;margin-bottom:8px">${this.core.escapeHtml(m.mountPoint)}</div>
-						<div class="progress-bar" style="margin-bottom:8px">
-							<div class="progress-fill" style="width:${this.core.escapeHtml(m.usePercent)}"></div>
+						.map(m => {
+							const pct = Number(String(m.usePercent || '').replace('%', ''));
+							const usagePct = Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : 0;
+							let usageClass = 'neutral';
+							if (colorful && usagePct >= 90) usageClass = 'critical';
+							else if (colorful && usagePct >= 75) usageClass = 'warning';
+							return `<div class="storage-chart-item">
+						<div class="storage-chart-header">MOUNT POINT</div>
+						<div class="storage-chart-mount">${this.core.escapeHtml(m.mountPoint)}</div>
+						<div class="storage-chart-bar">
+							<div class="storage-chart-fill ${this.core.escapeHtml(usageClass)}" style="width:${usagePct.toFixed(1)}%"></div>
 						</div>
-						<div style="font-size:11px;color:var(--steel-muted)">${this.core.escapeHtml(m.used)} / ${this.core.escapeHtml(m.size)} (${this.core.escapeHtml(m.usePercent)})</div>
-					</div>`
-						)
+						<div class="storage-chart-stats">
+							<span>${this.core.escapeHtml(m.used)} / ${this.core.escapeHtml(m.size)}</span>
+							<span>${this.core.escapeHtml(usagePct.toFixed(1))}%</span>
+						</div>
+					</div>`;
+						})
 						.join('');
 				}
 			}

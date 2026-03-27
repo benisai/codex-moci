@@ -1191,6 +1191,10 @@ select.form-input {
 	}
 }
 
+.storage-chart-fill.neutral {
+	background: linear-gradient(90deg, rgba(230, 230, 234, 0.9), rgba(186, 186, 194, 0.85));
+}
+
 .storage-chart-fill.warning {
 	background: linear-gradient(90deg, var(--warning-amber), var(--alert-red));
 }
