@@ -1038,10 +1038,6 @@ export default class DevicesModule {
 	}
 
 	renderSourceStatus() {
-		const el = document.getElementById('devices-source-status');
-		if (!el) return;
-		const nlbwText = this.nlbwAvailable ? 'NLBWMON: READY' : 'NLBWMON: UNAVAILABLE';
-		const netifyText = this.netifyFeatureEnabled ? 'NETIFY DETAILS: ENABLED' : 'NETIFY DETAILS: DISABLED';
-		el.textContent = `${nlbwText} | ${netifyText}`;
+		// Source status banner intentionally hidden per UX preference.
 	}
 }
