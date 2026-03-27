@@ -10,6 +10,7 @@ DEFAULT_PORT="7150"
 DEFAULT_DB="/tmp/moci-netify.sqlite"
 DEFAULT_RETENTION_ROWS="500000"
 DEFAULT_STREAM_TIMEOUT="45"
+DEFAULT_EXCLUDE_PROTOCOLS="MDNS,DNS,QUIC,DHCPv6,ICMP"
 RECONNECT_DELAY="3"
 LOG_FILE="/tmp/moci-netify-collector.log"
 
@@ -18,6 +19,7 @@ NETIFY_PORT="$DEFAULT_PORT"
 NETIFY_DB="$DEFAULT_DB"
 RETENTION_ROWS="$DEFAULT_RETENTION_ROWS"
 STREAM_TIMEOUT="$DEFAULT_STREAM_TIMEOUT"
+EXCLUDE_PROTOCOLS="$DEFAULT_EXCLUDE_PROTOCOLS"
 SQLITE_BIN=""
 NETIFY_FEATURE_ENABLED="1"
 
@@ -120,6 +122,10 @@ load_config() {
 		value="$(sanitize_text "$value")"
 		[ -n "$value" ] && STREAM_TIMEOUT="$value"
 
+		value="$(uci -q get moci.collector.exclude_protocols 2>/dev/null || true)"
+		value="$(sanitize_text "$value")"
+		[ -n "$value" ] && EXCLUDE_PROTOCOLS="$value"
+
 		value="$(uci -q get moci.features.netify 2>/dev/null || true)"
 		value="$(sanitize_text "$value")"
 		[ -n "$value" ] && NETIFY_FEATURE_ENABLED="$value"
@@ -183,6 +189,42 @@ sql_escape() {
 	printf "%s" "$1" | sed "s/'/''/g"
 }
 
+normalize_protocol() {
+	printf "%s" "$1" | tr '[:lower:]' '[:upper:]' | tr -cd 'A-Z0-9'
+}
+
+extract_protocol_name() {
+	printf "%s\n" "$1" | sed -n 's/.*"detected_protocol_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
+}
+
+should_skip_protocol() {
+	local line proto token normalized_proto normalized_token old_ifs
+	line="$1"
+	proto="$(extract_protocol_name "$line")"
+	[ -n "$proto" ] || return 1
+
+	normalized_proto="$(normalize_protocol "$proto")"
+	[ -n "$normalized_proto" ] || return 1
+
+	old_ifs="$IFS"
+	IFS=','
+	for token in $EXCLUDE_PROTOCOLS; do
+		token="$(sanitize_text "$token")"
+		token="$(printf "%s" "$token" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+		[ -n "$token" ] || continue
+		normalized_token="$(normalize_protocol "$token")"
+		[ -n "$normalized_token" ] || continue
+		case "$normalized_proto" in
+			"$normalized_token"|"$normalized_token"*)
+				IFS="$old_ifs"
+				return 0
+				;;
+		esac
+	done
+	IFS="$old_ifs"
+	return 1
+}
+
 insert_flow() {
 	local escaped
 	escaped="$(sql_escape "$1")"
@@ -196,6 +238,9 @@ consume_stream() {
 	nc -w "$STREAM_TIMEOUT" "$NETIFY_HOST" "$NETIFY_PORT" | while IFS= read -r line; do
 		[ -n "$line" ] || continue
 		if ! is_flow_event "$line"; then
+			continue
+		fi
+		if should_skip_protocol "$line"; then
 			continue
 		fi
 
