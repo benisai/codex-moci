@@ -2466,6 +2466,28 @@
 									<button class="action-btn danger" id="reset-btn">RESET TO DEFAULTS</button>
 								</div>
 							</div>
+							<div class="stat-card" style="margin-top: 24px">
+								<div class="section-title">MOCI STATE BACKUP</div>
+								<div class="form-group">
+									<label class="form-label">BACKUP INTERVAL (MINUTES)</label>
+									<input type="number" id="moci-state-backup-time" class="form-input" min="5" max="10080" value="60" />
+								</div>
+								<div class="form-group">
+									<label class="form-label">STATE DIRECTORY</label>
+									<input type="text" id="moci-state-backup-dir" class="form-input" value="/overlay/moci-state" />
+								</div>
+								<div class="form-group">
+									<label class="form-label">STATUS</label>
+									<div id="moci-state-backup-status" style="font-family: var(--font-mono); font-size: 11px; color: var(--steel-muted)">
+										Loading...
+									</div>
+								</div>
+								<div class="quick-actions">
+									<button class="action-btn" id="moci-state-backup-apply-btn">SAVE INTERVAL</button>
+									<button class="action-btn" id="moci-state-backup-save-btn">BACKUP NOW</button>
+									<button class="action-btn warning" id="moci-state-backup-restore-btn">RESTORE NOW</button>
+								</div>
+							</div>
 						</div>
 
 						<div class="tab-content hidden" id="tab-software">

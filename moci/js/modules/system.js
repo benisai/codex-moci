@@ -46,6 +46,9 @@ export default class SystemModule {
 		document.getElementById('backup-btn')?.addEventListener('click', () => this.createBackup());
 		document.getElementById('reset-btn')?.addEventListener('click', () => this.factoryReset());
 		document.getElementById('reboot-btn')?.addEventListener('click', () => this.rebootSystem());
+		document.getElementById('moci-state-backup-apply-btn')?.addEventListener('click', () => this.saveMociStateBackupSettings());
+		document.getElementById('moci-state-backup-save-btn')?.addEventListener('click', () => this.runMociStateBackupAction('save'));
+		document.getElementById('moci-state-backup-restore-btn')?.addEventListener('click', () => this.runMociStateBackupAction('restore'));
 		document.getElementById('packages-search')?.addEventListener('input', event => {
 			this.packagesQuery = String(event?.target?.value || '')
 				.trim()
@@ -321,7 +324,87 @@ export default class SystemModule {
 		}
 	}
 
-	async loadBackup() {}
+	async loadBackup() {
+		const timeEl = document.getElementById('moci-state-backup-time');
+		const dirEl = document.getElementById('moci-state-backup-dir');
+		const statusEl = document.getElementById('moci-state-backup-status');
+		if (!timeEl || !dirEl || !statusEl) return;
+
+		try {
+			const [status, result] = await this.core.uciGet('moci', 'state_backup');
+			const values = status === 0 && result?.values ? result.values : {};
+			const backupTime = Number(values.backup_time || 60);
+			timeEl.value = String(Number.isFinite(backupTime) ? Math.max(5, Math.min(10080, backupTime)) : 60);
+			dirEl.value = String(values.state_dir || '/overlay/moci-state');
+
+			const [cronStatus, cronResult] = await this.core.ubusCall('file', 'read', { path: '/etc/crontabs/root' });
+			const cronLine =
+				cronStatus === 0 && cronResult?.data
+					? String(cronResult.data)
+							.split('\n')
+							.map(line => line.trim())
+							.find(line => line.includes('# MOCI_STATE_SYNC')) || 'not scheduled'
+					: 'not scheduled';
+			statusEl.textContent = `Cron: ${cronLine}`;
+		} catch {
+			statusEl.textContent = 'Failed to load state backup settings';
+		}
+	}
+
+	async saveMociStateBackupSettings() {
+		const timeEl = document.getElementById('moci-state-backup-time');
+		const dirEl = document.getElementById('moci-state-backup-dir');
+		if (!timeEl || !dirEl) return;
+
+		const backupTime = Number(timeEl.value || 60);
+		const stateDir = String(dirEl.value || '').trim() || '/overlay/moci-state';
+		if (!Number.isFinite(backupTime) || backupTime < 5 || backupTime > 10080) {
+			this.core.showToast('Backup interval must be between 5 and 10080 minutes', 'error');
+			return;
+		}
+		if (!stateDir.startsWith('/')) {
+			this.core.showToast('State directory must be an absolute path', 'error');
+			return;
+		}
+
+		try {
+			await this.core.uciSet('moci', 'state_backup', {
+				backup_time: String(Math.round(backupTime)),
+				state_dir: stateDir
+			});
+			await this.core.uciCommit('moci');
+			await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', '/usr/bin/moci-state-sync sync-cron']
+			});
+			this.core.showToast('MoCI state backup settings saved', 'success');
+			await this.loadBackup();
+		} catch (err) {
+			this.core.showToast(`Failed to save state backup settings: ${err?.message || 'unknown error'}`, 'error');
+		}
+	}
+
+	async runMociStateBackupAction(action) {
+		if (!['save', 'restore'].includes(action)) return;
+		try {
+			const [status, result] = await this.core.ubusCall(
+				'file',
+				'exec',
+				{
+					command: '/bin/sh',
+					params: ['-c', `/usr/bin/moci-state-sync ${action}`]
+				},
+				{ timeout: 90000 }
+			);
+			if (status !== 0 || Number(result?.code ?? 1) !== 0) {
+				throw new Error((result?.stderr || '').trim() || `moci-state-sync ${action} failed`);
+			}
+			this.core.showToast(action === 'save' ? 'MoCI state backup completed' : 'MoCI state restore completed', 'success');
+			await this.loadBackup();
+		} catch (err) {
+			this.core.showToast(`Failed to ${action} MoCI state: ${err?.message || 'unknown error'}`, 'error');
+		}
+	}
 
 	async createBackup() {
 		try {
