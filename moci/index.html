@@ -2408,8 +2408,8 @@
 										<span id="netify-collector-toggle-icon">▸</span>
 									</button>
 								</div>
-								<div id="netify-collector-body" style="margin-top: 16px; display: none">
-									<div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px">
+									<div id="netify-collector-body" style="margin-top: 16px; display: none">
+										<div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px">
 										<div>
 											<div class="stat-label">SERVICE</div>
 											<div id="netify-service-status" style="margin-top: 8px">Loading...</div>
@@ -2423,10 +2423,30 @@
 											<div id="netify-db-path" style="margin-top: 8px; font-family: monospace; color: var(--steel-light)">
 												/tmp/moci-netify.sqlite
 											</div>
+											</div>
 										</div>
-									</div>
-									<div class="quick-actions">
-										<button class="action-btn" id="netify-start-btn">START COLLECTOR</button>
+										<div
+											style="
+												display: flex;
+												flex-wrap: wrap;
+												align-items: center;
+												justify-content: space-between;
+												gap: 12px;
+												margin-bottom: 12px;
+												padding: 10px 12px;
+												border: 1px solid var(--glass-border);
+												border-radius: 6px;
+												background: rgba(255, 255, 255, 0.02);
+											"
+										>
+											<label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none">
+												<input type="checkbox" id="netify-ignore-wan-source" />
+												<span style="font-size: 12px; color: var(--steel-light)">Ignore WAN IP as source</span>
+											</label>
+											<button class="action-btn-sm" id="netify-save-settings-btn" type="button">SAVE SETTINGS</button>
+										</div>
+										<div class="quick-actions">
+											<button class="action-btn" id="netify-start-btn">START COLLECTOR</button>
 										<button class="action-btn" id="netify-stop-btn">STOP COLLECTOR</button>
 										<button class="action-btn" id="netify-restart-btn">RESTART COLLECTOR</button>
 										<button class="action-btn" id="netify-init-db-btn">INIT DB</button>

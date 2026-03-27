@@ -34,8 +34,9 @@ export default class NetifyModule {
 		this.isRefreshingCards = false;
 		this.lastCardsRefreshAt = 0;
 		this.cardsRefreshIntervalMs = 10000;
-		this.lastTopAppsRefreshAt = 0;
-		this.isRefreshingTopApps = false;
+			this.lastTopAppsRefreshAt = 0;
+			this.isRefreshingTopApps = false;
+			this.ignoreWanSource = true;
 
 		this.core.registerRoute('/netify', async () => {
 			const pageElement = document.getElementById('netify-page');
@@ -57,8 +58,9 @@ export default class NetifyModule {
 		document.getElementById('netify-restart-btn')?.addEventListener('click', () => this.runServiceAction('restart'));
 		document.getElementById('netify-init-db-btn')?.addEventListener('click', () => this.initCollectorOutput());
 		document.getElementById('netify-full-reset-btn')?.addEventListener('click', () => this.fullResetCollector());
-		document.getElementById('netify-debug-clear-btn')?.addEventListener('click', () => this.clearDebugLog());
-		document.getElementById('netify-collector-toggle-btn')?.addEventListener('click', () => this.toggleCollectorPanel());
+			document.getElementById('netify-debug-clear-btn')?.addEventListener('click', () => this.clearDebugLog());
+			document.getElementById('netify-save-settings-btn')?.addEventListener('click', () => this.saveCollectorSettings());
+			document.getElementById('netify-collector-toggle-btn')?.addEventListener('click', () => this.toggleCollectorPanel());
 		document.getElementById('netify-auto-refresh-toggle-btn')?.addEventListener('click', () =>
 			this.toggleAutoRefreshPause()
 		);
@@ -217,15 +219,36 @@ export default class NetifyModule {
 					this.outputPath = configuredDbPath;
 				} else if (configuredOutput && /\.sqlite(?:3)?$/i.test(configuredOutput)) {
 					this.outputPath = configuredOutput;
+					}
+					this.maxLines = Number(c.retention_rows || c.max_lines) || this.maxLines;
+					this.ignoreWanSource = String(c.ignore_wan_source ?? '1') === '1';
 				}
-				this.maxLines = Number(c.retention_rows || c.max_lines) || this.maxLines;
-			}
-		} catch {}
+			} catch {}
 
-		const pathEl = document.getElementById('netify-db-path');
-		if (pathEl) pathEl.textContent = this.outputPath;
-		this.logDebug(`Config loaded; db=${this.outputPath} retention=${this.maxLines}`);
-	}
+			const pathEl = document.getElementById('netify-db-path');
+			if (pathEl) pathEl.textContent = this.outputPath;
+			const ignoreWanEl = document.getElementById('netify-ignore-wan-source');
+			if (ignoreWanEl) ignoreWanEl.checked = this.ignoreWanSource;
+			this.logDebug(`Config loaded; db=${this.outputPath} retention=${this.maxLines}`);
+		}
+
+		async saveCollectorSettings() {
+			const checkbox = document.getElementById('netify-ignore-wan-source');
+			const ignoreWan = checkbox?.checked ? '1' : '0';
+			try {
+				await this.core.uciSet('moci', 'collector', { ignore_wan_source: ignoreWan });
+				await this.core.uciCommit('moci');
+				this.ignoreWanSource = ignoreWan === '1';
+				await this.exec('/etc/init.d/netify-collector', ['restart']);
+				this.core.showToast('Netify collector settings saved', 'success');
+				this.logDebug(`Saved collector setting: ignore_wan_source=${ignoreWan}`);
+				setTimeout(() => this.refresh(false, false), 600);
+			} catch (err) {
+				console.error('Failed to save netify collector settings:', err);
+				this.logDebug(`Save collector settings failed: ${err?.message || 'unknown error'}`);
+				this.core.showToast(this.describeExecFailure(err, 'Failed to save Netify settings'), 'error');
+			}
+		}
 
 	async runServiceAction(action) {
 		try {

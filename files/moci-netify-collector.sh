@@ -11,6 +11,7 @@ DEFAULT_DB="/tmp/moci-netify.sqlite"
 DEFAULT_RETENTION_ROWS="500000"
 DEFAULT_STREAM_TIMEOUT="45"
 DEFAULT_EXCLUDE_PROTOCOLS="MDNS,DNS,QUIC,DHCPv6,ICMP"
+DEFAULT_IGNORE_WAN_SOURCE="1"
 RECONNECT_DELAY="3"
 LOG_FILE="/tmp/moci-netify-collector.log"
 
@@ -20,6 +21,8 @@ NETIFY_DB="$DEFAULT_DB"
 RETENTION_ROWS="$DEFAULT_RETENTION_ROWS"
 STREAM_TIMEOUT="$DEFAULT_STREAM_TIMEOUT"
 EXCLUDE_PROTOCOLS="$DEFAULT_EXCLUDE_PROTOCOLS"
+IGNORE_WAN_SOURCE="$DEFAULT_IGNORE_WAN_SOURCE"
+WAN_PREFIX=""
 SQLITE_BIN=""
 NETIFY_FEATURE_ENABLED="1"
 
@@ -126,16 +129,32 @@ load_config() {
 		value="$(sanitize_text "$value")"
 		[ -n "$value" ] && EXCLUDE_PROTOCOLS="$value"
 
+		value="$(uci -q get moci.collector.ignore_wan_source 2>/dev/null || true)"
+		value="$(sanitize_text "$value")"
+		[ -n "$value" ] && IGNORE_WAN_SOURCE="$value"
+
 		value="$(uci -q get moci.features.netify 2>/dev/null || true)"
 		value="$(sanitize_text "$value")"
 		[ -n "$value" ] && NETIFY_FEATURE_ENABLED="$value"
 	fi
 }
 
+derive_wan_prefix() {
+	local wan_ip cleaned
+	WAN_PREFIX=""
+	command -v uci >/dev/null 2>&1 || return 0
+	wan_ip="$(uci -q get network.wan.ipaddr 2>/dev/null || true)"
+	wan_ip="$(sanitize_text "$wan_ip")"
+	cleaned="$(printf "%s" "$wan_ip" | sed -n "s/^\([0-9]\+\)\.\([0-9]\+\)\.\([0-9]\+\)\.[0-9]\+$/\1.\2.\3/p")"
+	[ -n "$cleaned" ] && WAN_PREFIX="$cleaned"
+}
+
 refresh_runtime_config() {
 	load_config
 	RETENTION_ROWS="$(sanitize_int "$RETENTION_ROWS" "$DEFAULT_RETENTION_ROWS")"
 	STREAM_TIMEOUT="$(sanitize_int "$STREAM_TIMEOUT" "$DEFAULT_STREAM_TIMEOUT")"
+	IGNORE_WAN_SOURCE="$(sanitize_int "$IGNORE_WAN_SOURCE" "$DEFAULT_IGNORE_WAN_SOURCE")"
+	derive_wan_prefix
 	ensure_db_file
 }
 
@@ -197,6 +216,26 @@ extract_protocol_name() {
 	printf "%s\n" "$1" | sed -n 's/.*"detected_protocol_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
 }
 
+extract_local_ip() {
+	printf "%s\n" "$1" | sed -n 's/.*"local_ip"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
+}
+
+should_skip_wan_source() {
+	local line local_ip
+	[ "$IGNORE_WAN_SOURCE" = "1" ] || return 1
+	[ -n "$WAN_PREFIX" ] || return 1
+	line="$1"
+	local_ip="$(extract_local_ip "$line")"
+	case "$local_ip" in
+		"$WAN_PREFIX".*)
+			return 0
+			;;
+		*)
+			return 1
+			;;
+	esac
+}
+
 should_skip_protocol() {
 	local line proto token normalized_proto normalized_token old_ifs
 	line="$1"
@@ -243,6 +282,9 @@ consume_stream() {
 		if should_skip_protocol "$line"; then
 			continue
 		fi
+		if should_skip_wan_source "$line"; then
+			continue
+		fi
 
 		insert_flow "$line" || continue
 		counter=$((counter + 1))
@@ -258,7 +300,7 @@ run_forever() {
 		log "netify feature disabled (moci.features.netify=$NETIFY_FEATURE_ENABLED); exiting collector"
 		exit 0
 	fi
-	log "starting netify collector host=$NETIFY_HOST port=$NETIFY_PORT db=$NETIFY_DB timeout=${STREAM_TIMEOUT}s"
+	log "starting netify collector host=$NETIFY_HOST port=$NETIFY_PORT db=$NETIFY_DB timeout=${STREAM_TIMEOUT}s ignore_wan_source=$IGNORE_WAN_SOURCE wan_prefix=${WAN_PREFIX:-none}"
 	while true; do
 		refresh_runtime_config
 		if [ "$NETIFY_FEATURE_ENABLED" != "1" ]; then
