@@ -1358,6 +1358,14 @@ select.form-input {
 	font-size: 13px;
 }
 
+.dashboard-status-slim #bandwidth-down,
+.dashboard-status-slim #bandwidth-up {
+	display: inline-block;
+	width: 84px;
+	text-align: left;
+	white-space: nowrap;
+}
+
 .metric-card {
 	display: flex;
 	align-items: center;
