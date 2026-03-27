@@ -1154,9 +1154,9 @@ select.form-input {
 }
 
 .storage-chart-bar {
-	height: 24px;
+	height: 8px;
 	background: rgba(255, 255, 255, 0.05);
-	border-radius: 12px;
+	border-radius: 4px;
 	overflow: hidden;
 	margin-bottom: 8px;
 	position: relative;
@@ -1165,7 +1165,7 @@ select.form-input {
 .storage-chart-fill {
 	height: 100%;
 	background: linear-gradient(90deg, var(--success-green), var(--warning-amber));
-	border-radius: 12px;
+	border-radius: 4px;
 	transition: width 0.3s ease;
 	position: relative;
 	overflow: hidden;
