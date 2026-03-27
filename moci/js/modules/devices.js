@@ -299,6 +299,7 @@ export default class DevicesModule {
 
 	mergeRows(leases, arpMacs, totalsByClient, staticByMac, parentalByMac) {
 		const merged = [];
+		const seen = new Set();
 
 		for (const lease of leases) {
 			const mac = String(lease.macaddr || '').toLowerCase();
@@ -314,6 +315,30 @@ export default class DevicesModule {
 				mac: mac || 'N/A',
 				tx: usage ? usage.tx : null,
 				rx: usage ? usage.rx : null,
+				nlbwTopApps: this.extractTopNlbwApps(usage),
+				online: mac ? arpMacs.has(mac) : false,
+				pinned: Boolean(pin?.ip),
+				staticSection: pin?.section || '',
+				parentalSection: parental?.section || '',
+				parentalBlocked: Boolean(parental?.enabled)
+			});
+			if (key) seen.add(key);
+			if (ip) seen.add(ip);
+		}
+
+		for (const [key, usage] of totalsByClient.entries()) {
+			if (seen.has(key)) continue;
+			const mac = usage.mac || '';
+			const ip = usage.ip || '';
+			const pin = mac ? staticByMac.get(mac) : null;
+			const parental = mac ? parentalByMac.get(mac) : null;
+			merged.push({
+				hostname: pin?.name || 'Unknown',
+				ip: pin?.ip || ip || 'N/A',
+				leaseIp: ip || 'N/A',
+				mac: mac || 'N/A',
+				tx: usage.tx,
+				rx: usage.rx,
 				nlbwTopApps: this.extractTopNlbwApps(usage),
 				online: mac ? arpMacs.has(mac) : false,
 				pinned: Boolean(pin?.ip),
