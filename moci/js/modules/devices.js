@@ -14,6 +14,8 @@ export default class DevicesModule {
 		this.deviceMaxRows = 3000;
 		this.nlbwAvailable = false;
 		this.netifyFeatureEnabled = true;
+		this.parentalByMac = new Map();
+		this.parentalRulePrefix = 'moci_parental_';
 
 		this.core.registerRoute('/devices', async () => {
 			const pageElement = document.getElementById('devices-page');
@@ -40,6 +42,7 @@ export default class DevicesModule {
 			saveHandler: () => this.savePinnedIp()
 		});
 		document.getElementById('devices-pin-static')?.addEventListener('change', () => this.syncStaticIpField());
+		document.getElementById('devices-parental-toggle-btn')?.addEventListener('click', () => this.toggleParentalControl());
 
 		this.core.delegateActions('devices-table', {
 			pin: mac => this.openPinDialog(mac)
@@ -60,19 +63,21 @@ export default class DevicesModule {
 		if (!tbody) return;
 
 		try {
-			const [leases, arpMacs, usage, staticByMac, netifyEnabled] = await Promise.all([
+			const [leases, arpMacs, usage, staticByMac, netifyEnabled, parentalByMac] = await Promise.all([
 				this.fetchLeases(),
 				this.fetchArpMacs(),
 				this.fetchNlbwmonUsage(),
 				this.fetchStaticLeasesByMac(),
-				this.fetchNetifyFeatureFlag()
+				this.fetchNetifyFeatureFlag(),
+				this.fetchParentalRulesByMac()
 			]);
 
 			this.staticByMac = staticByMac;
 			this.nlbwAvailable = Boolean(usage.available);
 			this.netifyFeatureEnabled = Boolean(netifyEnabled);
+			this.parentalByMac = parentalByMac;
 			this.renderSourceStatus();
-			const rows = this.mergeRows(leases, arpMacs, usage.totalsByClient, staticByMac);
+			const rows = this.mergeRows(leases, arpMacs, usage.totalsByClient, staticByMac, parentalByMac);
 			this.deviceRows = rows;
 			this.renderRows(rows);
 		} catch (err) {
@@ -123,6 +128,28 @@ export default class DevicesModule {
 			}
 		} catch {}
 		return this.core.isFeatureEnabled ? this.core.isFeatureEnabled('netify') : true;
+	}
+
+	async fetchParentalRulesByMac() {
+		const map = new Map();
+		try {
+			const [status, result] = await this.core.uciGet('firewall');
+			if (status !== 0 || !result?.values) return map;
+
+			for (const [section, cfg] of Object.entries(result.values)) {
+				if (String(cfg?.['.type'] || '') !== 'rule') continue;
+				const ruleName = String(cfg?.name || '');
+				if (!ruleName.startsWith(this.parentalRulePrefix)) continue;
+				const mac = this.normalizeMac(cfg?.src_mac || cfg?.src_mac_address || '');
+				if (!mac) continue;
+				const enabled = String(cfg?.enabled ?? '1') !== '0';
+				map.set(mac, {
+					section,
+					enabled
+				});
+			}
+		} catch {}
+		return map;
 	}
 
 	normalizeMac(value) {
@@ -232,7 +259,7 @@ export default class DevicesModule {
 		return { available: true, totalsByClient };
 	}
 
-	mergeRows(leases, arpMacs, totalsByClient, staticByMac) {
+	mergeRows(leases, arpMacs, totalsByClient, staticByMac, parentalByMac) {
 		const merged = [];
 		const seen = new Set();
 
@@ -242,6 +269,7 @@ export default class DevicesModule {
 			const key = mac || ip;
 			const usage = totalsByClient.get(key) || totalsByClient.get(ip) || null;
 			const pin = mac ? staticByMac.get(mac) : null;
+			const parental = mac ? parentalByMac.get(mac) : null;
 			merged.push({
 				hostname: lease.hostname || pin?.name || 'Unknown',
 				ip: pin?.ip || ip || 'N/A',
@@ -252,7 +280,9 @@ export default class DevicesModule {
 				nlbwTopApps: this.extractTopNlbwApps(usage),
 				online: mac ? arpMacs.has(mac) : false,
 				pinned: Boolean(pin?.ip),
-				staticSection: pin?.section || ''
+				staticSection: pin?.section || '',
+				parentalSection: parental?.section || '',
+				parentalBlocked: Boolean(parental?.enabled)
 			});
 			if (key) seen.add(key);
 			if (ip) seen.add(ip);
@@ -263,6 +293,7 @@ export default class DevicesModule {
 			const mac = usage.mac || '';
 			const ip = usage.ip || '';
 			const pin = mac ? staticByMac.get(mac) : null;
+			const parental = mac ? parentalByMac.get(mac) : null;
 			merged.push({
 				hostname: pin?.name || 'Unknown',
 				ip: pin?.ip || ip || 'N/A',
@@ -273,7 +304,9 @@ export default class DevicesModule {
 				nlbwTopApps: this.extractTopNlbwApps(usage),
 				online: mac ? arpMacs.has(mac) : false,
 				pinned: Boolean(pin?.ip),
-				staticSection: pin?.section || ''
+				staticSection: pin?.section || '',
+				parentalSection: parental?.section || '',
+				parentalBlocked: Boolean(parental?.enabled)
 			});
 		}
 
@@ -661,8 +694,21 @@ export default class DevicesModule {
 		const staticCheckbox = document.getElementById('devices-pin-static');
 		if (staticCheckbox) staticCheckbox.checked = Boolean(row.pinned);
 		document.getElementById('devices-pin-ip').value = row.ip && row.ip !== 'N/A' ? row.ip : '';
+		document.getElementById('devices-parental-rule-section').value = row.parentalSection || '';
 		this.syncStaticIpField();
+		this.syncParentalControlUi(row);
 		this.core.openModal('devices-pin-modal');
+	}
+
+	syncParentalControlUi(row) {
+		const statusEl = document.getElementById('devices-parental-status');
+		const toggleBtn = document.getElementById('devices-parental-toggle-btn');
+		if (!statusEl || !toggleBtn) return;
+		const blocked = Boolean(row?.parentalBlocked);
+		statusEl.textContent = blocked ? 'Status: INTERNET BLOCKED' : 'Status: INTERNET ALLOWED';
+		toggleBtn.textContent = blocked ? 'UNBLOCK INTERNET' : 'BLOCK INTERNET';
+		toggleBtn.classList.toggle('danger', !blocked);
+		toggleBtn.classList.toggle('success', blocked);
 	}
 
 	syncStaticIpField() {
@@ -729,6 +775,58 @@ export default class DevicesModule {
 		} catch (err) {
 			console.error('Failed to save static lease:', err);
 			this.core.showToast('Failed to save static IP', 'error');
+		}
+	}
+
+	async toggleParentalControl() {
+		const mac = this.normalizeMac(document.getElementById('devices-pin-mac')?.value || '');
+		if (!mac) {
+			this.core.showToast('Invalid MAC address', 'error');
+			return;
+		}
+
+		const row = this.rowsByMac.get(mac);
+		const sectionInput = document.getElementById('devices-parental-rule-section');
+		const existingSection = String(sectionInput?.value || row?.parentalSection || '').trim();
+		const currentlyBlocked = Boolean(row?.parentalBlocked);
+		const targetEnabled = currentlyBlocked ? '0' : '1';
+		const ruleName = `${this.parentalRulePrefix}${mac.replace(/:/g, '')}`;
+
+		try {
+			if (existingSection) {
+				await this.core.uciSet('firewall', existingSection, { enabled: targetEnabled });
+			} else {
+				const [, addResult] = await this.core.uciAdd('firewall', 'rule');
+				const newSection = addResult?.section;
+				if (!newSection) throw new Error('failed to create firewall rule');
+				await this.core.uciSet('firewall', newSection, {
+					name: ruleName,
+					src: 'lan',
+					dest: 'wan',
+					src_mac: mac,
+					proto: 'all',
+					target: 'REJECT',
+					family: 'any',
+					enabled: '1'
+				});
+			}
+
+			await this.core.uciCommit('firewall');
+			await this.exec('/bin/sh', [
+				'-c',
+				'/etc/init.d/firewall reload 2>/dev/null || /etc/init.d/firewall restart 2>/dev/null || true'
+			]);
+
+			this.core.showToast(currentlyBlocked ? 'Internet unblocked for device' : 'Internet blocked for device', 'success');
+			await this.loadDevices();
+			const refreshed = this.rowsByMac.get(mac);
+			if (refreshed) {
+				document.getElementById('devices-parental-rule-section').value = refreshed.parentalSection || '';
+				this.syncParentalControlUi(refreshed);
+			}
+		} catch (err) {
+			console.error('Failed to toggle parental control:', err);
+			this.core.showToast('Failed to update parental control rule', 'error');
 		}
 	}
 
