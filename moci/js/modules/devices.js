@@ -91,12 +91,13 @@ export default class DevicesModule {
 			if (this.core.currentRoute?.startsWith('/devices')) {
 				// Keep row order stable while user is inspecting expanded details.
 				if (this.expandedMac) return;
-				this.loadDevices();
+				this.loadDevices({ fromAuto: true });
 			}
 		}, 15000);
 	}
 
-	async loadDevices() {
+	async loadDevices(options = {}) {
+		const fromAuto = Boolean(options?.fromAuto);
 		const tbody = document.querySelector('#devices-table tbody');
 		if (!tbody) return;
 
@@ -116,6 +117,7 @@ export default class DevicesModule {
 			this.parentalByMac = parentalByMac;
 			this.renderSourceStatus();
 			const rows = this.mergeRows(leases, arpMacs, usage.totalsByClient, staticByMac, parentalByMac);
+			if (fromAuto && this.expandedMac) return;
 			this.deviceRows = rows;
 			this.renderRows(this.sortRows(rows));
 		} catch (err) {
@@ -471,7 +473,7 @@ export default class DevicesModule {
 
 		if (this.expandedMac === normalizedMac) {
 			this.expandedMac = '';
-			this.renderRows(this.deviceRows);
+			this.renderRows(this.sortRows(this.deviceRows));
 			return;
 		}
 
@@ -479,11 +481,11 @@ export default class DevicesModule {
 		if (this.netifyFeatureEnabled && !this.netifyByMac.has(normalizedMac)) {
 			this.netifyByMac.set(normalizedMac, { loading: true });
 		}
-		this.renderRows(this.deviceRows);
+		this.renderRows(this.sortRows(this.deviceRows));
 
 		if (this.netifyFeatureEnabled) {
 			await this.loadNetifyDetails(normalizedMac);
-			if (this.expandedMac === normalizedMac) this.renderRows(this.deviceRows);
+			if (this.expandedMac === normalizedMac) this.renderRows(this.sortRows(this.deviceRows));
 		}
 	}
 
