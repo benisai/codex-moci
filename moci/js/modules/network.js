@@ -1376,25 +1376,27 @@ export default class NetworkModule {
 				bootEl.innerHTML = this.core.renderBadge('error', 'UNKNOWN');
 			}
 
-			const rows = await this.readQuarantineRules();
-			if (rows.length === 0) {
-				this.core.renderEmptyTable(tbody, 4, 'No quarantined devices');
-				return;
-			}
+				const rows = await this.readQuarantineRules();
+				if (rows.length === 0) {
+					this.core.renderEmptyTable(tbody, 6, 'No quarantined devices');
+					return;
+				}
 
 			tbody.innerHTML = rows
 				.map(row => {
 					const statusBadge = row.enabled
 						? this.core.renderBadge('error', 'BLOCKED')
 						: this.core.renderBadge('success', 'RELEASED');
-					const releaseId = encodeURIComponent(row.base || '');
-					return `<tr>
-						<td>${this.core.escapeHtml(row.base || row.name || 'N/A')}</td>
-						<td>${this.core.escapeHtml(row.mac || 'N/A')}</td>
-						<td>${statusBadge}</td>
-						<td><button class="action-btn-sm" data-action="release" data-id="${releaseId}">RELEASE</button></td>
-					</tr>`;
-				})
+						const releaseId = encodeURIComponent(row.base || '');
+						return `<tr>
+							<td>${this.core.escapeHtml(row.base || row.name || 'N/A')}</td>
+							<td>${this.core.escapeHtml(row.hostname || 'Unknown')}</td>
+							<td>${this.core.escapeHtml(row.ip || 'N/A')}</td>
+							<td>${this.core.escapeHtml(row.mac || 'N/A')}</td>
+							<td>${statusBadge}</td>
+							<td><button class="action-btn-sm" data-action="release" data-id="${releaseId}">RELEASE</button></td>
+						</tr>`;
+					})
 				.join('');
 		});
 	}
@@ -1402,6 +1404,32 @@ export default class NetworkModule {
 	async readQuarantineRules() {
 		const rows = [];
 		try {
+			const leaseByMac = new Map();
+			try {
+				const [ls, lr] = await this.core.ubusCall('luci-rpc', 'getDHCPLeases', {});
+				if (ls === 0 && Array.isArray(lr?.dhcp_leases)) {
+					for (const lease of lr.dhcp_leases) {
+						const mac = String(lease?.macaddr || '')
+							.trim()
+							.toLowerCase();
+						if (!mac) continue;
+						leaseByMac.set(mac, {
+							ip: String(lease?.ipaddr || '').trim(),
+							hostname: String(lease?.hostname || '').trim()
+						});
+					}
+				}
+			} catch {}
+
+			let rulePrefix = 'moci_quarantine_';
+			try {
+				const [qs, qr] = await this.core.uciGet('moci', 'quarantine');
+				if (qs === 0 && qr?.values?.rule_prefix) {
+					const candidate = String(qr.values.rule_prefix || '').trim();
+					if (candidate) rulePrefix = candidate;
+				}
+			} catch {}
+
 			const [status, result] = await this.core.uciGet('firewall');
 			if (status !== 0 || !result?.values) return rows;
 
@@ -1409,13 +1437,15 @@ export default class NetworkModule {
 			for (const [section, cfg] of Object.entries(result.values)) {
 				if (String(cfg?.['.type'] || '') !== 'rule') continue;
 				const name = String(cfg?.name || '').trim();
-				if (!name.startsWith('moci_quarantine_')) continue;
+				if (!name.startsWith(rulePrefix)) continue;
 				const base = name.replace(/_(lan|wan)$/i, '');
 				const entry = grouped.get(base) || {
 					base,
 					name,
 					mac: String(cfg?.src_mac || ''),
 					srcIp: String(cfg?.src_ip || ''),
+					hostname: '',
+					ip: '',
 					enabled: false,
 					sections: []
 				};
@@ -1423,6 +1453,21 @@ export default class NetworkModule {
 				entry.enabled = entry.enabled || String(cfg?.enabled ?? '1') !== '0';
 				if (!entry.mac) entry.mac = String(cfg?.src_mac || '');
 				if (!entry.srcIp) entry.srcIp = String(cfg?.src_ip || '');
+				const macKey = String(entry.mac || '')
+					.trim()
+					.toLowerCase();
+				const lease = macKey ? leaseByMac.get(macKey) : null;
+				if (lease) {
+					if (!entry.ip && lease.ip) entry.ip = lease.ip;
+					if (!entry.hostname && lease.hostname && lease.hostname !== '*') entry.hostname = lease.hostname;
+				}
+				if (!entry.ip && entry.srcIp) entry.ip = entry.srcIp;
+				if (!entry.hostname) {
+					let hostGuess = String(base || '');
+					if (hostGuess.startsWith(rulePrefix)) hostGuess = hostGuess.slice(rulePrefix.length);
+					hostGuess = hostGuess.replace(/_(lan|wan)$/i, '').replace(/_/g, ' ').trim();
+					entry.hostname = hostGuess || 'Unknown';
+				}
 				grouped.set(base, entry);
 			}
 
