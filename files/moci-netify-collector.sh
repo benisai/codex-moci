@@ -145,6 +145,20 @@ derive_wan_prefix() {
 	command -v uci >/dev/null 2>&1 || return 0
 	wan_ip="$(uci -q get network.wan.ipaddr 2>/dev/null || true)"
 	wan_ip="$(sanitize_text "$wan_ip")"
+	if [ -z "$wan_ip" ] && command -v ubus >/dev/null 2>&1; then
+		wan_ip="$(
+			ubus call network.interface.wan status 2>/dev/null |
+				sed -n 's/.*"address"[[:space:]]*:[[:space:]]*"\([0-9.]\+\)".*/\1/p' |
+				head -n 1
+		)"
+	fi
+	if [ -z "$wan_ip" ] && command -v ip >/dev/null 2>&1; then
+		wan_ip="$(
+			ip -4 route get 1.1.1.1 2>/dev/null |
+				sed -n 's/.*src[[:space:]]\([0-9.]\+\).*/\1/p' |
+				head -n 1
+		)"
+	fi
 	cleaned="$(printf "%s" "$wan_ip" | sed -n "s/^\([0-9]\+\)\.\([0-9]\+\)\.\([0-9]\+\)\.[0-9]\+$/\1.\2.\3/p")"
 	[ -n "$cleaned" ] && WAN_PREFIX="$cleaned"
 }
