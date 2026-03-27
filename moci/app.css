@@ -1731,6 +1731,15 @@ select.form-input {
 	vertical-align: bottom;
 }
 
+.netify-localip-ellipsis {
+	display: inline-block;
+	max-width: 190px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	vertical-align: bottom;
+}
+
 .software-root-space-fill {
 	background: linear-gradient(90deg, rgba(90, 180, 255, 0.95), rgba(120, 215, 255, 0.88));
 }
