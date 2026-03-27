@@ -16,6 +16,8 @@ export default class DevicesModule {
 		this.netifyFeatureEnabled = true;
 		this.parentalByMac = new Map();
 		this.parentalRulePrefix = 'moci_parental_';
+		this.sortKey = 'traffic';
+		this.sortDir = 'desc';
 
 		this.core.registerRoute('/devices', async () => {
 			const pageElement = document.getElementById('devices-page');
@@ -46,6 +48,39 @@ export default class DevicesModule {
 
 		this.core.delegateActions('devices-table', {
 			pin: mac => this.openPinDialog(mac)
+		});
+		this.setupSortHeaders();
+	}
+
+	setupSortHeaders() {
+		const headers = document.querySelectorAll('#devices-table thead th[data-sort]');
+		headers.forEach(th => {
+			th.addEventListener('click', () => {
+				const key = String(th.getAttribute('data-sort') || '').trim();
+				if (!key) return;
+				if (this.sortKey === key) {
+					this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+				} else {
+					this.sortKey = key;
+					this.sortDir = ['upload', 'download', 'online'].includes(key) ? 'desc' : 'asc';
+				}
+				this.updateSortHeaderUi();
+				this.renderRows(this.sortRows(this.deviceRows));
+			});
+		});
+		this.updateSortHeaderUi();
+	}
+
+	updateSortHeaderUi() {
+		const headers = document.querySelectorAll('#devices-table thead th[data-sort]');
+		headers.forEach(th => {
+			const key = String(th.getAttribute('data-sort') || '').trim();
+			const label = String(th.getAttribute('data-label') || th.textContent || '').trim();
+			if (key === this.sortKey) {
+				th.textContent = `${label} ${this.sortDir === 'asc' ? '▲' : '▼'}`;
+			} else {
+				th.textContent = label;
+			}
 		});
 	}
 
@@ -79,7 +114,7 @@ export default class DevicesModule {
 			this.renderSourceStatus();
 			const rows = this.mergeRows(leases, arpMacs, usage.totalsByClient, staticByMac, parentalByMac);
 			this.deviceRows = rows;
-			this.renderRows(rows);
+			this.renderRows(this.sortRows(rows));
 		} catch (err) {
 			console.error('Failed to load devices page:', err);
 			this.core.renderEmptyTable(tbody, 7, 'Failed to load device data');
@@ -310,10 +345,29 @@ export default class DevicesModule {
 			});
 		}
 
-		return merged.sort((a, b) => {
-			const aTotal = (a.rx || 0) + (a.tx || 0);
-			const bTotal = (b.rx || 0) + (b.tx || 0);
-			return bTotal - aTotal;
+		return merged;
+	}
+
+	sortRows(rows) {
+		const key = String(this.sortKey || 'traffic');
+		const dir = this.sortDir === 'asc' ? 1 : -1;
+		const list = Array.isArray(rows) ? [...rows] : [];
+		const rankStatus = row => (row?.parentalBlocked ? 2 : row?.online ? 1 : 0);
+		const totalTraffic = row => Number(row?.rx || 0) + Number(row?.tx || 0);
+		const numCmp = (a, b) => (a === b ? 0 : a > b ? 1 : -1);
+		const strCmp = (a, b) => String(a || '').localeCompare(String(b || ''));
+
+		return list.sort((a, b) => {
+			let cmp = 0;
+			if (key === 'hostname') cmp = strCmp(a.hostname, b.hostname);
+			else if (key === 'ip') cmp = strCmp(a.ip, b.ip);
+			else if (key === 'mac') cmp = strCmp(a.mac, b.mac);
+			else if (key === 'upload') cmp = numCmp(Number(a.tx || 0), Number(b.tx || 0));
+			else if (key === 'download') cmp = numCmp(Number(a.rx || 0), Number(b.rx || 0));
+			else if (key === 'online') cmp = numCmp(rankStatus(a), rankStatus(b));
+			else cmp = numCmp(totalTraffic(a), totalTraffic(b));
+			if (cmp !== 0) return cmp * dir;
+			return strCmp(a.hostname, b.hostname);
 		});
 	}
 
