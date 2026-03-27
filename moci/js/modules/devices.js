@@ -361,7 +361,7 @@ export default class DevicesModule {
 					<td>${this.core.escapeHtml(row.mac)}</td>
 					<td>${this.core.escapeHtml(upload)}</td>
 					<td>${this.core.escapeHtml(download)}</td>
-					<td>${row.online ? '<span class="badge badge-online-soft">ONLINE</span>' : '<span class="badge badge-offline-soft">OFFLINE</span>'}</td>
+					<td>${this.renderDeviceStatusBadge(row)}</td>
 					<td>${pinBtn}</td>
 				</tr>`;
 
@@ -376,6 +376,13 @@ export default class DevicesModule {
 		tbody.querySelectorAll('tr[data-device-mac]').forEach(tr => {
 			tr.addEventListener('click', event => this.handleRowClick(event));
 		});
+	}
+
+	renderDeviceStatusBadge(row) {
+		if (row?.parentalBlocked) {
+			return '<span class="badge badge-adblock-disabled-soft">BLOCKED</span>';
+		}
+		return row?.online ? '<span class="badge badge-online-soft">ONLINE</span>' : '<span class="badge badge-offline-soft">OFFLINE</span>';
 	}
 
 	renderDeviceIp(ipValue, pinned) {
