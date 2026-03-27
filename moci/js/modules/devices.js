@@ -869,6 +869,8 @@ export default class DevicesModule {
 
 		let removedDhcp = 0;
 		let removedFirewall = 0;
+		let cleanedTmpLeases = false;
+		let cleanedQuarantineKnown = false;
 		try {
 			const [dhcpStatus, dhcpResult] = await this.core.uciGet('dhcp');
 			if (dhcpStatus === 0 && dhcpResult?.values) {
@@ -909,11 +911,34 @@ export default class DevicesModule {
 			console.error('Failed while deleting firewall rules:', err);
 		}
 
+		try {
+			const macQuoted = this.shellQuote(normalizedMac);
+			await this.exec('/bin/sh', [
+				'-c',
+				`if [ -f /tmp/dhcp.leases ]; then awk -v m=${macQuoted} 'tolower($2)!=m {print}' /tmp/dhcp.leases > /tmp/.moci_dhcp_leases.$$ && mv /tmp/.moci_dhcp_leases.$$ /tmp/dhcp.leases; fi`
+			]);
+			cleanedTmpLeases = true;
+		} catch (err) {
+			console.error('Failed while pruning /tmp/dhcp.leases:', err);
+		}
+
+		try {
+			const macQuoted = this.shellQuote(normalizedMac);
+			await this.exec('/bin/sh', [
+				'-c',
+				`if [ -f /tmp/moci-quarantine-known.txt ]; then grep -vi "^${normalizedMac}$" /tmp/moci-quarantine-known.txt > /tmp/.moci_quarantine_known.$$ || true; mv /tmp/.moci_quarantine_known.$$ /tmp/moci-quarantine-known.txt; fi`
+			]);
+			cleanedQuarantineKnown = true;
+		} catch (err) {
+			console.error('Failed while pruning /tmp/moci-quarantine-known.txt:', err);
+		}
+
 		const removedTotal = removedDhcp + removedFirewall;
 		if (removedTotal === 0) {
 			this.core.showToast('No static lease or firewall rules found for this device', 'warning');
 		} else {
-			this.core.showToast(`Removed ${removedDhcp} DHCP + ${removedFirewall} firewall entries`, 'success');
+			const tmpNotes = `${cleanedTmpLeases ? ' leases tmp cleaned' : ''}${cleanedQuarantineKnown ? ' quarantine tmp cleaned' : ''}`;
+			this.core.showToast(`Removed ${removedDhcp} DHCP + ${removedFirewall} firewall entries${tmpNotes}`, 'success');
 		}
 
 		if (this.expandedMac === normalizedMac) this.expandedMac = '';
