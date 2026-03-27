@@ -562,11 +562,25 @@ export default class MonitoringModule {
 			this.appendSpeedtestDebug(`Latest sample before run: ${beforeTs || 'none'}`);
 
 			// Run in background to avoid ubus/rpcd request timeout on long speedtests.
-			await this.exec('/bin/sh', [
-				'-c',
-				'/usr/bin/moci-speedtest-monitor --once >/tmp/moci-speedtest-monitor.last.log 2>&1 &'
-			]);
-			this.appendSpeedtestDebug('Background speedtest process started');
+			let launchStatus = 0;
+			let launchError = '';
+			try {
+				const [status] = await this.core.ubusCall('file', 'exec', {
+					command: '/bin/sh',
+					params: ['-c', '/usr/bin/moci-speedtest-monitor --once >/tmp/moci-speedtest-monitor.last.log 2>&1 &']
+				});
+				launchStatus = Number(status || 0);
+			} catch (err) {
+				launchStatus = -1;
+				launchError = err?.message || 'unknown launch error';
+			}
+			if (launchStatus === 0) {
+				this.appendSpeedtestDebug('Background speedtest process started');
+			} else {
+				this.appendSpeedtestDebug(
+					`Background launch returned status=${launchStatus}${launchError ? ` (${launchError})` : ''}; waiting for new sample anyway`
+				);
+			}
 
 			const completed = await this.waitForNewSpeedtestSample(beforeTs, 24, 2500);
 			if (completed) {
@@ -575,7 +589,10 @@ export default class MonitoringModule {
 				this.core.showToast('Speedtest captured', 'success');
 			} else {
 				this.appendSpeedtestDebug('No new sample detected yet; check execution log below');
-				this.core.showToast('Speedtest started; result will appear shortly', 'warning');
+				this.core.showToast(
+					launchStatus === 0 ? 'Speedtest started; result will appear shortly' : 'Speedtest launch reported an error; check debug log',
+					'warning'
+				);
 				await this.refresh();
 			}
 		} catch (err) {
