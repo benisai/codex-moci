@@ -47,7 +47,8 @@ export default class DevicesModule {
 		document.getElementById('devices-parental-toggle-btn')?.addEventListener('click', () => this.toggleParentalControl());
 
 		this.core.delegateActions('devices-table', {
-			pin: mac => this.openPinDialog(mac)
+			pin: mac => this.openPinDialog(mac),
+			delete: mac => this.deleteDevice(mac)
 		});
 		this.setupSortHeaders();
 	}
@@ -405,7 +406,10 @@ export default class DevicesModule {
 				const pinBtn =
 					row.mac === 'N/A'
 						? '-'
-						: `<button class="action-btn-sm devices-action-btn" data-action="pin" data-id="${this.core.escapeHtml(row.mac)}" title="Device settings">ACTION</button>`;
+						: `<div class="action-buttons">
+							<button class="action-btn-sm devices-action-btn" data-action="pin" data-id="${this.core.escapeHtml(row.mac)}" title="Device settings">ACTION</button>
+							<button class="action-btn-sm danger devices-action-btn" data-action="delete" data-id="${this.core.escapeHtml(row.mac)}" title="Delete device configuration">DELETE</button>
+						</div>`;
 
 				const ipText = this.renderDeviceIp(row.ip, row.pinned);
 
@@ -837,6 +841,76 @@ export default class DevicesModule {
 			console.error('Failed to save static lease:', err);
 			this.core.showToast('Failed to save static IP', 'error');
 		}
+	}
+
+	async deleteDevice(mac) {
+		const normalizedMac = this.normalizeMac(mac);
+		if (!normalizedMac) {
+			this.core.showToast('Device MAC not available', 'error');
+			return;
+		}
+
+		const row = this.rowsByMac.get(normalizedMac);
+		const label = row?.hostname && row.hostname !== 'Unknown' ? `${row.hostname} (${normalizedMac})` : normalizedMac;
+		if (
+			!confirm(
+				`Delete device settings for ${label}?\n\nThis removes DHCP static hostname/IP entries and firewall rules that match this MAC.`
+			)
+		) {
+			return;
+		}
+
+		let removedDhcp = 0;
+		let removedFirewall = 0;
+		try {
+			const [dhcpStatus, dhcpResult] = await this.core.uciGet('dhcp');
+			if (dhcpStatus === 0 && dhcpResult?.values) {
+				for (const [section, cfg] of Object.entries(dhcpResult.values)) {
+					if (String(cfg?.['.type'] || '') !== 'host') continue;
+					const candidateMac = this.normalizeMac(cfg?.mac || '');
+					if (candidateMac && candidateMac === normalizedMac) {
+						await this.core.uciDelete('dhcp', section);
+						removedDhcp += 1;
+					}
+				}
+				if (removedDhcp > 0) await this.core.uciCommit('dhcp');
+			}
+		} catch (err) {
+			console.error('Failed while deleting DHCP host entries:', err);
+		}
+
+		try {
+			const [fwStatus, fwResult] = await this.core.uciGet('firewall');
+			if (fwStatus === 0 && fwResult?.values) {
+				for (const [section, cfg] of Object.entries(fwResult.values)) {
+					if (String(cfg?.['.type'] || '') !== 'rule') continue;
+					const candidateMac = this.normalizeMac(cfg?.src_mac || cfg?.src_mac_address || '');
+					if (candidateMac && candidateMac === normalizedMac) {
+						await this.core.uciDelete('firewall', section);
+						removedFirewall += 1;
+					}
+				}
+				if (removedFirewall > 0) {
+					await this.core.uciCommit('firewall');
+					await this.exec('/bin/sh', [
+						'-c',
+						'/etc/init.d/firewall reload 2>/dev/null || /etc/init.d/firewall restart 2>/dev/null || true'
+					]);
+				}
+			}
+		} catch (err) {
+			console.error('Failed while deleting firewall rules:', err);
+		}
+
+		const removedTotal = removedDhcp + removedFirewall;
+		if (removedTotal === 0) {
+			this.core.showToast('No static lease or firewall rules found for this device', 'warning');
+		} else {
+			this.core.showToast(`Removed ${removedDhcp} DHCP + ${removedFirewall} firewall entries`, 'success');
+		}
+
+		if (this.expandedMac === normalizedMac) this.expandedMac = '';
+		await this.loadDevices();
 	}
 
 	async toggleParentalControl() {
