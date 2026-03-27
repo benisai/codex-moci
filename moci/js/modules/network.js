@@ -1333,16 +1333,15 @@ export default class NetworkModule {
 			const tbody = document.querySelector('#quarantine-table tbody');
 			if (!intervalInput || !serviceEl || !bootEl || !featureEl || !tbody) return;
 
-			const featureEnabled = this.core.isFeatureEnabled('quarantine');
-			featureEl.innerHTML = featureEnabled
-				? this.core.renderBadge('success', 'ENABLED')
-				: this.core.renderBadge('error', 'DISABLED');
+			let quarantineEnabled = false;
+			let featureEnabled = this.core.isFeatureEnabled('quarantine');
 
 			try {
 				const [status, result] = await this.core.uciGet('moci', 'quarantine');
 				if (status === 0 && result?.values) {
 					const interval = Number(result.values.interval || 15);
 					intervalInput.value = String(Number.isFinite(interval) ? Math.max(10, Math.min(3600, interval)) : 15);
+					quarantineEnabled = String(result.values.enabled ?? '0') === '1';
 				} else {
 					intervalInput.value = '15';
 				}
@@ -1351,16 +1350,31 @@ export default class NetworkModule {
 			}
 
 			try {
-				const [s, r] = await this.core.ubusCall('file', 'exec', {
-					command: '/bin/sh',
-					params: ['-c', 'pgrep -f moci-device-quarantine >/dev/null && echo RUNNING || echo STOPPED']
-				});
-				const running = s === 0 && String(r?.stdout || '').trim() === 'RUNNING';
-				serviceEl.innerHTML = running
-					? this.core.renderBadge('success', 'RUNNING')
-					: this.core.renderBadge('error', 'STOPPED');
-			} catch {
-				serviceEl.innerHTML = this.core.renderBadge('error', 'UNKNOWN');
+				const [status, result] = await this.core.uciGet('moci', 'features');
+				if (status === 0 && result?.values) {
+					featureEnabled = String(result.values.quarantine ?? '1') === '1';
+				}
+			} catch {}
+
+			featureEl.innerHTML = featureEnabled && quarantineEnabled
+				? this.core.renderBadge('success', 'ENABLED')
+				: this.core.renderBadge('error', 'DISABLED');
+
+			if (!featureEnabled || !quarantineEnabled) {
+				serviceEl.innerHTML = this.core.renderBadge('error', 'DISABLED');
+			} else {
+				try {
+					const [s, r] = await this.core.ubusCall('file', 'exec', {
+						command: '/bin/sh',
+						params: ['-c', 'pgrep -f moci-device-quarantine >/dev/null && echo RUNNING || echo STOPPED']
+					});
+					const running = s === 0 && String(r?.stdout || '').trim() === 'RUNNING';
+					serviceEl.innerHTML = running
+						? this.core.renderBadge('success', 'RUNNING')
+						: this.core.renderBadge('error', 'STOPPED');
+				} catch {
+					serviceEl.innerHTML = this.core.renderBadge('error', 'UNKNOWN');
+				}
 			}
 
 			try {
