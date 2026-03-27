@@ -24,7 +24,8 @@ export default class NetworkModule {
 					qos: () => this.loadQoS(),
 					vpn: () => this.loadVPN(),
 					connections: () => this.loadConnections(),
-					diagnostics: () => this.loadDiagnostics()
+					diagnostics: () => this.loadDiagnostics(),
+					quarantine: () => this.loadQuarantine()
 				});
 				this.subTabs.attachListeners();
 				this.setupModals();
@@ -265,6 +266,10 @@ export default class NetworkModule {
 		document.getElementById('network-connections-refresh-btn')?.addEventListener('click', () =>
 			this.refreshConnectionsManually()
 		);
+		document.getElementById('quarantine-enable-btn')?.addEventListener('click', () => this.saveQuarantineSettings(true));
+		document.getElementById('quarantine-disable-btn')?.addEventListener('click', () => this.saveQuarantineSettings(false));
+		document.getElementById('quarantine-refresh-btn')?.addEventListener('click', () => this.loadQuarantine());
+		document.getElementById('quarantine-discover-btn')?.addEventListener('click', () => this.runQuarantineDiscovery());
 		document.getElementById('add-pbr-policy-btn')?.addEventListener('click', async () => {
 			this.core.resetModal('pbr-policy-add-modal');
 			await this.populatePbrInterfaceOptions();
@@ -311,6 +316,11 @@ export default class NetworkModule {
 			delete: id => this.deletePbrInclude(id)
 		});
 		if (pbrIncludeCleanup) this.cleanups.push(pbrIncludeCleanup);
+
+		const quarantineCleanup = this.core.delegateActions('quarantine-table', {
+			release: id => this.releaseQuarantinedDevice(id)
+		});
+		if (quarantineCleanup) this.cleanups.push(quarantineCleanup);
 	}
 
 	setupDiagnostics() {
@@ -1268,6 +1278,193 @@ export default class NetworkModule {
 			this.loadDNS();
 		} catch {
 			this.core.showToast('Failed to delete hosts entry', 'error');
+		}
+	}
+
+	async loadQuarantine() {
+		await this.core.loadResource('quarantine-table', 5, 'quarantine', async () => {
+			const intervalInput = document.getElementById('quarantine-interval');
+			const serviceEl = document.getElementById('quarantine-service-status');
+			const bootEl = document.getElementById('quarantine-boot-status');
+			const featureEl = document.getElementById('quarantine-feature-status');
+			const tbody = document.querySelector('#quarantine-table tbody');
+			if (!intervalInput || !serviceEl || !bootEl || !featureEl || !tbody) return;
+
+			const featureEnabled = this.core.isFeatureEnabled('quarantine');
+			featureEl.innerHTML = featureEnabled
+				? this.core.renderBadge('success', 'ENABLED')
+				: this.core.renderBadge('error', 'DISABLED');
+
+			try {
+				const [status, result] = await this.core.uciGet('moci', 'quarantine');
+				if (status === 0 && result?.values) {
+					const interval = Number(result.values.interval || 60);
+					intervalInput.value = String(Number.isFinite(interval) ? Math.max(10, Math.min(3600, interval)) : 60);
+				} else {
+					intervalInput.value = '60';
+				}
+			} catch {
+				intervalInput.value = '60';
+			}
+
+			try {
+				const [s, r] = await this.core.ubusCall('file', 'exec', {
+					command: '/bin/sh',
+					params: ['-c', 'pgrep -f moci-device-quarantine >/dev/null && echo RUNNING || echo STOPPED']
+				});
+				const running = s === 0 && String(r?.stdout || '').trim() === 'RUNNING';
+				serviceEl.innerHTML = running
+					? this.core.renderBadge('success', 'RUNNING')
+					: this.core.renderBadge('error', 'STOPPED');
+			} catch {
+				serviceEl.innerHTML = this.core.renderBadge('error', 'UNKNOWN');
+			}
+
+			try {
+				const [s, r] = await this.core.ubusCall('file', 'exec', {
+					command: '/bin/sh',
+					params: ['-c', '/etc/init.d/moci-device-quarantine enabled >/dev/null 2>&1 && echo ENABLED || echo DISABLED']
+				});
+				const enabled = s === 0 && String(r?.stdout || '').trim() === 'ENABLED';
+				bootEl.innerHTML = enabled
+					? this.core.renderBadge('success', 'ENABLED')
+					: this.core.renderBadge('error', 'DISABLED');
+			} catch {
+				bootEl.innerHTML = this.core.renderBadge('error', 'UNKNOWN');
+			}
+
+			const rows = await this.readQuarantineRules();
+			if (rows.length === 0) {
+				this.core.renderEmptyTable(tbody, 5, 'No quarantined devices');
+				return;
+			}
+
+			tbody.innerHTML = rows
+				.map(row => {
+					const statusBadge = row.enabled
+						? this.core.renderBadge('error', 'BLOCKED')
+						: this.core.renderBadge('success', 'RELEASED');
+					const releaseId = encodeURIComponent(row.base || '');
+					return `<tr>
+						<td>${this.core.escapeHtml(row.base || row.name || 'N/A')}</td>
+						<td>${this.core.escapeHtml(row.mac || 'N/A')}</td>
+						<td>${this.core.escapeHtml(row.srcIp || 'N/A')}</td>
+						<td>${statusBadge}</td>
+						<td><button class="action-btn-sm" data-action="release" data-id="${releaseId}">RELEASE</button></td>
+					</tr>`;
+				})
+				.join('');
+		});
+	}
+
+	async readQuarantineRules() {
+		const rows = [];
+		try {
+			const [status, result] = await this.core.uciGet('firewall');
+			if (status !== 0 || !result?.values) return rows;
+
+			const grouped = new Map();
+			for (const [section, cfg] of Object.entries(result.values)) {
+				if (String(cfg?.['.type'] || '') !== 'rule') continue;
+				const name = String(cfg?.name || '').trim();
+				if (!name.startsWith('moci_quarantine_')) continue;
+				const base = name.replace(/_(lan|wan)$/i, '');
+				const entry = grouped.get(base) || {
+					base,
+					name,
+					mac: String(cfg?.src_mac || ''),
+					srcIp: String(cfg?.src_ip || ''),
+					enabled: false,
+					sections: []
+				};
+				entry.sections.push(section);
+				entry.enabled = entry.enabled || String(cfg?.enabled ?? '1') !== '0';
+				if (!entry.mac) entry.mac = String(cfg?.src_mac || '');
+				if (!entry.srcIp) entry.srcIp = String(cfg?.src_ip || '');
+				grouped.set(base, entry);
+			}
+
+			rows.push(...Array.from(grouped.values()).sort((a, b) => a.base.localeCompare(b.base)));
+		} catch {}
+		return rows;
+	}
+
+	async saveQuarantineSettings(enableFlag) {
+		const intervalInput = document.getElementById('quarantine-interval');
+		const interval = Number(intervalInput?.value || 60);
+		if (!Number.isFinite(interval) || interval < 10 || interval > 3600) {
+			this.core.showToast('Interval must be between 10 and 3600 seconds', 'error');
+			return;
+		}
+		const enabled = Boolean(enableFlag) ? '1' : '0';
+
+		try {
+			await this.core.uciSet('moci', 'quarantine', {
+				enabled,
+				interval: String(Math.round(interval))
+			});
+			await this.core.uciCommit('moci');
+
+			await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: [
+					'-c',
+					enableFlag
+						? '/etc/init.d/moci-device-quarantine enable 2>/dev/null || true; /etc/init.d/moci-device-quarantine restart 2>/dev/null || /etc/init.d/moci-device-quarantine start 2>/dev/null || true'
+						: '/etc/init.d/moci-device-quarantine stop 2>/dev/null || true'
+				]
+			});
+
+			this.core.showToast(enableFlag ? 'Quarantine enabled' : 'Quarantine disabled', 'success');
+			await this.loadQuarantine();
+		} catch {
+			this.core.showToast('Failed to save quarantine settings', 'error');
+		}
+	}
+
+	async runQuarantineDiscovery() {
+		try {
+			await this.core.ubusCall(
+				'file',
+				'exec',
+				{
+					command: '/usr/bin/moci-device-quarantine',
+					params: ['--once']
+				},
+				{ timeout: 20000 }
+			);
+			this.core.showToast('Quarantine discovery completed', 'success');
+			await this.loadQuarantine();
+		} catch {
+			this.core.showToast('Failed to run quarantine discovery', 'error');
+		}
+	}
+
+	async releaseQuarantinedDevice(encodedBase) {
+		const base = decodeURIComponent(String(encodedBase || ''));
+		if (!base) return;
+		if (!confirm('Release this device from quarantine?')) return;
+
+		try {
+			const [status, result] = await this.core.uciGet('firewall');
+			if (status !== 0 || !result?.values) throw new Error('Unable to read firewall config');
+
+			for (const [section, cfg] of Object.entries(result.values)) {
+				if (String(cfg?.['.type'] || '') !== 'rule') continue;
+				const name = String(cfg?.name || '').trim();
+				if (name === `${base}_lan` || name === `${base}_wan` || name === base) {
+					await this.core.uciDelete('firewall', section);
+				}
+			}
+			await this.core.uciCommit('firewall');
+			await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', '/etc/init.d/firewall reload 2>/dev/null || /etc/init.d/firewall restart 2>/dev/null || true']
+			});
+			this.core.showToast('Device released from quarantine', 'success');
+			await this.loadQuarantine();
+		} catch {
+			this.core.showToast('Failed to release quarantined device', 'error');
 		}
 	}
 

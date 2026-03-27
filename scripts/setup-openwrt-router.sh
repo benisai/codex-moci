@@ -102,9 +102,11 @@ require_file "$REPO_DIR/files/moci-netify-collector.sh"
 require_file "$REPO_DIR/files/moci-ping-monitor.sh"
 require_file "$REPO_DIR/files/moci-speedtest-monitor.sh"
 require_file "$REPO_DIR/files/moci-state-sync.sh"
+require_file "$REPO_DIR/files/moci-device-quarantine.sh"
 require_file "$REPO_DIR/files/netify-collector.init"
 require_file "$REPO_DIR/files/ping-monitor.init"
 require_file "$REPO_DIR/files/moci-state-sync.init"
+require_file "$REPO_DIR/files/device-quarantine.init"
 require_file "$REPO_DIR/files/moci.config"
 require_file "$REPO_DIR/rpcd-acl.json"
 require_file "$REPO_DIR/moci/index.html"
@@ -162,9 +164,11 @@ install_file "$REPO_DIR/files/moci-netify-collector.sh" /usr/bin/moci-netify-col
 install_file "$REPO_DIR/files/moci-ping-monitor.sh" /usr/bin/moci-ping-monitor 0755
 install_file "$REPO_DIR/files/moci-speedtest-monitor.sh" /usr/bin/moci-speedtest-monitor 0755
 install_file "$REPO_DIR/files/moci-state-sync.sh" /usr/bin/moci-state-sync 0755
+install_file "$REPO_DIR/files/moci-device-quarantine.sh" /usr/bin/moci-device-quarantine 0755
 install_file "$REPO_DIR/files/netify-collector.init" /etc/init.d/netify-collector 0755
 install_file "$REPO_DIR/files/ping-monitor.init" /etc/init.d/ping-monitor 0755
 install_file "$REPO_DIR/files/moci-state-sync.init" /etc/init.d/moci-state-sync 0755
+install_file "$REPO_DIR/files/device-quarantine.init" /etc/init.d/moci-device-quarantine 0755
 
 if [ -f /etc/config/moci ]; then
 	cp /etc/config/moci "/etc/config/moci.bak.$(date +%Y%m%d%H%M%S)"
@@ -196,6 +200,11 @@ set_uci moci.speedtest_monitor.run_minute "15"
 set_uci moci.speedtest_monitor.bin "/usr/bin/speedtest"
 set_uci moci.speedtest_monitor.output_file "/tmp/moci-speedtest-monitor.txt"
 set_uci moci.speedtest_monitor.max_lines "365"
+set_uci moci.quarantine.enabled "0"
+set_uci moci.quarantine.interval "60"
+set_uci moci.quarantine.leases_file "/tmp/dhcp.leases"
+set_uci moci.quarantine.state_file "/tmp/moci-quarantine-known.txt"
+set_uci moci.quarantine.rule_prefix "moci_quarantine_"
 set_uci moci.state_backup.backup_time "60"
 set_uci moci.state_backup.state_dir "/overlay/moci-state"
 uci commit moci
@@ -259,7 +268,7 @@ cp "$TMP_CRON" "$CRON_PATH"
 rm -f "$TMP_CRON"
 /bin/sh -c '/etc/init.d/cron reload 2>/dev/null || /etc/init.d/cron restart 2>/dev/null || /etc/init.d/crond reload 2>/dev/null || /etc/init.d/crond restart 2>/dev/null || killall -HUP crond 2>/dev/null || true'
 
-for svc in vnstat nlbwmon netifyd netify-collector ping-monitor moci-state-sync; do
+for svc in vnstat nlbwmon netifyd netify-collector ping-monitor moci-state-sync moci-device-quarantine; do
 	if [ -x "/etc/init.d/$svc" ]; then
 		/etc/init.d/"$svc" enable || true
 		/etc/init.d/"$svc" restart || true

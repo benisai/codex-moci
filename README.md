@@ -63,6 +63,7 @@ scp -r moci/* root@192.168.1.1:/www/moci/
 - Wireless management (SSID, encryption)
 - Firewall & port forwarding
 - DHCP leases (active + static)
+- Device quarantine service
 - Diagnostics (ping, traceroute, WOL)
 
 </td>
@@ -124,9 +125,11 @@ What does the shell script do?:
   - `/usr/bin/moci-ping-monitor`
   - `/usr/bin/moci-speedtest-monitor`
   - `/usr/bin/moci-state-sync`
+  - `/usr/bin/moci-device-quarantine`
   - `/etc/init.d/netify-collector`
   - `/etc/init.d/ping-monitor`
   - `/etc/init.d/moci-state-sync`
+  - `/etc/init.d/moci-device-quarantine`
 - installs `/etc/config/moci` defaults for Monitoring + Netify
 - enables/restarts `rpcd`, `uhttpd`, `netify-collector`, `ping-monitor`, `moci-state-sync`, `vnstat`, `nlbwmon`, `netifyd`
 
@@ -243,6 +246,31 @@ The frontend reads data via `ubus` (`file.read`, `file.exec`, `uci.get`) and doe
 /etc/init.d/netify-collector start
 /etc/init.d/netify-collector restart
 ```
+
+### Network backend (Device Quarantine service)
+
+**Service and scripts**
+- Init script: `files/device-quarantine.init`
+- Worker: `files/moci-device-quarantine.sh`
+- Runtime command: `/usr/bin/moci-device-quarantine`
+
+**Behavior**
+1. Service checks both:
+   - `moci.features.quarantine`
+   - `moci.quarantine.enabled`
+2. If enabled, it scans DHCP leases on interval.
+3. New (previously unseen) MACs are quarantined by adding firewall reject rules for:
+   - `lan -> lan`
+   - `lan -> wan`
+4. Rules use prefix `moci_quarantine_` and appear in MoCI Network -> Quarantine.
+
+**Config keys (`/etc/config/moci`)**
+- `config quarantine 'quarantine'`
+- `option enabled '0'` (default disabled)
+- `option interval '60'`
+- `option leases_file '/tmp/dhcp.leases'`
+- `option state_file '/tmp/moci-quarantine-known.txt'`
+- `option rule_prefix 'moci_quarantine_'`
 
 ### Runtime data persistence (safe checkpoints)
 

@@ -321,6 +321,7 @@
 							<button class="tab-btn" data-tab="vpn">VPN</button>
 							<button class="tab-btn" data-tab="connections">CONNECTIONS</button>
 							<button class="tab-btn" data-tab="diagnostics">DIAGNOSTICS</button>
+							<button class="tab-btn" data-tab="quarantine" data-feature="quarantine">QUARANTINE</button>
 						</div>
 
 						<div class="tab-content" id="tab-interfaces">
@@ -1743,6 +1744,56 @@
 									</div>
 								</div>
 							</div>
+							</div>
+						</div>
+
+						<div class="tab-content hidden" id="tab-quarantine" data-feature="quarantine">
+							<div class="stat-card">
+								<div class="section-title">DEVICE QUARANTINE</div>
+								<div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px">
+									<div>
+										<div class="stat-label">SERVICE</div>
+										<div id="quarantine-service-status" style="margin-top: 8px">Loading...</div>
+									</div>
+									<div>
+										<div class="stat-label">BOOT</div>
+										<div id="quarantine-boot-status" style="margin-top: 8px">Loading...</div>
+									</div>
+									<div>
+										<div class="stat-label">FEATURE FLAG</div>
+										<div id="quarantine-feature-status" style="margin-top: 8px">Loading...</div>
+									</div>
+								</div>
+								<div class="form-group">
+									<label class="form-label">SCAN INTERVAL (SECONDS)</label>
+									<input type="number" id="quarantine-interval" class="form-input" min="10" max="3600" value="60" />
+								</div>
+								<div class="quick-actions">
+									<button class="action-btn success" id="quarantine-enable-btn">ENABLE</button>
+									<button class="action-btn danger" id="quarantine-disable-btn">DISABLE</button>
+									<button class="action-btn" id="quarantine-discover-btn">DISCOVER NOW</button>
+									<button class="action-btn" id="quarantine-refresh-btn">REFRESH</button>
+								</div>
+							</div>
+
+							<div class="stat-card" style="margin-top: 24px">
+								<div class="section-title">QUARANTINED DEVICES</div>
+								<table class="data-table" id="quarantine-table">
+									<thead>
+										<tr>
+											<th>RULE</th>
+											<th>MAC ADDRESS</th>
+											<th>SOURCE IP</th>
+											<th>STATUS</th>
+											<th>ACTIONS</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td colspan="5" style="text-align: center; color: var(--steel-muted)">Loading...</td>
+										</tr>
+									</tbody>
+								</table>
 							</div>
 						</div>
 
