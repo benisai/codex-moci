@@ -1332,6 +1332,11 @@ export default class NetworkModule {
 				return;
 			}
 
+			rows.sort((a, b) => {
+				if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
+				return String(a.name || '').localeCompare(String(b.name || ''));
+			});
+
 			tbody.innerHTML = rows
 				.map(
 					row => `<tr>
