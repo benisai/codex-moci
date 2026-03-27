@@ -1099,14 +1099,15 @@ export default class DevicesModule {
 				'/etc/init.d/firewall reload 2>/dev/null || /etc/init.d/firewall restart 2>/dev/null || true'
 			]);
 
-			this.core.showToast(currentlyBlocked ? 'Internet unblocked for device' : 'Internet blocked for device', 'success');
-			await this.loadDevices();
-			const refreshed = this.rowsByMac.get(mac);
-			if (refreshed) {
-				document.getElementById('devices-parental-rule-section').value = refreshed.parentalSection || '';
-				this.syncParentalControlUi(refreshed);
-			}
-		} catch (err) {
+				this.core.showToast(currentlyBlocked ? 'Internet unblocked for device' : 'Internet blocked for device', 'success');
+				await this.loadDevices();
+				const refreshed = this.rowsByMac.get(mac);
+				if (refreshed) {
+					document.getElementById('devices-parental-rule-section').value = refreshed.parentalSection || '';
+					this.syncParentalControlUi(refreshed);
+				}
+				this.core.closeModal('devices-pin-modal');
+			} catch (err) {
 			console.error('Failed to toggle parental control:', err);
 			this.core.showToast('Failed to update parental control rule', 'error');
 		}
