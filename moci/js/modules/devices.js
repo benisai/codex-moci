@@ -1309,6 +1309,7 @@ rm -f "$tmp"
 				this.syncParentalDnsUi(refreshed);
 				this.syncQuarantineActionUi(refreshed);
 			}
+			this.core.closeModal('devices-pin-modal');
 		} catch (err) {
 			console.error('Failed to apply PBR DNS profile:', err);
 			this.core.showToast('Failed to apply DNS 1.1.1.3 profile', 'error');
