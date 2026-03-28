@@ -106,8 +106,7 @@ export default class DevicesModule {
 
 		try {
 			const leases = await this.fetchLeases();
-			const [arpMacs, pingReachableIps, usage, staticByMac, netifyEnabled, parentalByMac, quarantineByMac] = await Promise.all([
-				this.fetchNeighborMacs(),
+			const [pingReachableIps, usage, staticByMac, netifyEnabled, parentalByMac, quarantineByMac] = await Promise.all([
 				this.fetchPingReachableIps(leases),
 				this.fetchNlbwmonUsage(),
 				this.fetchStaticLeasesByMac(),
@@ -122,7 +121,7 @@ export default class DevicesModule {
 			this.parentalByMac = parentalByMac;
 			this.quarantineByMac = quarantineByMac;
 			this.renderSourceStatus();
-			const rows = this.mergeRows(leases, arpMacs, pingReachableIps, usage.totalsByClient, staticByMac, parentalByMac, quarantineByMac);
+			const rows = this.mergeRows(leases, pingReachableIps, usage.totalsByClient, staticByMac, parentalByMac, quarantineByMac);
 			if (fromAuto && this.expandedMac) return;
 			this.deviceRows = rows;
 			this.renderRows(this.sortRows(rows));
@@ -402,7 +401,7 @@ rm -f "$tmp"
 		return { available: true, totalsByClient };
 	}
 
-	mergeRows(leases, arpMacs, pingReachableIps, totalsByClient, staticByMac, parentalByMac, quarantineByMac) {
+	mergeRows(leases, pingReachableIps, totalsByClient, staticByMac, parentalByMac, quarantineByMac) {
 		const merged = [];
 		const seenMacs = new Set();
 
@@ -422,7 +421,7 @@ rm -f "$tmp"
 				tx: usage ? usage.tx : null,
 				rx: usage ? usage.rx : null,
 				nlbwTopApps: this.extractTopNlbwApps(usage),
-				online: (mac ? arpMacs.has(mac) : false) || (ip ? pingReachableIps.has(ip) : false),
+				online: ip ? pingReachableIps.has(ip) : false,
 				pinned: Boolean(pin?.ip),
 				staticSection: pin?.section || '',
 				parentalSection: parental?.section || '',
@@ -446,7 +445,7 @@ rm -f "$tmp"
 				tx: usage ? usage.tx : null,
 				rx: usage ? usage.rx : null,
 				nlbwTopApps: this.extractTopNlbwApps(usage),
-				online: arpMacs.has(mac) || (usage?.ip ? pingReachableIps.has(usage.ip) : false) || (pin?.ip ? pingReachableIps.has(pin.ip) : false),
+				online: (usage?.ip ? pingReachableIps.has(usage.ip) : false) || (pin?.ip ? pingReachableIps.has(pin.ip) : false),
 				pinned: Boolean(pin?.ip),
 				staticSection: pin?.section || '',
 				parentalSection: parental?.section || '',
