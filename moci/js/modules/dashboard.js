@@ -23,7 +23,6 @@ export default class DashboardModule {
 		this.systemLogLines = [];
 		this.systemLogQuery = '';
 		this.systemLogSearchBound = false;
-		this.quickActionsBound = false;
 
 		this.core.registerRoute('/dashboard', () => this.load());
 	}
@@ -151,7 +150,6 @@ export default class DashboardModule {
 		this.applyLanVisibility();
 		this.applyDashboardColorTheme();
 		this.initSystemLogSearch();
-		this.initQuickActions();
 		try {
 			const systemInfo = await this.fetchSystemInfo();
 			const boardInfo = await this.fetchBoardInfo();
@@ -171,42 +169,6 @@ export default class DashboardModule {
 			console.error('Failed to load dashboard:', err);
 			this.core.showToast('Failed to load system information', 'error');
 		}
-	}
-
-	initQuickActions() {
-		if (this.quickActionsBound) return;
-		this.quickActionsBound = true;
-
-		document.getElementById('reboot-btn')?.addEventListener('click', async () => {
-			if (!confirm('Reboot the router now?')) return;
-			try {
-				await this.core.ubusCall('system', 'reboot', {});
-				this.core.showToast('System is rebooting...', 'success');
-			} catch (err) {
-				console.error('Failed to reboot from dashboard:', err);
-				this.core.showToast('Failed to reboot', 'error');
-			}
-		});
-
-		document.getElementById('restart-network-btn')?.addEventListener('click', async () => {
-			try {
-				await this.core.serviceReload('network');
-				this.core.showToast('Network restarted', 'success');
-			} catch (err) {
-				console.error('Failed to restart network from dashboard:', err);
-				this.core.showToast('Failed to restart network', 'error');
-			}
-		});
-
-		document.getElementById('restart-firewall-btn')?.addEventListener('click', async () => {
-			try {
-				await this.core.serviceReload('firewall');
-				this.core.showToast('Firewall restarted', 'success');
-			} catch (err) {
-				console.error('Failed to restart firewall from dashboard:', err);
-				this.core.showToast('Failed to restart firewall', 'error');
-			}
-		});
 	}
 
 	applyLanVisibility() {

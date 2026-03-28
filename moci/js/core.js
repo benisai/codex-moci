@@ -5,6 +5,7 @@ export class OpenWrtCore {
 		this.modules = new Map();
 		this.routes = new Map();
 		this.currentRoute = null;
+		this.dashboardQuickActionsBound = false;
 	}
 
 	registerRoute(path, handler) {
@@ -226,6 +227,49 @@ export class OpenWrtCore {
 
 	attachEventListeners() {
 		document.getElementById('logout-btn')?.addEventListener('click', () => this.logout());
+		this.bindDashboardQuickActions();
+	}
+
+	bindDashboardQuickActions() {
+		if (this.dashboardQuickActionsBound) return;
+		this.dashboardQuickActionsBound = true;
+
+		const bind = (id, handler) => {
+			const el = document.getElementById(id);
+			if (!el) return;
+			el.onclick = handler;
+		};
+
+		bind('reboot-btn', async () => {
+			if (!confirm('Reboot the router now?')) return;
+			try {
+				await this.ubusCall('system', 'reboot', {});
+				this.showToast('System is rebooting...', 'success');
+			} catch (err) {
+				console.error('Failed to reboot:', err);
+				this.showToast('Failed to reboot', 'error');
+			}
+		});
+
+		bind('restart-network-btn', async () => {
+			try {
+				await this.serviceReload('network');
+				this.showToast('Network restarted', 'success');
+			} catch (err) {
+				console.error('Failed to restart network:', err);
+				this.showToast('Failed to restart network', 'error');
+			}
+		});
+
+		bind('restart-firewall-btn', async () => {
+			try {
+				await this.serviceReload('firewall');
+				this.showToast('Firewall restarted', 'success');
+			} catch (err) {
+				console.error('Failed to restart firewall:', err);
+				this.showToast('Failed to restart firewall', 'error');
+			}
+		});
 	}
 
 	startPolling() {
