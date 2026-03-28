@@ -976,6 +976,21 @@ rm -f "$tmp"
 		btn.title = active ? 'Family DNS profile active for this device' : 'Apply family DNS profile for this device';
 	}
 
+	setParentalDnsBusy(isBusy) {
+		const btn = document.getElementById('devices-parental-dns-btn');
+		if (!btn) return;
+		if (isBusy) {
+			btn.disabled = true;
+			btn.textContent = 'ADDING...';
+			btn.style.opacity = '0.6';
+			btn.style.cursor = 'wait';
+		} else {
+			btn.disabled = false;
+			btn.style.opacity = '';
+			btn.style.cursor = '';
+		}
+	}
+
 	syncQuarantineActionUi(row) {
 		const btn = document.getElementById('devices-release-quarantine-btn');
 		if (!btn) return;
@@ -1270,13 +1285,18 @@ rm -f "$tmp"
 		}
 
 	async applyParentalDnsProfile() {
+		const btn = document.getElementById('devices-parental-dns-btn');
+		if (btn?.disabled) return;
+		this.setParentalDnsBusy(true);
 		const mac = this.normalizeMac(document.getElementById('devices-pin-mac')?.value || '');
 		if (!mac) {
 			this.core.showToast('Invalid MAC address', 'error');
+			this.setParentalDnsBusy(false);
 			return;
 		}
 		if (!this.pbrFeatureEnabled || !this.pbrInstalled) {
 			this.core.showToast('PBR is not available', 'error');
+			this.setParentalDnsBusy(false);
 			return;
 		}
 
@@ -1318,6 +1338,7 @@ rm -f "$tmp"
 		} catch (err) {
 			console.error('Failed to apply PBR DNS profile:', err);
 			this.core.showToast('Failed to apply DNS 1.1.1.3 profile', 'error');
+			this.setParentalDnsBusy(false);
 		}
 	}
 
