@@ -1916,7 +1916,9 @@
 									</div>
 									<div class="form-group">
 										<label class="form-label">SOURCE (IP/CIDR/HOST/MAC)</label>
-										<input type="text" id="pbr-dns-src-addr" class="form-input" placeholder="192.168.1.50 or aa:bb:cc:dd:ee:ff" />
+										<select id="pbr-dns-src-addr" class="form-input">
+											<option value="">Select device (MAC source)</option>
+										</select>
 									</div>
 									<div class="form-group">
 										<label class="form-label">DNS TARGET (DEST_DNS)</label>
@@ -2255,7 +2257,12 @@
 						</div>
 
 						<div id="netify-page" class="page hidden" data-feature="netify">
-							<h2>NETIFY</h2>
+							<h2>
+								NETIFY
+								<span style="font-size: 0.72em; font-weight: 500; opacity: 0.8"
+									>(Please wait while flows are loaded)</span
+								>
+							</h2>
 							<div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 24px">
 								<div class="stat-card">
 									<div class="stat-label">FLOWS</div>

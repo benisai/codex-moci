@@ -280,9 +280,10 @@ export default class NetworkModule {
 			this.resetPbrPolicyAddForm();
 			this.core.openModal('pbr-policy-add-modal');
 		});
-		document.getElementById('add-pbr-dns-policy-btn')?.addEventListener('click', () => {
+		document.getElementById('add-pbr-dns-policy-btn')?.addEventListener('click', async () => {
 			this.core.resetModal('pbr-dns-policy-add-modal');
 			this.resetPbrDnsPolicyAddForm();
+			await this.loadPbrDnsSourceDeviceOptions();
 			this.core.openModal('pbr-dns-policy-add-modal');
 		});
 		document.getElementById('add-pbr-include-btn')?.addEventListener('click', () => {
@@ -2292,6 +2293,7 @@ export default class NetworkModule {
 		if (!addModalOpen) {
 			this.core.resetModal('pbr-dns-policy-add-modal');
 			this.resetPbrDnsPolicyAddForm();
+			await this.loadPbrDnsSourceDeviceOptions();
 			this.core.openModal('pbr-dns-policy-add-modal');
 			return;
 		}
@@ -2324,6 +2326,40 @@ export default class NetworkModule {
 			await this.loadPBR();
 		} catch {
 			this.core.showToast('Failed to add DNS policy', 'error');
+		}
+	}
+
+	async loadPbrDnsSourceDeviceOptions() {
+		const select = document.getElementById('pbr-dns-src-addr');
+		if (!select) return;
+
+		let leases = [];
+		try {
+			const [status, result] = await this.core.ubusCall('luci-rpc', 'getDHCPLeases', {});
+			if (status === 0 && Array.isArray(result?.dhcp_leases)) {
+				leases = result.dhcp_leases;
+			}
+		} catch {}
+
+		const options = leases
+			.map(lease => ({
+				mac: String(lease.macaddr || '').trim().toLowerCase(),
+				ip: String(lease.ipaddr || '').trim(),
+				hostname: String(lease.hostname || '').trim() || 'Unknown'
+			}))
+			.filter(item => item.mac)
+			.sort((a, b) => a.hostname.localeCompare(b.hostname));
+
+		const prior = String(select.value || '').trim().toLowerCase();
+		select.innerHTML = '<option value="">Select device (MAC source)</option>';
+		for (const item of options) {
+			const option = document.createElement('option');
+			option.value = item.mac;
+			option.textContent = `${item.hostname} (${item.ip || item.mac})`;
+			select.appendChild(option);
+		}
+		if (prior && options.some(item => item.mac === prior)) {
+			select.value = prior;
 		}
 	}
 
