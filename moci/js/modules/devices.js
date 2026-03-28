@@ -1326,12 +1326,6 @@ rm -f "$tmp"
 					if (!section) throw new Error('Failed to create DNS hijack redirect');
 				}
 
-				// DNS hijack should not coexist with an active "block internet" parental rule.
-				const parentalSection = String(row?.parentalSection || '').trim();
-				if (parentalSection && Boolean(row?.parentalBlocked)) {
-					await this.core.uciSet('firewall', parentalSection, { enabled: '0' });
-				}
-
 				await this.core.uciSet('firewall', section, {
 					name,
 					src: 'lan',
