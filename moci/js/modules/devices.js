@@ -1329,7 +1329,6 @@ rm -f "$tmp"
 				await this.core.uciSet('firewall', section, {
 					name,
 					src: 'lan',
-					dest: 'wan',
 					src_mac: mac,
 					proto: 'tcp udp',
 					src_dport: '53',
@@ -1339,6 +1338,7 @@ rm -f "$tmp"
 					family: 'ipv4',
 					enabled: '1'
 				});
+				await this.core.uciDelete('firewall', section, 'dest').catch(() => {});
 			}
 			await this.core.uciCommit('firewall');
 			await this.exec('/bin/sh', ['-c', '/etc/init.d/firewall reload 2>/dev/null || /etc/init.d/firewall restart 2>/dev/null || true']);
