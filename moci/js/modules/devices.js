@@ -571,6 +571,8 @@ rm -f "$tmp"
 
 	handleRowClick(event) {
 		if (event.target?.closest?.('[data-action]')) return;
+		const selection = typeof window !== 'undefined' && window.getSelection ? window.getSelection() : null;
+		if (selection && !selection.isCollapsed && String(selection).trim().length > 0) return;
 		const rowEl = event.target?.closest?.('tr[data-device-mac]');
 		if (!rowEl) return;
 		const mac = this.normalizeMac(rowEl.getAttribute('data-device-mac'));
