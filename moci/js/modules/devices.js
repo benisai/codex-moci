@@ -956,10 +956,11 @@ rm -f "$tmp"
 		group.classList.remove('hidden');
 
 		const active = String(row?.dnsHijackDest || '').trim() === '1.1.1.3' && Boolean(row?.dnsHijackEnabled);
-		btn.textContent = 'DNS 1.1.1.3';
-		btn.classList.toggle('success', active);
+		btn.textContent = active ? 'REMOVE DNS 1.1.1.3' : 'ADD DNS 1.1.1.3';
+		btn.classList.toggle('danger', active);
 		btn.classList.toggle('warning', !active);
-		btn.title = active ? 'DNS hijack to 1.1.1.3 is active for this device' : 'Apply DNS hijack to 1.1.1.3 for this device';
+		btn.classList.toggle('success', false);
+		btn.title = active ? 'Remove DNS hijack to 1.1.1.3 for this device' : 'Apply DNS hijack to 1.1.1.3 for this device';
 	}
 
 	setParentalDnsBusy(isBusy) {
@@ -967,7 +968,7 @@ rm -f "$tmp"
 		if (!btn) return;
 		if (isBusy) {
 			btn.disabled = true;
-			btn.textContent = 'ADDING...';
+			btn.textContent = 'WORKING...';
 			btn.style.opacity = '0.6';
 			btn.style.cursor = 'wait';
 		} else {
@@ -1283,6 +1284,7 @@ rm -f "$tmp"
 		}
 
 		const row = this.rowsByMac.get(mac);
+		const currentlyActive = String(row?.dnsHijackDest || '').trim() === '1.1.1.3' && Boolean(row?.dnsHijackEnabled);
 		const hostname = String(row?.hostname || 'device')
 			.trim()
 			.replace(/\s+/g, '_')
@@ -1294,30 +1296,54 @@ rm -f "$tmp"
 		const existingSection = String(row?.dnsHijackSection || '').trim();
 
 		try {
-			let section = existingSection;
-			if (!section) {
-				const [, addResult] = await this.core.uciAdd('firewall', 'redirect');
-				section = String(addResult?.section || '').trim();
-				if (!section) throw new Error('Failed to create DNS hijack redirect');
-			}
+			if (currentlyActive) {
+				let removed = 0;
+				const [status, result] = await this.core.uciGet('firewall');
+				if (status !== 0 || !result?.values) throw new Error('Failed to load firewall config');
 
-			await this.core.uciSet('firewall', section, {
-				name,
-				src: 'lan',
-				dest: 'wan',
-				src_mac: mac,
-				proto: 'tcp udp',
-				src_dport: '53',
-				dest_ip: '1.1.1.3',
-				dest_port: '53',
-				target: 'DNAT',
-				family: 'ipv4',
-				enabled: '1'
-			});
+				for (const [section, cfg] of Object.entries(result.values)) {
+					if (String(cfg?.['.type'] || '') !== 'redirect') continue;
+					const ruleMac = this.normalizeMac(cfg?.src_mac || cfg?.src_mac_address || '');
+					if (!ruleMac || ruleMac !== mac) continue;
+					const srcDport = String(cfg?.src_dport || '').trim();
+					const destPort = String(cfg?.dest_port || '').trim();
+					const target = String(cfg?.target || '').trim().toUpperCase();
+					const destIp = String(cfg?.dest_ip || '').trim();
+					if (srcDport === '53' && destPort === '53' && target === 'DNAT' && destIp === '1.1.1.3') {
+						await this.core.uciDelete('firewall', section);
+						removed += 1;
+					}
+				}
+				if (removed === 0 && existingSection) {
+					await this.core.uciDelete('firewall', existingSection);
+					removed = 1;
+				}
+			} else {
+				let section = existingSection;
+				if (!section) {
+					const [, addResult] = await this.core.uciAdd('firewall', 'redirect');
+					section = String(addResult?.section || '').trim();
+					if (!section) throw new Error('Failed to create DNS hijack redirect');
+				}
+
+				await this.core.uciSet('firewall', section, {
+					name,
+					src: 'lan',
+					dest: 'wan',
+					src_mac: mac,
+					proto: 'tcp udp',
+					src_dport: '53',
+					dest_ip: '1.1.1.3',
+					dest_port: '53',
+					target: 'DNAT',
+					family: 'ipv4',
+					enabled: '1'
+				});
+			}
 			await this.core.uciCommit('firewall');
 			await this.exec('/bin/sh', ['-c', '/etc/init.d/firewall reload 2>/dev/null || /etc/init.d/firewall restart 2>/dev/null || true']);
 
-			this.core.showToast('Applied DNS hijack to 1.1.1.3', 'success');
+			this.core.showToast(currentlyActive ? 'Removed DNS hijack 1.1.1.3' : 'Applied DNS hijack to 1.1.1.3', 'success');
 			await this.loadDevices();
 			const refreshed = this.rowsByMac.get(mac);
 			if (refreshed) {
