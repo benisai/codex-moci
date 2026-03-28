@@ -16,6 +16,9 @@ export default class DevicesModule {
 		this.netifyFeatureEnabled = true;
 		this.parentalByMac = new Map();
 		this.parentalRulePrefix = 'moci_parental_';
+		this.pbrFeatureEnabled = false;
+		this.pbrInstalled = false;
+		this.pbrDnsByMac = new Map();
 		this.quarantineByMac = new Map();
 		this.quarantineRulePrefix = 'moci_quarantine_';
 		this.sortKey = 'online';
@@ -47,6 +50,7 @@ export default class DevicesModule {
 		});
 		document.getElementById('devices-pin-static')?.addEventListener('change', () => this.syncStaticIpField());
 		document.getElementById('devices-parental-toggle-btn')?.addEventListener('click', () => this.toggleParentalControl());
+		document.getElementById('devices-parental-dns-btn')?.addEventListener('click', () => this.applyParentalDnsProfile());
 		document.getElementById('devices-release-quarantine-btn')?.addEventListener('click', () => this.releaseQuarantineFromDialog());
 		document.getElementById('delete-devices-pin-btn')?.addEventListener('click', () => this.deleteFromDialog());
 
@@ -106,12 +110,13 @@ export default class DevicesModule {
 
 		try {
 			const leases = await this.fetchLeases();
-			const [pingReachableIps, usage, staticByMac, netifyEnabled, parentalByMac, quarantineByMac] = await Promise.all([
+			const [pingReachableIps, usage, staticByMac, netifyEnabled, parentalByMac, pbrState, quarantineByMac] = await Promise.all([
 				this.fetchPingReachableIps(leases),
 				this.fetchNlbwmonUsage(),
 				this.fetchStaticLeasesByMac(),
 				this.fetchNetifyFeatureFlag(),
 				this.fetchParentalRulesByMac(),
+				this.fetchPbrDnsPoliciesByMac(),
 				this.fetchQuarantineRulesByMac()
 			]);
 
@@ -119,9 +124,20 @@ export default class DevicesModule {
 			this.nlbwAvailable = Boolean(usage.available);
 			this.netifyFeatureEnabled = Boolean(netifyEnabled);
 			this.parentalByMac = parentalByMac;
+			this.pbrFeatureEnabled = Boolean(pbrState?.featureEnabled);
+			this.pbrInstalled = Boolean(pbrState?.installed);
+			this.pbrDnsByMac = pbrState?.byMac instanceof Map ? pbrState.byMac : new Map();
 			this.quarantineByMac = quarantineByMac;
 			this.renderSourceStatus();
-			const rows = this.mergeRows(leases, pingReachableIps, usage.totalsByClient, staticByMac, parentalByMac, quarantineByMac);
+			const rows = this.mergeRows(
+				leases,
+				pingReachableIps,
+				usage.totalsByClient,
+				staticByMac,
+				parentalByMac,
+				this.pbrDnsByMac,
+				quarantineByMac
+			);
 			if (fromAuto && this.expandedMac) return;
 			this.deviceRows = rows;
 			this.renderRows(this.sortRows(rows));
@@ -195,6 +211,47 @@ export default class DevicesModule {
 			}
 		} catch {}
 		return map;
+	}
+
+	async fetchPbrDnsPoliciesByMac() {
+		const byMac = new Map();
+		let featureEnabled = this.core.isFeatureEnabled ? this.core.isFeatureEnabled('pbr') : true;
+
+		try {
+			const [fs, fr] = await this.core.uciGet('moci', 'features');
+			if (fs === 0 && fr?.values) {
+				featureEnabled = String(fr.values.pbr ?? '1') === '1';
+			}
+		} catch {}
+
+		if (!featureEnabled) {
+			return { featureEnabled: false, installed: false, byMac };
+		}
+
+		try {
+			const [status, result] = await this.core.uciGet('pbr');
+			if (status !== 0 || !result?.values) {
+				return { featureEnabled: true, installed: false, byMac };
+			}
+
+			for (const [section, cfg] of Object.entries(result.values)) {
+				if (String(cfg?.['.type'] || '') !== 'dns_policy') continue;
+				const mac = this.normalizeMac(cfg?.src_addr || '');
+				if (!mac) continue;
+				const next = {
+					section,
+					name: String(cfg?.name || ''),
+					destDns: String(cfg?.dest_dns || ''),
+					enabled: String(cfg?.enabled ?? '1') !== '0'
+				};
+				const current = byMac.get(mac);
+				if (!current || (next.enabled && !current.enabled)) byMac.set(mac, next);
+			}
+
+			return { featureEnabled: true, installed: true, byMac };
+		} catch {
+			return { featureEnabled: true, installed: false, byMac };
+		}
 	}
 
 	async fetchQuarantineRulesByMac() {
@@ -401,7 +458,7 @@ rm -f "$tmp"
 		return { available: true, totalsByClient };
 	}
 
-	mergeRows(leases, pingReachableIps, totalsByClient, staticByMac, parentalByMac, quarantineByMac) {
+	mergeRows(leases, pingReachableIps, totalsByClient, staticByMac, parentalByMac, pbrDnsByMac, quarantineByMac) {
 		const merged = [];
 		const seenMacs = new Set();
 
@@ -412,6 +469,7 @@ rm -f "$tmp"
 			const usage = totalsByClient.get(key) || totalsByClient.get(ip) || null;
 			const pin = mac ? staticByMac.get(mac) : null;
 			const parental = mac ? parentalByMac.get(mac) : null;
+			const pbrDns = mac ? pbrDnsByMac.get(mac) : null;
 			const quarantine = mac ? quarantineByMac.get(mac) : null;
 			merged.push({
 				hostname: lease.hostname || pin?.name || 'Unknown',
@@ -426,6 +484,9 @@ rm -f "$tmp"
 				staticSection: pin?.section || '',
 				parentalSection: parental?.section || '',
 				parentalBlocked: Boolean(parental?.enabled),
+				pbrDnsSection: pbrDns?.section || '',
+				pbrDnsDest: pbrDns?.destDns || '',
+				pbrDnsEnabled: Boolean(pbrDns?.enabled),
 				quarantined: Boolean(quarantine?.enabled),
 				quarantineBase: quarantine?.base || ''
 			});
@@ -436,6 +497,7 @@ rm -f "$tmp"
 			if (!mac || seenMacs.has(mac)) continue;
 			const usage = totalsByClient.get(mac) || totalsByClient.get(pin?.ip || '') || null;
 			const parental = parentalByMac.get(mac) || null;
+			const pbrDns = pbrDnsByMac.get(mac) || null;
 			const quarantine = quarantineByMac.get(mac) || null;
 			merged.push({
 				hostname: pin?.name || 'Unknown',
@@ -450,6 +512,9 @@ rm -f "$tmp"
 				staticSection: pin?.section || '',
 				parentalSection: parental?.section || '',
 				parentalBlocked: Boolean(parental?.enabled),
+				pbrDnsSection: pbrDns?.section || '',
+				pbrDnsDest: pbrDns?.destDns || '',
+				pbrDnsEnabled: Boolean(pbrDns?.enabled),
 				quarantined: Boolean(quarantine?.enabled),
 				quarantineBase: quarantine?.base || ''
 			});
@@ -874,6 +939,7 @@ rm -f "$tmp"
 		document.getElementById('devices-quarantine-rule-base').value = row.quarantineBase || '';
 		this.syncStaticIpField();
 		this.syncParentalControlUi(row);
+		this.syncParentalDnsUi(row);
 		this.syncQuarantineActionUi(row);
 		this.core.openModal('devices-pin-modal');
 	}
@@ -887,6 +953,22 @@ rm -f "$tmp"
 		toggleBtn.textContent = blocked ? 'UNBLOCK INTERNET' : 'BLOCK INTERNET';
 		toggleBtn.classList.toggle('danger', !blocked);
 		toggleBtn.classList.toggle('success', blocked);
+	}
+
+	syncParentalDnsUi(row) {
+		const group = document.getElementById('devices-parental-dns-group');
+		const btn = document.getElementById('devices-parental-dns-btn');
+		if (!group || !btn) return;
+
+		const visible = this.pbrFeatureEnabled && this.pbrInstalled;
+		group.classList.toggle('hidden', !visible);
+		if (!visible) return;
+
+		const active = String(row?.pbrDnsDest || '').trim() === '1.1.1.3' && Boolean(row?.pbrDnsEnabled);
+		btn.textContent = 'DNS 1.1.1.3';
+		btn.classList.toggle('success', active);
+		btn.classList.toggle('warning', !active);
+		btn.title = active ? 'Family DNS profile active for this device' : 'Apply family DNS profile for this device';
 	}
 
 	syncQuarantineActionUi(row) {
@@ -1161,10 +1243,10 @@ rm -f "$tmp"
 			}
 
 			await this.core.uciCommit('firewall');
-			await this.exec('/bin/sh', [
-				'-c',
-				'/etc/init.d/firewall reload 2>/dev/null || /etc/init.d/firewall restart 2>/dev/null || true'
-			]);
+				await this.exec('/bin/sh', [
+					'-c',
+					'/etc/init.d/firewall reload 2>/dev/null || /etc/init.d/firewall restart 2>/dev/null || true'
+				]);
 
 				this.core.showToast(currentlyBlocked ? 'Internet unblocked for device' : 'Internet blocked for device', 'success');
 				await this.loadDevices();
@@ -1172,11 +1254,64 @@ rm -f "$tmp"
 				if (refreshed) {
 					document.getElementById('devices-parental-rule-section').value = refreshed.parentalSection || '';
 					this.syncParentalControlUi(refreshed);
+					this.syncParentalDnsUi(refreshed);
+					this.syncQuarantineActionUi(refreshed);
 				}
 				this.core.closeModal('devices-pin-modal');
 			} catch (err) {
-			console.error('Failed to toggle parental control:', err);
-			this.core.showToast('Failed to update parental control rule', 'error');
+				console.error('Failed to toggle parental control:', err);
+				this.core.showToast('Failed to update parental control rule', 'error');
+			}
+		}
+
+	async applyParentalDnsProfile() {
+		const mac = this.normalizeMac(document.getElementById('devices-pin-mac')?.value || '');
+		if (!mac) {
+			this.core.showToast('Invalid MAC address', 'error');
+			return;
+		}
+		if (!this.pbrFeatureEnabled || !this.pbrInstalled) {
+			this.core.showToast('PBR is not available', 'error');
+			return;
+		}
+
+		const row = this.rowsByMac.get(mac);
+		const hostname = String(row?.hostname || 'device')
+			.trim()
+			.replace(/\s+/g, '_')
+			.replace(/[^A-Za-z0-9_.-]/g, '')
+			.slice(0, 28);
+		const name = hostname && hostname.toLowerCase() !== 'unknown' ? `moci_dns13_${hostname}` : `moci_dns13_${mac.replace(/:/g, '')}`;
+		const existingSection = String(row?.pbrDnsSection || '').trim();
+
+		try {
+			let section = existingSection;
+			if (!section) {
+				const [, addResult] = await this.core.uciAdd('pbr', 'dns_policy');
+				section = String(addResult?.section || '').trim();
+				if (!section) throw new Error('Failed to create PBR DNS policy');
+			}
+
+			await this.core.uciSet('pbr', section, {
+				name,
+				src_addr: mac,
+				dest_dns: '1.1.1.3',
+				enabled: '1'
+			});
+			await this.core.uciCommit('pbr');
+			await this.exec('/bin/sh', ['-c', '/etc/init.d/pbr restart 2>/dev/null || true']);
+
+			this.core.showToast('Applied DNS 1.1.1.3 profile', 'success');
+			await this.loadDevices();
+			const refreshed = this.rowsByMac.get(mac);
+			if (refreshed) {
+				this.syncParentalControlUi(refreshed);
+				this.syncParentalDnsUi(refreshed);
+				this.syncQuarantineActionUi(refreshed);
+			}
+		} catch (err) {
+			console.error('Failed to apply PBR DNS profile:', err);
+			this.core.showToast('Failed to apply DNS 1.1.1.3 profile', 'error');
 		}
 	}
 
