@@ -107,7 +107,7 @@ export default class DevicesModule {
 		try {
 			const [leases, arpMacs, usage, staticByMac, netifyEnabled, parentalByMac, quarantineByMac] = await Promise.all([
 				this.fetchLeases(),
-				this.fetchArpMacs(),
+				this.fetchNeighborMacs(),
 				this.fetchNlbwmonUsage(),
 				this.fetchStaticLeasesByMac(),
 				this.fetchNetifyFeatureFlag(),
@@ -246,25 +246,51 @@ export default class DevicesModule {
 		return /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(first) ? first : '';
 	}
 
-	async fetchArpMacs() {
+	async fetchNeighborMacs() {
+		const online = new Set();
+
+		// IPv4 ARP table
 		try {
 			const [status, result] = await this.core.ubusCall('file', 'read', { path: '/proc/net/arp' });
-			if (status !== 0 || !result?.data) return new Set();
-			return this.parseArpMacs(result.data);
-		} catch {
-			return new Set();
-		}
+			if (status === 0 && result?.data) {
+				for (const mac of this.parseArpMacs(result.data)) online.add(mac);
+			}
+		} catch {}
+
+		// IPv4/IPv6 neighbor table
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', 'ip neigh 2>/dev/null || true']
+			});
+			if (status === 0 && result?.stdout) {
+				for (const mac of this.parseIpNeighMacs(result.stdout)) online.add(mac);
+			}
+		} catch {}
+
+		return online;
 	}
 
 	parseArpMacs(text) {
-		const online = new Set();
+		const macs = new Set();
 		for (const line of text.split('\n').slice(1)) {
 			const parts = line.trim().split(/\s+/);
 			if (parts.length < 4) continue;
 			const mac = (parts[3] || '').toLowerCase();
-			if (mac && mac !== '00:00:00:00:00:00') online.add(mac);
+			if (mac && mac !== '00:00:00:00:00:00') macs.add(mac);
 		}
-		return online;
+		return macs;
+	}
+
+	parseIpNeighMacs(text) {
+		const macs = new Set();
+		for (const line of String(text || '').split('\n')) {
+			const m = line.match(/\blladdr\s+([0-9a-f]{2}(?::[0-9a-f]{2}){5})\b/i);
+			if (!m) continue;
+			const mac = String(m[1] || '').toLowerCase();
+			if (mac && mac !== '00:00:00:00:00:00') macs.add(mac);
+		}
+		return macs;
 	}
 
 	async fetchNlbwmonUsage() {
