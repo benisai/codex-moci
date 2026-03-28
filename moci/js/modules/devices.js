@@ -312,7 +312,7 @@ tmp="/tmp/.moci_ping_online.$$"
 : > "$tmp"
 i=0
 for ip in ${ipArgs}; do
-	(ping -c 1 -W 1 "$ip" >/dev/null 2>&1 && echo "$ip" >> "$tmp") &
+	(ping -c 2 -W 1 "$ip" >/dev/null 2>&1 && echo "$ip" >> "$tmp") &
 	i=$((i+1))
 	if [ $((i % 8)) -eq 0 ]; then
 		wait
