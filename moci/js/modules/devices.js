@@ -109,8 +109,9 @@ export default class DevicesModule {
 
 		try {
 			const leases = await this.fetchLeases();
-			const [pingReachableIps, usage, staticByMac, netifyEnabled, parentalByMac, dnsHijackByMac, quarantineByMac] = await Promise.all([
+			const [pingReachableIps, conntrackIps, usage, staticByMac, netifyEnabled, parentalByMac, dnsHijackByMac, quarantineByMac] = await Promise.all([
 				this.fetchPingReachableIps(leases),
+				this.fetchConntrackIps(),
 				this.fetchNlbwmonUsage(),
 				this.fetchStaticLeasesByMac(),
 				this.fetchNetifyFeatureFlag(),
@@ -129,6 +130,7 @@ export default class DevicesModule {
 			const rows = this.mergeRows(
 				leases,
 				pingReachableIps,
+				conntrackIps,
 				usage.totalsByClient,
 				staticByMac,
 				parentalByMac,
@@ -377,6 +379,29 @@ rm -f "$tmp"
 		return reachable;
 	}
 
+	async fetchConntrackIps() {
+		const ips = new Set();
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: [
+					'-c',
+					'if command -v conntrack >/dev/null 2>&1; then conntrack -L 2>/dev/null | head -n 2000; ' +
+						'elif [ -r /proc/net/nf_conntrack ]; then head -n 2000 /proc/net/nf_conntrack 2>/dev/null; ' +
+						'elif [ -r /proc/net/ip_conntrack ]; then head -n 2000 /proc/net/ip_conntrack 2>/dev/null; fi'
+				]
+			});
+			if (status !== 0 || !result?.stdout) return ips;
+
+			const text = String(result.stdout || '');
+			for (const match of text.matchAll(/\b(?:src|dst)=([0-9]{1,3}(?:\.[0-9]{1,3}){3})\b/g)) {
+				const ip = String(match?.[1] || '').trim();
+				if (this.isValidIpv4(ip)) ips.add(ip);
+			}
+		} catch {}
+		return ips;
+	}
+
 	async fetchNlbwmonUsage() {
 		const result = {
 			available: false,
@@ -446,7 +471,7 @@ rm -f "$tmp"
 		return { available: true, totalsByClient };
 	}
 
-	mergeRows(leases, pingReachableIps, totalsByClient, staticByMac, parentalByMac, dnsHijackByMac, quarantineByMac) {
+	mergeRows(leases, pingReachableIps, conntrackIps, totalsByClient, staticByMac, parentalByMac, dnsHijackByMac, quarantineByMac) {
 		const merged = [];
 		const seenMacs = new Set();
 
@@ -467,7 +492,7 @@ rm -f "$tmp"
 				tx: usage ? usage.tx : null,
 				rx: usage ? usage.rx : null,
 				nlbwTopApps: this.extractTopNlbwApps(usage),
-				online: ip ? pingReachableIps.has(ip) : false,
+				online: ip ? pingReachableIps.has(ip) || conntrackIps.has(ip) : false,
 				pinned: Boolean(pin?.ip),
 				staticSection: pin?.section || '',
 				parentalSection: parental?.section || '',
@@ -495,7 +520,9 @@ rm -f "$tmp"
 				tx: usage ? usage.tx : null,
 				rx: usage ? usage.rx : null,
 				nlbwTopApps: this.extractTopNlbwApps(usage),
-				online: (usage?.ip ? pingReachableIps.has(usage.ip) : false) || (pin?.ip ? pingReachableIps.has(pin.ip) : false),
+				online:
+					(usage?.ip ? pingReachableIps.has(usage.ip) || conntrackIps.has(usage.ip) : false) ||
+					(pin?.ip ? pingReachableIps.has(pin.ip) || conntrackIps.has(pin.ip) : false),
 				pinned: Boolean(pin?.ip),
 				staticSection: pin?.section || '',
 				parentalSection: parental?.section || '',
