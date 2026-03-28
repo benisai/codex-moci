@@ -18,7 +18,7 @@ export default class NetworkModule {
 					firewall: () => this.loadFirewall(),
 					dhcp: () => this.loadDHCP(),
 					dns: () => this.loadDNS(),
-					adblock: () => this.loadAdblock(),
+					'adblock-fast': () => this.loadAdblock(),
 					pbr: () => this.loadPBR(),
 					ddns: () => this.loadDDNS(),
 					qos: () => this.loadQoS(),
@@ -32,7 +32,8 @@ export default class NetworkModule {
 				this.setupDiagnostics();
 			}
 
-			const tab = subPaths[0] || 'interfaces';
+			const tabRaw = subPaths[0] || 'interfaces';
+			const tab = tabRaw === 'adblock' ? 'adblock-fast' : tabRaw;
 			this.subTabs.showSubTab(tab);
 		});
 	}
@@ -1602,7 +1603,7 @@ export default class NetworkModule {
 	}
 
 	async loadAdblock() {
-		await this.core.loadResource('adblock-targets-table', 4, 'adblock', async () => {
+		await this.core.loadResource('adblock-targets-table', 4, 'adblock_fast', async () => {
 			this.syncAdblockSettingsPanel();
 			const tbody = document.querySelector('#adblock-targets-table tbody');
 			if (!tbody) return;

@@ -107,12 +107,18 @@ export class OpenWrtCore {
 		try {
 			const [status, result] = await this.uciGet('moci', 'features');
 
-			if (status === 0 && result && result.values) {
-				// Merge router config over defaults so newly added features remain visible.
-				this.features = { ...defaults, ...result.values };
-			} else {
-				this.features = defaults;
-			}
+				if (status === 0 && result && result.values) {
+					// Merge router config over defaults so newly added features remain visible.
+					this.features = { ...defaults, ...result.values };
+					if (
+						typeof this.features.adblock_fast === 'undefined' &&
+						typeof this.features.adblock !== 'undefined'
+					) {
+						this.features.adblock_fast = this.features.adblock;
+					}
+				} else {
+					this.features = defaults;
+				}
 		} catch (err) {
 			console.error('Feature config not found, using defaults:', err);
 			this.features = defaults;
@@ -133,7 +139,7 @@ export class OpenWrtCore {
 			firewall: '1',
 			dhcp: '1',
 			dns: '1',
-			adblock: '1',
+				adblock_fast: '1',
 			pbr: '1',
 			wireguard: '1',
 			qos: '1',
@@ -152,6 +158,10 @@ export class OpenWrtCore {
 	}
 
 	isFeatureEnabled(feature) {
+		if (feature === 'adblock_fast') {
+			const value = this.features.adblock_fast ?? this.features.adblock;
+			return value === '1';
+		}
 		return this.features[feature] === '1';
 	}
 
@@ -197,7 +207,7 @@ export class OpenWrtCore {
 		const moduleFeatures = {
 			dashboard: ['dashboard'],
 			devices: ['devices'],
-			network: ['network', 'wireless', 'firewall', 'dhcp', 'dns', 'adblock', 'pbr', 'diagnostics', 'quarantine'],
+				network: ['network', 'wireless', 'firewall', 'dhcp', 'dns', 'adblock_fast', 'pbr', 'diagnostics', 'quarantine'],
 			monitoring: ['monitoring'],
 			system: ['system', 'backup', 'packages', 'services', 'ssh_keys', 'storage', 'leds', 'firmware'],
 			netify: ['netify'],
