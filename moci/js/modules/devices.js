@@ -105,9 +105,10 @@ export default class DevicesModule {
 		if (!tbody) return;
 
 		try {
-			const [leases, arpMacs, usage, staticByMac, netifyEnabled, parentalByMac, quarantineByMac] = await Promise.all([
-				this.fetchLeases(),
+			const leases = await this.fetchLeases();
+			const [arpMacs, pingReachableIps, usage, staticByMac, netifyEnabled, parentalByMac, quarantineByMac] = await Promise.all([
 				this.fetchNeighborMacs(),
+				this.fetchPingReachableIps(leases),
 				this.fetchNlbwmonUsage(),
 				this.fetchStaticLeasesByMac(),
 				this.fetchNetifyFeatureFlag(),
@@ -121,7 +122,7 @@ export default class DevicesModule {
 			this.parentalByMac = parentalByMac;
 			this.quarantineByMac = quarantineByMac;
 			this.renderSourceStatus();
-			const rows = this.mergeRows(leases, arpMacs, usage.totalsByClient, staticByMac, parentalByMac, quarantineByMac);
+			const rows = this.mergeRows(leases, arpMacs, pingReachableIps, usage.totalsByClient, staticByMac, parentalByMac, quarantineByMac);
 			if (fromAuto && this.expandedMac) return;
 			this.deviceRows = rows;
 			this.renderRows(this.sortRows(rows));
@@ -293,6 +294,45 @@ export default class DevicesModule {
 		return macs;
 	}
 
+	async fetchPingReachableIps(leases) {
+		const reachable = new Set();
+		const ips = Array.from(
+			new Set(
+				(Array.isArray(leases) ? leases : [])
+					.map(lease => String(lease?.ipaddr || '').trim())
+					.filter(ip => this.isValidIpv4(ip))
+			)
+		).slice(0, 64);
+
+		if (ips.length === 0) return reachable;
+
+		try {
+			const ipArgs = ips.map(ip => this.shellQuote(ip)).join(' ');
+			const cmd = `
+tmp="/tmp/.moci_ping_online.$$"
+: > "$tmp"
+i=0
+for ip in ${ipArgs}; do
+	(ping -c 1 -W 1 "$ip" >/dev/null 2>&1 && echo "$ip" >> "$tmp") &
+	i=$((i+1))
+	if [ $((i % 8)) -eq 0 ]; then
+		wait
+	fi
+done
+wait
+cat "$tmp" 2>/dev/null || true
+rm -f "$tmp"
+`;
+			const result = await this.exec('/bin/sh', ['-c', cmd], { timeout: 20000 });
+			for (const line of String(result?.stdout || '').split('\n')) {
+				const ip = String(line || '').trim();
+				if (this.isValidIpv4(ip)) reachable.add(ip);
+			}
+		} catch {}
+
+		return reachable;
+	}
+
 	async fetchNlbwmonUsage() {
 		const result = {
 			available: false,
@@ -362,7 +402,7 @@ export default class DevicesModule {
 		return { available: true, totalsByClient };
 	}
 
-	mergeRows(leases, arpMacs, totalsByClient, staticByMac, parentalByMac, quarantineByMac) {
+	mergeRows(leases, arpMacs, pingReachableIps, totalsByClient, staticByMac, parentalByMac, quarantineByMac) {
 		const merged = [];
 		const seenMacs = new Set();
 
@@ -382,7 +422,7 @@ export default class DevicesModule {
 				tx: usage ? usage.tx : null,
 				rx: usage ? usage.rx : null,
 				nlbwTopApps: this.extractTopNlbwApps(usage),
-				online: mac ? arpMacs.has(mac) : false,
+				online: (mac ? arpMacs.has(mac) : false) || (ip ? pingReachableIps.has(ip) : false),
 				pinned: Boolean(pin?.ip),
 				staticSection: pin?.section || '',
 				parentalSection: parental?.section || '',
@@ -406,7 +446,7 @@ export default class DevicesModule {
 				tx: usage ? usage.tx : null,
 				rx: usage ? usage.rx : null,
 				nlbwTopApps: this.extractTopNlbwApps(usage),
-				online: arpMacs.has(mac),
+				online: arpMacs.has(mac) || (usage?.ip ? pingReachableIps.has(usage.ip) : false) || (pin?.ip ? pingReachableIps.has(pin.ip) : false),
 				pinned: Boolean(pin?.ip),
 				staticSection: pin?.section || '',
 				parentalSection: parental?.section || '',
