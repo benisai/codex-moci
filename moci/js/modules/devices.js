@@ -16,9 +16,8 @@ export default class DevicesModule {
 		this.netifyFeatureEnabled = true;
 		this.parentalByMac = new Map();
 		this.parentalRulePrefix = 'moci_parental_';
-		this.pbrFeatureEnabled = false;
-		this.pbrInstalled = false;
-		this.pbrDnsByMac = new Map();
+		this.dnsHijackByMac = new Map();
+		this.dnsHijackRulePrefix = 'moci_dns_hijack_';
 		this.quarantineByMac = new Map();
 		this.quarantineRulePrefix = 'moci_quarantine_';
 		this.sortKey = 'online';
@@ -110,13 +109,13 @@ export default class DevicesModule {
 
 		try {
 			const leases = await this.fetchLeases();
-			const [pingReachableIps, usage, staticByMac, netifyEnabled, parentalByMac, pbrState, quarantineByMac] = await Promise.all([
+			const [pingReachableIps, usage, staticByMac, netifyEnabled, parentalByMac, dnsHijackByMac, quarantineByMac] = await Promise.all([
 				this.fetchPingReachableIps(leases),
 				this.fetchNlbwmonUsage(),
 				this.fetchStaticLeasesByMac(),
 				this.fetchNetifyFeatureFlag(),
 				this.fetchParentalRulesByMac(),
-				this.fetchPbrDnsPoliciesByMac(),
+				this.fetchDnsHijackRulesByMac(),
 				this.fetchQuarantineRulesByMac()
 			]);
 
@@ -124,9 +123,7 @@ export default class DevicesModule {
 			this.nlbwAvailable = Boolean(usage.available);
 			this.netifyFeatureEnabled = Boolean(netifyEnabled);
 			this.parentalByMac = parentalByMac;
-			this.pbrFeatureEnabled = Boolean(pbrState?.featureEnabled);
-			this.pbrInstalled = Boolean(pbrState?.installed);
-			this.pbrDnsByMac = pbrState?.byMac instanceof Map ? pbrState.byMac : new Map();
+			this.dnsHijackByMac = dnsHijackByMac instanceof Map ? dnsHijackByMac : new Map();
 			this.quarantineByMac = quarantineByMac;
 			this.renderSourceStatus();
 			const rows = this.mergeRows(
@@ -135,7 +132,7 @@ export default class DevicesModule {
 				usage.totalsByClient,
 				staticByMac,
 				parentalByMac,
-				this.pbrDnsByMac,
+				this.dnsHijackByMac,
 				quarantineByMac
 			);
 			if (fromAuto && this.expandedMac) return;
@@ -213,45 +210,36 @@ export default class DevicesModule {
 		return map;
 	}
 
-	async fetchPbrDnsPoliciesByMac() {
+	async fetchDnsHijackRulesByMac() {
 		const byMac = new Map();
-		let featureEnabled = this.core.isFeatureEnabled ? this.core.isFeatureEnabled('pbr') : true;
-
 		try {
-			const [fs, fr] = await this.core.uciGet('moci', 'features');
-			if (fs === 0 && fr?.values) {
-				featureEnabled = String(fr.values.pbr ?? '1') === '1';
-			}
-		} catch {}
-
-		if (!featureEnabled) {
-			return { featureEnabled: false, installed: false, byMac };
-		}
-
-		try {
-			const [status, result] = await this.core.uciGet('pbr');
-			if (status !== 0 || !result?.values) {
-				return { featureEnabled: true, installed: false, byMac };
-			}
+			const [status, result] = await this.core.uciGet('firewall');
+			if (status !== 0 || !result?.values) return byMac;
 
 			for (const [section, cfg] of Object.entries(result.values)) {
-				if (String(cfg?.['.type'] || '') !== 'dns_policy') continue;
-				const mac = this.normalizeMac(cfg?.src_addr || '');
+				if (String(cfg?.['.type'] || '') !== 'redirect') continue;
+				const mac = this.normalizeMac(cfg?.src_mac || cfg?.src_mac_address || '');
 				if (!mac) continue;
+
+				const srcDport = String(cfg?.src_dport || '').trim();
+				const destPort = String(cfg?.dest_port || '').trim();
+				const target = String(cfg?.target || '').trim().toUpperCase();
+				const destDns = String(cfg?.dest_ip || '').trim();
+				const enabled = String(cfg?.enabled ?? '1') !== '0';
+				const matchesDns = srcDport === '53' && destPort === '53' && target === 'DNAT' && Boolean(destDns);
+				if (!matchesDns) continue;
+
 				const next = {
 					section,
 					name: String(cfg?.name || ''),
-					destDns: String(cfg?.dest_dns || ''),
-					enabled: String(cfg?.enabled ?? '1') !== '0'
+					destDns,
+					enabled
 				};
 				const current = byMac.get(mac);
 				if (!current || (next.enabled && !current.enabled)) byMac.set(mac, next);
 			}
-
-			return { featureEnabled: true, installed: true, byMac };
-		} catch {
-			return { featureEnabled: true, installed: false, byMac };
-		}
+		} catch {}
+		return byMac;
 	}
 
 	async fetchQuarantineRulesByMac() {
@@ -458,7 +446,7 @@ rm -f "$tmp"
 		return { available: true, totalsByClient };
 	}
 
-	mergeRows(leases, pingReachableIps, totalsByClient, staticByMac, parentalByMac, pbrDnsByMac, quarantineByMac) {
+	mergeRows(leases, pingReachableIps, totalsByClient, staticByMac, parentalByMac, dnsHijackByMac, quarantineByMac) {
 		const merged = [];
 		const seenMacs = new Set();
 
@@ -469,7 +457,7 @@ rm -f "$tmp"
 			const usage = totalsByClient.get(key) || totalsByClient.get(ip) || null;
 			const pin = mac ? staticByMac.get(mac) : null;
 			const parental = mac ? parentalByMac.get(mac) : null;
-			const pbrDns = mac ? pbrDnsByMac.get(mac) : null;
+			const dnsHijack = mac ? dnsHijackByMac.get(mac) : null;
 			const quarantine = mac ? quarantineByMac.get(mac) : null;
 			merged.push({
 				hostname: lease.hostname || pin?.name || 'Unknown',
@@ -484,9 +472,9 @@ rm -f "$tmp"
 				staticSection: pin?.section || '',
 				parentalSection: parental?.section || '',
 				parentalBlocked: Boolean(parental?.enabled),
-				pbrDnsSection: pbrDns?.section || '',
-				pbrDnsDest: pbrDns?.destDns || '',
-				pbrDnsEnabled: Boolean(pbrDns?.enabled),
+				dnsHijackSection: dnsHijack?.section || '',
+				dnsHijackDest: dnsHijack?.destDns || '',
+				dnsHijackEnabled: Boolean(dnsHijack?.enabled),
 				quarantined: Boolean(quarantine?.enabled),
 				quarantineBase: quarantine?.base || ''
 			});
@@ -497,7 +485,7 @@ rm -f "$tmp"
 			if (!mac || seenMacs.has(mac)) continue;
 			const usage = totalsByClient.get(mac) || totalsByClient.get(pin?.ip || '') || null;
 			const parental = parentalByMac.get(mac) || null;
-			const pbrDns = pbrDnsByMac.get(mac) || null;
+			const dnsHijack = dnsHijackByMac.get(mac) || null;
 			const quarantine = quarantineByMac.get(mac) || null;
 			merged.push({
 				hostname: pin?.name || 'Unknown',
@@ -512,9 +500,9 @@ rm -f "$tmp"
 				staticSection: pin?.section || '',
 				parentalSection: parental?.section || '',
 				parentalBlocked: Boolean(parental?.enabled),
-				pbrDnsSection: pbrDns?.section || '',
-				pbrDnsDest: pbrDns?.destDns || '',
-				pbrDnsEnabled: Boolean(pbrDns?.enabled),
+				dnsHijackSection: dnsHijack?.section || '',
+				dnsHijackDest: dnsHijack?.destDns || '',
+				dnsHijackEnabled: Boolean(dnsHijack?.enabled),
 				quarantined: Boolean(quarantine?.enabled),
 				quarantineBase: quarantine?.base || ''
 			});
@@ -670,9 +658,9 @@ rm -f "$tmp"
 	renderNetifyDetail(mac) {
 		const row = this.rowsByMac.get(mac);
 		const nlbwApps = Array.isArray(row?.nlbwTopApps) ? row.nlbwTopApps : [];
-		const hasPbrDns13 = String(row?.pbrDnsDest || '').trim() === '1.1.1.3' && Boolean(row?.pbrDnsEnabled);
-		const pbrDnsNotice = hasPbrDns13
-			? `<div style="margin-bottom:10px; font-size:11px; color:var(--steel-light); font-family:var(--font-mono)">Device Using PBR DNS 1.1.1.3</div>`
+		const hasDnsHijack13 = String(row?.dnsHijackDest || '').trim() === '1.1.1.3' && Boolean(row?.dnsHijackEnabled);
+		const dnsHijackNotice = hasDnsHijack13
+			? `<div style="margin-bottom:10px; font-size:11px; color:var(--steel-light); font-family:var(--font-mono)">Device Using DNS Hijack 1.1.1.3</div>`
 			: '';
 		const nlbwRows =
 			nlbwApps.length > 0
@@ -691,7 +679,7 @@ rm -f "$tmp"
 				<span>NLBW UPLOAD: ${this.core.escapeHtml(row?.tx == null ? 'N/A' : this.core.formatBytes(row.tx || 0))}</span>
 				<span>NLBW DOWNLOAD: ${this.core.escapeHtml(row?.rx == null ? 'N/A' : this.core.formatBytes(row.rx || 0))}</span>
 			</div>
-			${pbrDnsNotice}
+			${dnsHijackNotice}
 			<div style="margin-bottom:10px; font-size:11px; color:var(--steel-muted); font-family:var(--font-mono)">NLBW TOP APPLICATIONS (10)</div>
 			<table class="data-table" style="margin-top:0">
 				<thead>
@@ -965,15 +953,13 @@ rm -f "$tmp"
 		const btn = document.getElementById('devices-parental-dns-btn');
 		if (!group || !btn) return;
 
-		const visible = this.pbrFeatureEnabled && this.pbrInstalled;
-		group.classList.toggle('hidden', !visible);
-		if (!visible) return;
+		group.classList.remove('hidden');
 
-		const active = String(row?.pbrDnsDest || '').trim() === '1.1.1.3' && Boolean(row?.pbrDnsEnabled);
+		const active = String(row?.dnsHijackDest || '').trim() === '1.1.1.3' && Boolean(row?.dnsHijackEnabled);
 		btn.textContent = 'DNS 1.1.1.3';
 		btn.classList.toggle('success', active);
 		btn.classList.toggle('warning', !active);
-		btn.title = active ? 'Family DNS profile active for this device' : 'Apply family DNS profile for this device';
+		btn.title = active ? 'DNS hijack to 1.1.1.3 is active for this device' : 'Apply DNS hijack to 1.1.1.3 for this device';
 	}
 
 	setParentalDnsBusy(isBusy) {
@@ -1117,7 +1103,8 @@ rm -f "$tmp"
 			const [fwStatus, fwResult] = await this.core.uciGet('firewall');
 			if (fwStatus === 0 && fwResult?.values) {
 				for (const [section, cfg] of Object.entries(fwResult.values)) {
-					if (String(cfg?.['.type'] || '') !== 'rule') continue;
+					const type = String(cfg?.['.type'] || '');
+					if (type !== 'rule' && type !== 'redirect') continue;
 					const candidateMac = this.normalizeMac(cfg?.src_mac || cfg?.src_mac_address || '');
 					if (candidateMac && candidateMac === normalizedMac) {
 						await this.core.uciDelete('firewall', section);
@@ -1294,11 +1281,6 @@ rm -f "$tmp"
 			this.setParentalDnsBusy(false);
 			return;
 		}
-		if (!this.pbrFeatureEnabled || !this.pbrInstalled) {
-			this.core.showToast('PBR is not available', 'error');
-			this.setParentalDnsBusy(false);
-			return;
-		}
 
 		const row = this.rowsByMac.get(mac);
 		const hostname = String(row?.hostname || 'device')
@@ -1306,27 +1288,36 @@ rm -f "$tmp"
 			.replace(/\s+/g, '_')
 			.replace(/[^A-Za-z0-9_.-]/g, '')
 			.slice(0, 28);
-		const name = hostname && hostname.toLowerCase() !== 'unknown' ? `moci_dns13_${hostname}` : `moci_dns13_${mac.replace(/:/g, '')}`;
-		const existingSection = String(row?.pbrDnsSection || '').trim();
+		const fallback = mac.replace(/:/g, '');
+		const nameSuffix = hostname && hostname.toLowerCase() !== 'unknown' ? hostname : fallback;
+		const name = `${this.dnsHijackRulePrefix}${nameSuffix}`;
+		const existingSection = String(row?.dnsHijackSection || '').trim();
 
 		try {
 			let section = existingSection;
 			if (!section) {
-				const [, addResult] = await this.core.uciAdd('pbr', 'dns_policy');
+				const [, addResult] = await this.core.uciAdd('firewall', 'redirect');
 				section = String(addResult?.section || '').trim();
-				if (!section) throw new Error('Failed to create PBR DNS policy');
+				if (!section) throw new Error('Failed to create DNS hijack redirect');
 			}
 
-			await this.core.uciSet('pbr', section, {
+			await this.core.uciSet('firewall', section, {
 				name,
-				src_addr: mac,
-				dest_dns: '1.1.1.3',
+				src: 'lan',
+				dest: 'wan',
+				src_mac: mac,
+				proto: 'tcp udp',
+				src_dport: '53',
+				dest_ip: '1.1.1.3',
+				dest_port: '53',
+				target: 'DNAT',
+				family: 'ipv4',
 				enabled: '1'
 			});
-			await this.core.uciCommit('pbr');
-			await this.exec('/bin/sh', ['-c', '/etc/init.d/pbr restart 2>/dev/null || true']);
+			await this.core.uciCommit('firewall');
+			await this.exec('/bin/sh', ['-c', '/etc/init.d/firewall reload 2>/dev/null || /etc/init.d/firewall restart 2>/dev/null || true']);
 
-			this.core.showToast('Applied DNS 1.1.1.3 profile', 'success');
+			this.core.showToast('Applied DNS hijack to 1.1.1.3', 'success');
 			await this.loadDevices();
 			const refreshed = this.rowsByMac.get(mac);
 			if (refreshed) {
@@ -1336,8 +1327,8 @@ rm -f "$tmp"
 			}
 			this.core.closeModal('devices-pin-modal');
 		} catch (err) {
-			console.error('Failed to apply PBR DNS profile:', err);
-			this.core.showToast('Failed to apply DNS 1.1.1.3 profile', 'error');
+			console.error('Failed to apply DNS hijack profile:', err);
+			this.core.showToast('Failed to apply DNS hijack profile', 'error');
 			this.setParentalDnsBusy(false);
 		}
 	}
