@@ -1336,6 +1336,7 @@ rm -f "$tmp"
 					dest_port: '53',
 					target: 'DNAT',
 					family: 'ipv4',
+					reflection: '0',
 					enabled: '1'
 				});
 				await this.core.uciDelete('firewall', section, 'dest').catch(() => {});
