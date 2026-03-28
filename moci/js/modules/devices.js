@@ -670,6 +670,10 @@ rm -f "$tmp"
 	renderNetifyDetail(mac) {
 		const row = this.rowsByMac.get(mac);
 		const nlbwApps = Array.isArray(row?.nlbwTopApps) ? row.nlbwTopApps : [];
+		const hasPbrDns13 = String(row?.pbrDnsDest || '').trim() === '1.1.1.3' && Boolean(row?.pbrDnsEnabled);
+		const pbrDnsNotice = hasPbrDns13
+			? `<div style="margin-bottom:10px; font-size:11px; color:var(--steel-light); font-family:var(--font-mono)">Device Using PBR DNS 1.1.1.3</div>`
+			: '';
 		const nlbwRows =
 			nlbwApps.length > 0
 				? nlbwApps
@@ -687,6 +691,7 @@ rm -f "$tmp"
 				<span>NLBW UPLOAD: ${this.core.escapeHtml(row?.tx == null ? 'N/A' : this.core.formatBytes(row.tx || 0))}</span>
 				<span>NLBW DOWNLOAD: ${this.core.escapeHtml(row?.rx == null ? 'N/A' : this.core.formatBytes(row.rx || 0))}</span>
 			</div>
+			${pbrDnsNotice}
 			<div style="margin-bottom:10px; font-size:11px; color:var(--steel-muted); font-family:var(--font-mono)">NLBW TOP APPLICATIONS (10)</div>
 			<table class="data-table" style="margin-top:0">
 				<thead>
