@@ -190,7 +190,9 @@
 								<div class="form-group" style="margin-bottom: 12px">
 									<div style="display: flex; gap: 8px; align-items: center">
 										<input type="text" id="system-log-search" class="form-input" placeholder="Search system logs..." />
-										<button class="action-btn-sm" id="system-log-jump-bottom" type="button" title="Jump to latest logs">↓ BOTTOM</button>
+										<button class="action-btn-sm" id="system-log-jump-bottom" type="button" title="Jump to latest logs" aria-label="Jump to latest logs">
+											<span style="font-size: 14px; line-height: 1">▼</span>
+										</button>
 									</div>
 								</div>
 								<div class="log-viewer" id="system-log" style="max-height: 460px; overflow-y: auto">
