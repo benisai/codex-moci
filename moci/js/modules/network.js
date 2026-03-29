@@ -1748,7 +1748,20 @@ export default class NetworkModule {
 						params: ['running']
 					});
 					const running = status === 0 && Number(result?.code ?? 1) === 0;
-					serviceStatusEl.innerHTML = this.core.renderBadge(running ? 'success' : 'error', running ? 'RUNNING' : 'STOPPED');
+					if (running) {
+						serviceStatusEl.innerHTML = this.core.renderBadge('success', 'RUNNING');
+					} else {
+						// Classic adblock is usually on-demand/oneshot, so "running" is often false.
+						const [enabledStatus, enabledResult] = await this.core.ubusCall('file', 'exec', {
+							command: '/etc/init.d/adblock',
+							params: ['enabled']
+						});
+						const bootEnabled = enabledStatus === 0 && Number(enabledResult?.code ?? 1) === 0;
+						serviceStatusEl.innerHTML = this.core.renderBadge(
+							bootEnabled ? 'success' : 'error',
+							bootEnabled ? 'ENABLED' : 'DISABLED'
+						);
+					}
 				} catch {
 					serviceStatusEl.innerHTML = this.core.renderBadge('error', 'UNKNOWN');
 				}
