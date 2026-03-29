@@ -188,7 +188,10 @@
 							<div class="section-title">SYSTEM LOG</div>
 							<div class="stat-card">
 								<div class="form-group" style="margin-bottom: 12px">
-									<input type="text" id="system-log-search" class="form-input" placeholder="Search system logs..." />
+									<div style="display: flex; gap: 8px; align-items: center">
+										<input type="text" id="system-log-search" class="form-input" placeholder="Search system logs..." />
+										<button class="action-btn-sm" id="system-log-jump-bottom" type="button" title="Jump to latest logs">↓ BOTTOM</button>
+									</div>
 								</div>
 								<div class="log-viewer" id="system-log" style="max-height: 460px; overflow-y: auto">
 									<div class="log-line">Loading system logs...</div>

@@ -23,6 +23,7 @@ export default class DashboardModule {
 		this.systemLogLines = [];
 		this.systemLogQuery = '';
 		this.systemLogSearchBound = false;
+		this.systemLogJumpBottomBound = false;
 
 		this.core.registerRoute('/dashboard', () => this.load());
 	}
@@ -516,6 +517,20 @@ export default class DashboardModule {
 				.toLowerCase();
 			this.renderSystemLog(this.systemLogLines);
 		});
+
+		if (!this.systemLogJumpBottomBound) {
+			const bottomBtn = document.getElementById('system-log-jump-bottom');
+			if (bottomBtn) {
+				this.systemLogJumpBottomBound = true;
+				bottomBtn.addEventListener('click', () => this.scrollSystemLogToBottom());
+			}
+		}
+	}
+
+	scrollSystemLogToBottom() {
+		const logEl = document.getElementById('system-log');
+		if (!logEl) return;
+		logEl.scrollTop = logEl.scrollHeight;
 	}
 
 	async updateSystemLog() {
