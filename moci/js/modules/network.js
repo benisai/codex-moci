@@ -1859,7 +1859,9 @@ export default class NetworkModule {
 			.filter(v => v.trim().length > 0);
 		const lower = lines.map(v => v.toLowerCase());
 
-		const topRows = [];
+		const topClients = [];
+		const topDomains = [];
+		const topBlocked = [];
 		const dnsRows = [];
 
 		const topIdx = lower.findIndex(v => v.includes('top statistics'));
@@ -1874,14 +1876,9 @@ export default class NetworkModule {
 				}
 				const cols = this.splitAdblockReportColumns(lines[i]);
 				if (cols.length >= 6) {
-					topRows.push({
-						clientCount: cols[0] || '',
-						client: cols[1] || '',
-						domainCount: cols[2] || '',
-						domain: cols[3] || '',
-						blockedCount: cols[4] || '',
-						blockedDomain: cols[5] || ''
-					});
+					if (cols[0] || cols[1]) topClients.push({ count: cols[0] || '', value: cols[1] || '' });
+					if (cols[2] || cols[3]) topDomains.push({ count: cols[2] || '', value: cols[3] || '' });
+					if (cols[4] || cols[5]) topBlocked.push({ count: cols[4] || '', value: cols[5] || '' });
 				}
 				i += 1;
 			}
@@ -1914,7 +1911,7 @@ export default class NetworkModule {
 			}
 		}
 
-		return { topRows, dnsRows };
+		return { topClients, topDomains, topBlocked, dnsRows };
 	}
 
 	parseAdblockClassicJsonReport(raw) {
@@ -1922,9 +1919,9 @@ export default class NetworkModule {
 		try {
 			data = JSON.parse(String(raw || '').trim());
 		} catch {
-			return { topRows: [], dnsRows: [] };
+			return { topClients: [], topDomains: [], topBlocked: [], dnsRows: [] };
 		}
-		if (!data || typeof data !== 'object') return { topRows: [], dnsRows: [] };
+		if (!data || typeof data !== 'object') return { topClients: [], topDomains: [], topBlocked: [], dnsRows: [] };
 
 		const asArray = value => (Array.isArray(value) ? value : []);
 		const normalizeTopEntries = value => {
@@ -1978,21 +1975,13 @@ export default class NetworkModule {
 		const blocked =
 			pickTopEntries(topContainers, ['blocked_domains', 'blocked', 'top_blocked', 'deny', 'blocked_domain']) || [];
 
-		const maxTop = Math.max(clients.length, domains.length, blocked.length);
-		const topRows = [];
-		for (let i = 0; i < maxTop; i += 1) {
-			const c = clients[i] || {};
-			const d = domains[i] || {};
-			const b = blocked[i] || {};
-			topRows.push({
-				clientCount: String(c.count ?? c.hits ?? c.total ?? ''),
-				client: String(c.client ?? c.name ?? c.value ?? c.addr ?? ''),
-				domainCount: String(d.count ?? d.hits ?? d.total ?? ''),
-				domain: String(d.domain ?? d.name ?? d.value ?? ''),
-				blockedCount: String(b.count ?? b.hits ?? b.total ?? ''),
-				blockedDomain: String(b.domain ?? b.name ?? b.value ?? '')
-			});
-		}
+		const normalizeTopRow = item => ({
+			count: String(item?.count ?? item?.hits ?? item?.total ?? ''),
+			value: String(item?.client ?? item?.domain ?? item?.address ?? item?.name ?? item?.value ?? item?.addr ?? '')
+		});
+		const topClients = clients.map(normalizeTopRow);
+		const topDomains = domains.map(normalizeTopRow);
+		const topBlocked = blocked.map(normalizeTopRow);
 
 		const dnsCandidates = [
 			...asArray(data.latest_dns_requests),
@@ -2023,26 +2012,22 @@ export default class NetworkModule {
 			};
 		});
 
-		return { topRows, dnsRows };
+		return { topClients, topDomains, topBlocked, dnsRows };
 	}
 
-	renderAdblockClassicTopStats(rows) {
-		const tbody = document.querySelector('#adblock-classic-topstats-table tbody');
+	renderAdblockClassicTopTable(tableSelector, rows, emptyMessage) {
+		const tbody = document.querySelector(tableSelector);
 		if (!tbody) return;
 		const data = Array.isArray(rows) ? rows : [];
 		if (data.length === 0) {
-			this.core.renderEmptyTable(tbody, 6, 'No top statistics available');
+			this.core.renderEmptyTable(tbody, 2, emptyMessage || 'No rows available');
 			return;
 		}
 		tbody.innerHTML = data
 			.map(
 				row => `<tr>
-				<td>${this.core.escapeHtml(row.clientCount || '')}</td>
-				<td>${this.core.escapeHtml(row.client || '')}</td>
-				<td>${this.core.escapeHtml(row.domainCount || '')}</td>
-				<td>${this.core.escapeHtml(row.domain || '')}</td>
-				<td>${this.core.escapeHtml(row.blockedCount || '')}</td>
-				<td>${this.core.escapeHtml(row.blockedDomain || '')}</td>
+				<td>${this.core.escapeHtml(row.count || '')}</td>
+				<td>${this.core.escapeHtml(row.value || '')}</td>
 			</tr>`
 			)
 			.join('');
@@ -2104,7 +2089,9 @@ export default class NetworkModule {
 			const reportRaw = String(result?.stdout || '');
 			if (!reportRaw.trim()) {
 				if (statusEl) statusEl.innerHTML = this.core.renderBadge('error', 'REPORT MISSING');
-				this.renderAdblockClassicTopStats([]);
+				this.renderAdblockClassicTopTable('#adblock-classic-topclients-table tbody', [], 'No top clients available');
+				this.renderAdblockClassicTopTable('#adblock-classic-topdomains-table tbody', [], 'No top domains available');
+				this.renderAdblockClassicTopTable('#adblock-classic-topblocked-table tbody', [], 'No top blocked domains available');
 				this.renderAdblockClassicLatestDns([]);
 				return;
 			}
@@ -2112,17 +2099,35 @@ export default class NetworkModule {
 			const parsed = reportRaw.trim().startsWith('{')
 				? this.parseAdblockClassicJsonReport(reportRaw)
 				: this.parseAdblockClassicReport(reportRaw);
-			this.renderAdblockClassicTopStats(parsed.topRows);
+			this.renderAdblockClassicTopTable(
+				'#adblock-classic-topclients-table tbody',
+				parsed.topClients,
+				'No top clients available'
+			);
+			this.renderAdblockClassicTopTable(
+				'#adblock-classic-topdomains-table tbody',
+				parsed.topDomains,
+				'No top domains available'
+			);
+			this.renderAdblockClassicTopTable(
+				'#adblock-classic-topblocked-table tbody',
+				parsed.topBlocked,
+				'No top blocked domains available'
+			);
 			this.renderAdblockClassicLatestDns(parsed.dnsRows);
 			if (statusEl) {
+				const totalTopRows =
+					(parsed.topClients?.length || 0) + (parsed.topDomains?.length || 0) + (parsed.topBlocked?.length || 0);
 				statusEl.innerHTML = this.core.renderBadge(
 					'success',
-					`READY · ${parsed.topRows.length} top rows · ${parsed.dnsRows.length} dns rows`
+					`READY · ${totalTopRows} top rows · ${parsed.dnsRows.length} dns rows`
 				);
 			}
 		} catch {
 			if (statusEl) statusEl.innerHTML = this.core.renderBadge('error', 'FAILED TO LOAD REPORT');
-			this.renderAdblockClassicTopStats([]);
+			this.renderAdblockClassicTopTable('#adblock-classic-topclients-table tbody', [], 'No top clients available');
+			this.renderAdblockClassicTopTable('#adblock-classic-topdomains-table tbody', [], 'No top domains available');
+			this.renderAdblockClassicTopTable('#adblock-classic-topblocked-table tbody', [], 'No top blocked domains available');
 			this.renderAdblockClassicLatestDns([]);
 		}
 	}
