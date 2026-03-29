@@ -232,6 +232,12 @@ export default class NetworkModule {
 		document.getElementById('save-adblock-classic-btn')?.addEventListener('click', () => this.saveAdblockClassicSettings());
 		document.getElementById('refresh-adblock-classic-btn')?.addEventListener('click', () => this.loadAdblockClassic());
 		document
+			.getElementById('refresh-adblock-classic-report-btn')
+			?.addEventListener('click', () => this.loadAdblockClassicReport(false));
+		document
+			.getElementById('generate-adblock-classic-report-btn')
+			?.addEventListener('click', () => this.loadAdblockClassicReport(true));
+		document
 			.getElementById('adblock-classic-enabled-on-btn')
 			?.addEventListener('click', () => this.setAdblockClassicSettingValue('enabled', '1'));
 		document
@@ -1773,12 +1779,190 @@ export default class NetworkModule {
 					serviceStatusEl.innerHTML = this.core.renderBadge('error', 'UNKNOWN');
 				}
 			}
+			await this.loadAdblockClassicReport(false);
 		} catch (err) {
 			console.error('Failed to load classic AdBlock config:', err);
 			if (serviceStatusEl) serviceStatusEl.innerHTML = this.core.renderBadge('error', 'ERROR');
 			if (configStatusEl) configStatusEl.innerHTML = this.core.renderBadge('error', 'ERROR');
+			this.renderAdblockClassicTopStats([]);
+			this.renderAdblockClassicLatestDns([]);
 		} finally {
 			this.core.hideSkeleton('adblock-classic-config-card');
+		}
+	}
+
+	splitAdblockReportColumns(line) {
+		const text = String(line || '').trim();
+		if (!text) return [];
+		if (text.includes('\t')) {
+			return text
+				.split('\t')
+				.map(v => String(v || '').trim())
+				.filter(Boolean);
+		}
+		return text
+			.split(/\s{2,}/)
+			.map(v => String(v || '').trim())
+			.filter(Boolean);
+	}
+
+	parseAdblockClassicReport(raw) {
+		const lines = String(raw || '')
+			.split('\n')
+			.map(v => String(v || '').replace(/\r/g, ''))
+			.filter(v => v.trim().length > 0);
+		const lower = lines.map(v => v.toLowerCase());
+
+		const topRows = [];
+		const dnsRows = [];
+
+		const topIdx = lower.findIndex(v => v.includes('top statistics'));
+		if (topIdx >= 0) {
+			let i = topIdx + 1;
+			while (i < lines.length) {
+				const l = lower[i];
+				if (l.includes('latest dns requests')) break;
+				if (l.startsWith('count') && l.includes('clients')) {
+					i += 1;
+					continue;
+				}
+				const cols = this.splitAdblockReportColumns(lines[i]);
+				if (cols.length >= 6) {
+					topRows.push({
+						clientCount: cols[0] || '',
+						client: cols[1] || '',
+						domainCount: cols[2] || '',
+						domain: cols[3] || '',
+						blockedCount: cols[4] || '',
+						blockedDomain: cols[5] || ''
+					});
+				}
+				i += 1;
+			}
+		}
+
+		const dnsIdx = lower.findIndex(v => v.includes('latest dns requests'));
+		if (dnsIdx >= 0) {
+			let i = dnsIdx + 1;
+			while (i < lines.length) {
+				const l = lower[i];
+				if (l.startsWith('date') && l.includes('time') && l.includes('domain')) {
+					i += 1;
+					continue;
+				}
+				if (l.startsWith('adblock ') || l.startsWith('powered by ')) break;
+				const cols = this.splitAdblockReportColumns(lines[i]);
+				if (cols.length >= 8) {
+					dnsRows.push({
+						date: cols[0] || '',
+						time: cols[1] || '',
+						client: cols[2] || '',
+						iface: cols[3] || '',
+						type: cols[4] || '',
+						domain: cols[5] || '',
+						answer: cols[6] || '',
+						action: cols[7] || ''
+					});
+				}
+				i += 1;
+			}
+		}
+
+		return { topRows, dnsRows };
+	}
+
+	renderAdblockClassicTopStats(rows) {
+		const tbody = document.querySelector('#adblock-classic-topstats-table tbody');
+		if (!tbody) return;
+		const data = Array.isArray(rows) ? rows : [];
+		if (data.length === 0) {
+			this.core.renderEmptyTable(tbody, 6, 'No top statistics available');
+			return;
+		}
+		tbody.innerHTML = data
+			.map(
+				row => `<tr>
+				<td>${this.core.escapeHtml(row.clientCount || '')}</td>
+				<td>${this.core.escapeHtml(row.client || '')}</td>
+				<td>${this.core.escapeHtml(row.domainCount || '')}</td>
+				<td>${this.core.escapeHtml(row.domain || '')}</td>
+				<td>${this.core.escapeHtml(row.blockedCount || '')}</td>
+				<td>${this.core.escapeHtml(row.blockedDomain || '')}</td>
+			</tr>`
+			)
+			.join('');
+	}
+
+	renderAdblockClassicLatestDns(rows) {
+		const tbody = document.querySelector('#adblock-classic-latestdns-table tbody');
+		if (!tbody) return;
+		const data = Array.isArray(rows) ? rows : [];
+		if (data.length === 0) {
+			this.core.renderEmptyTable(tbody, 8, 'No DNS request rows available');
+			return;
+		}
+		tbody.innerHTML = data
+			.map(
+				row => `<tr>
+				<td>${this.core.escapeHtml(row.date || '')}</td>
+				<td>${this.core.escapeHtml(row.time || '')}</td>
+				<td>${this.core.escapeHtml(row.client || '')}</td>
+				<td>${this.core.escapeHtml(row.iface || '')}</td>
+				<td>${this.core.escapeHtml(row.type || '')}</td>
+				<td>${this.core.escapeHtml(row.domain || '')}</td>
+				<td>${this.core.escapeHtml(row.answer || '')}</td>
+				<td>${this.core.escapeHtml(row.action || '')}</td>
+			</tr>`
+			)
+			.join('');
+	}
+
+	async loadAdblockClassicReport(forceGenerate = false) {
+		const statusEl = document.getElementById('adblock-classic-report-status');
+		if (statusEl) {
+			statusEl.innerHTML = this.core.renderBadge('warning', forceGenerate ? 'GENERATING REPORT' : 'LOADING');
+		}
+
+		const cmdParts = [];
+		if (forceGenerate) {
+			cmdParts.push('/etc/init.d/adblock report gen >/dev/null 2>&1 || true');
+		}
+		cmdParts.push('[ -s /tmp/adblock-report ] && cat /tmp/adblock-report || true');
+		const cmd = cmdParts.join('; ');
+
+		try {
+			const [status, result] = await this.core.ubusCall(
+				'file',
+				'exec',
+				{
+					command: '/bin/sh',
+					params: ['-c', cmd]
+				},
+				{ timeout: 30000 }
+			);
+			if (status !== 0) throw new Error('Failed to load adblock report');
+
+			const reportRaw = String(result?.stdout || '');
+			if (!reportRaw.trim()) {
+				if (statusEl) statusEl.innerHTML = this.core.renderBadge('error', 'REPORT MISSING');
+				this.renderAdblockClassicTopStats([]);
+				this.renderAdblockClassicLatestDns([]);
+				return;
+			}
+
+			const parsed = this.parseAdblockClassicReport(reportRaw);
+			this.renderAdblockClassicTopStats(parsed.topRows);
+			this.renderAdblockClassicLatestDns(parsed.dnsRows);
+			if (statusEl) {
+				statusEl.innerHTML = this.core.renderBadge(
+					'success',
+					`READY · ${parsed.topRows.length} top rows · ${parsed.dnsRows.length} dns rows`
+				);
+			}
+		} catch {
+			if (statusEl) statusEl.innerHTML = this.core.renderBadge('error', 'FAILED TO LOAD REPORT');
+			this.renderAdblockClassicTopStats([]);
+			this.renderAdblockClassicLatestDns([]);
 		}
 	}
 

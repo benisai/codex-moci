@@ -142,6 +142,7 @@ for pkg in \
 	luci-proto-wireguard \
 	adblock-fast \
 	luci-app-adblock-fast \
+	tcpdump-mini \
 	sqlite3-cli \
 	speedtestcpp
 do
