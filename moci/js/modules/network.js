@@ -1825,7 +1825,7 @@ export default class NetworkModule {
 					serviceStatusEl.innerHTML = this.core.renderBadge('error', 'UNKNOWN');
 				}
 			}
-			await this.loadAdblockClassicReport(false);
+			await this.loadAdblockClassicReport(true);
 		} catch (err) {
 			console.error('Failed to load classic AdBlock config:', err);
 			if (serviceStatusEl) serviceStatusEl.innerHTML = this.core.renderBadge('error', 'ERROR');
