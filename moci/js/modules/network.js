@@ -6,6 +6,7 @@ export default class NetworkModule {
 		this.hostsRaw = '';
 		this.connectionsRefreshTimer = null;
 		this.isRefreshingConnections = false;
+		this.adblockClassicSection = 'global';
 
 		this.core.registerRoute('/network', (path, subPaths) => {
 			const pageElement = document.getElementById('network-page');
@@ -18,6 +19,7 @@ export default class NetworkModule {
 					firewall: () => this.loadFirewall(),
 					dhcp: () => this.loadDHCP(),
 					dns: () => this.loadDNS(),
+					adblock: () => this.loadAdblockClassic(),
 					'adblock-fast': () => this.loadAdblock(),
 					pbr: () => this.loadPBR(),
 					ddns: () => this.loadDDNS(),
@@ -32,8 +34,7 @@ export default class NetworkModule {
 				this.setupDiagnostics();
 			}
 
-			const tabRaw = subPaths[0] || 'interfaces';
-			const tab = tabRaw === 'adblock' ? 'adblock-fast' : tabRaw;
+			const tab = subPaths[0] || 'interfaces';
 			this.subTabs.showSubTab(tab);
 		});
 	}
@@ -225,6 +226,23 @@ export default class NetworkModule {
 		document.getElementById('generate-wg-keys-btn')?.addEventListener('click', () => this.generateWgKeys());
 		document.getElementById('save-adblock-settings-btn')?.addEventListener('click', () => this.saveAdblockSettings());
 		document.getElementById('refresh-adblock-btn')?.addEventListener('click', () => this.loadAdblock());
+		document.getElementById('save-adblock-classic-btn')?.addEventListener('click', () => this.saveAdblockClassicSettings());
+		document.getElementById('refresh-adblock-classic-btn')?.addEventListener('click', () => this.loadAdblockClassic());
+		document
+			.getElementById('adblock-classic-enabled-on-btn')
+			?.addEventListener('click', () => this.setAdblockClassicSettingValue('enabled', '1'));
+		document
+			.getElementById('adblock-classic-enabled-off-btn')
+			?.addEventListener('click', () => this.setAdblockClassicSettingValue('enabled', '0'));
+		document
+			.getElementById('adblock-classic-safesearch-on-btn')
+			?.addEventListener('click', () => this.setAdblockClassicSettingValue('safesearch', '1'));
+		document
+			.getElementById('adblock-classic-safesearch-off-btn')
+			?.addEventListener('click', () => this.setAdblockClassicSettingValue('safesearch', '0'));
+		document.getElementById('adblock-classic-start-btn')?.addEventListener('click', () => this.runAdblockClassicServiceAction('start'));
+		document.getElementById('adblock-classic-stop-btn')?.addEventListener('click', () => this.runAdblockClassicServiceAction('stop'));
+		document.getElementById('adblock-classic-restart-btn')?.addEventListener('click', () => this.runAdblockClassicServiceAction('restart'));
 		document.getElementById('add-adblock-list-btn')?.addEventListener('click', () => {
 			this.core.resetModal('adblock-list-modal');
 			this.resetAdblockListForm();
@@ -1602,6 +1620,173 @@ export default class NetworkModule {
 		}
 	}
 
+	setAdblockClassicSettingValue(key, value, options = {}) {
+		const normalized = String(value || '0') === '1' ? '1' : '0';
+		if (key === 'enabled') {
+			const input = document.getElementById('adblock-classic-enabled');
+			if (input) input.value = normalized;
+		} else if (key === 'safesearch') {
+			const input = document.getElementById('adblock-classic-safesearch');
+			if (input) input.value = normalized;
+		}
+		if (!options.syncOnly) this.syncAdblockClassicButtons();
+	}
+
+	syncAdblockClassicButtons() {
+		const enabledValue = String(document.getElementById('adblock-classic-enabled')?.value || '0') === '1';
+		const safeSearchValue = String(document.getElementById('adblock-classic-safesearch')?.value || '0') === '1';
+		this.syncAdblockTogglePair('adblock-classic-enabled-on-btn', 'adblock-classic-enabled-off-btn', enabledValue);
+		this.syncAdblockTogglePair(
+			'adblock-classic-safesearch-on-btn',
+			'adblock-classic-safesearch-off-btn',
+			safeSearchValue
+		);
+	}
+
+	async runAdblockClassicServiceAction(action) {
+		try {
+			await this.core.ubusCall('file', 'exec', {
+				command: '/etc/init.d/adblock',
+				params: [action]
+			});
+			this.core.showToast(`AdBlock ${action} command executed`, 'success');
+			await this.loadAdblockClassic();
+		} catch {
+			this.core.showToast(`Failed to ${action} AdBlock`, 'error');
+		}
+	}
+
+	async loadAdblockClassic() {
+		await this.core.loadResource('adblock-classic-config-card', 1, 'adblock', async () => {
+			const serviceStatusEl = document.getElementById('adblock-classic-service-status');
+			const configStatusEl = document.getElementById('adblock-classic-config-status');
+			const dnsEl = document.getElementById('adblock-classic-dns');
+			const triggerEl = document.getElementById('adblock-classic-trigger');
+			const feedsEl = document.getElementById('adblock-classic-feeds');
+
+			let config = null;
+			try {
+				const [status, result] = await this.core.uciGet('adblock');
+				if (status === 0 && result?.values) config = result;
+			} catch {}
+			if (!config) {
+				try {
+					const [status, result] = await this.core.ubusCall('file', 'exec', {
+						command: '/bin/sh',
+						params: ['-c', 'uci -q show adblock 2>/dev/null || true']
+					});
+					if (status === 0 && result?.stdout) {
+						const parsed = this.parseUciShowToConfig(String(result.stdout || ''), 'adblock');
+						if (parsed) config = { values: parsed };
+					}
+				} catch {}
+			}
+
+			let sectionName = 'global';
+			let sectionCfg = null;
+			if (config?.values) {
+				for (const [section, cfg] of Object.entries(config.values)) {
+					if (String(cfg?.['.type'] || '') === 'adblock' || section === 'global') {
+						sectionName = section;
+						sectionCfg = cfg;
+						break;
+					}
+				}
+			}
+			this.adblockClassicSection = sectionName;
+
+			if (sectionCfg) {
+				this.setAdblockClassicSettingValue('enabled', this.isEnabledValue(sectionCfg.adb_enabled ?? '0') ? '1' : '0', {
+					syncOnly: true
+				});
+				this.setAdblockClassicSettingValue(
+					'safesearch',
+					this.isEnabledValue(sectionCfg.adb_safesearch ?? '0') ? '1' : '0',
+					{ syncOnly: true }
+				);
+				if (dnsEl) dnsEl.value = String(sectionCfg.adb_dns || '');
+				if (triggerEl) triggerEl.value = String(sectionCfg.adb_trigger || '');
+				const feeds = Array.isArray(sectionCfg.adb_feed)
+					? sectionCfg.adb_feed
+					: String(sectionCfg.adb_feed || '')
+							.split(/\s+/)
+							.filter(Boolean);
+				if (feedsEl) feedsEl.value = feeds.join('\n');
+				if (configStatusEl) configStatusEl.innerHTML = this.core.renderBadge('success', 'CONFIG READY');
+			} else {
+				this.setAdblockClassicSettingValue('enabled', '0', { syncOnly: true });
+				this.setAdblockClassicSettingValue('safesearch', '0', { syncOnly: true });
+				if (dnsEl) dnsEl.value = '';
+				if (triggerEl) triggerEl.value = '';
+				if (feedsEl) feedsEl.value = '';
+				if (configStatusEl) {
+					configStatusEl.innerHTML = this.core.renderBadge('error', 'CONFIG MISSING');
+				}
+			}
+			this.syncAdblockClassicButtons();
+
+			if (serviceStatusEl) {
+				try {
+					const [status, result] = await this.core.ubusCall('file', 'exec', {
+						command: '/etc/init.d/adblock',
+						params: ['running']
+					});
+					const running = status === 0 && Number(result?.code ?? 1) === 0;
+					serviceStatusEl.innerHTML = this.core.renderBadge(running ? 'success' : 'error', running ? 'RUNNING' : 'STOPPED');
+				} catch {
+					serviceStatusEl.innerHTML = this.core.renderBadge('error', 'UNKNOWN');
+				}
+			}
+		});
+	}
+
+	async saveAdblockClassicSettings() {
+		const enabled = String(document.getElementById('adblock-classic-enabled')?.value || '0') === '1' ? '1' : '0';
+		const safesearch = String(document.getElementById('adblock-classic-safesearch')?.value || '0') === '1' ? '1' : '0';
+		const dns = String(document.getElementById('adblock-classic-dns')?.value || '').trim();
+		const trigger = String(document.getElementById('adblock-classic-trigger')?.value || '').trim();
+		const feedsRaw = String(document.getElementById('adblock-classic-feeds')?.value || '');
+		const feeds = Array.from(
+			new Set(
+				feedsRaw
+					.split(/\r?\n|,/)
+					.map(v => String(v || '').trim())
+					.filter(Boolean)
+			)
+		);
+
+		try {
+			let section = this.adblockClassicSection || 'global';
+			const [status, result] = await this.core.uciGet('adblock', section);
+			if (status !== 0 || !result?.values) {
+				const [addStatus, addResult] = await this.core.uciAdd('adblock', 'adblock', 'global');
+				if (addStatus !== 0 || !addResult?.section) throw new Error('Unable to create adblock section');
+				section = addResult.section;
+				this.adblockClassicSection = section;
+			}
+
+			const values = {
+				adb_enabled: enabled,
+				adb_safesearch: safesearch,
+				adb_dns: dns || '',
+				adb_feed: feeds
+			};
+			await this.core.uciSet('adblock', section, values);
+			if (trigger) {
+				await this.core.uciSet('adblock', section, { adb_trigger: trigger });
+			} else {
+				await this.core.uciDelete('adblock', section, 'adb_trigger').catch(() => {});
+			}
+
+			await this.core.uciCommit('adblock');
+			await this.runAdblockClassicServiceAction('restart');
+			this.core.showToast('AdBlock settings saved', 'success');
+			await this.loadAdblockClassic();
+		} catch {
+			this.core.showToast('Failed to save AdBlock settings', 'error');
+		}
+	}
+
 	async loadAdblock() {
 		await this.core.loadResource('adblock-targets-table', 4, 'adblock_fast', async () => {
 			this.syncAdblockSettingsPanel();
@@ -1726,7 +1911,12 @@ export default class NetworkModule {
 			const value = this.stripOuterQuotes(m[3]);
 			if (!cfg[section]) cfg[section] = {};
 			if (key === '') continue;
-			cfg[section][key] = value;
+			if (Object.prototype.hasOwnProperty.call(cfg[section], key)) {
+				if (!Array.isArray(cfg[section][key])) cfg[section][key] = [cfg[section][key]];
+				cfg[section][key].push(value);
+			} else {
+				cfg[section][key] = value;
+			}
 		}
 		return Object.keys(cfg).length > 0 ? cfg : null;
 	}
