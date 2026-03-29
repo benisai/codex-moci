@@ -1470,6 +1470,13 @@
 						<div class="tab-content hidden" id="tab-adblock-classic" data-feature="adblock">
 							<div class="stat-card" id="adblock-classic-config-card">
 								<div class="section-title">ADBLOCK CONFIGURATION</div>
+								<div
+									id="adblock-classic-install-hint"
+									class="hidden"
+									style="margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--glass-border); border-radius: 6px; color: var(--steel-muted); font-size: 12px"
+								>
+									AdBlock package not found. Install <code>adblock</code> (and optional LuCI package) first.
+								</div>
 								<input type="hidden" id="adblock-classic-enabled" value="0" />
 								<input type="hidden" id="adblock-classic-safesearch" value="0" />
 								<div class="form-group">
@@ -1527,6 +1534,13 @@
 						<div class="tab-content hidden" id="tab-adblock-fast" data-feature="adblock_fast">
 							<div class="stat-card">
 								<div class="section-title">TARGET LISTS</div>
+								<div
+									id="adblock-fast-install-hint"
+									class="hidden"
+									style="margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--glass-border); border-radius: 6px; color: var(--steel-muted); font-size: 12px"
+								>
+									AdBlock-Fast package not found. Install <code>adblock-fast</code> (and optional LuCI package) first.
+								</div>
 								<div class="quick-actions" style="margin-bottom: 16px">
 									<button class="action-btn" id="add-adblock-list-btn">ADD TARGET LIST</button>
 								</div>

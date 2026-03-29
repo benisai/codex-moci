@@ -1661,6 +1661,7 @@ export default class NetworkModule {
 		await this.core.loadResource('adblock-classic-config-card', 1, 'adblock', async () => {
 			const serviceStatusEl = document.getElementById('adblock-classic-service-status');
 			const configStatusEl = document.getElementById('adblock-classic-config-status');
+			const installHintEl = document.getElementById('adblock-classic-install-hint');
 			const dnsEl = document.getElementById('adblock-classic-dns');
 			const triggerEl = document.getElementById('adblock-classic-trigger');
 			const feedsEl = document.getElementById('adblock-classic-feeds');
@@ -1714,6 +1715,7 @@ export default class NetworkModule {
 							.filter(Boolean);
 				if (feedsEl) feedsEl.value = feeds.join('\n');
 				if (configStatusEl) configStatusEl.innerHTML = this.core.renderBadge('success', 'CONFIG READY');
+				if (installHintEl) installHintEl.classList.add('hidden');
 			} else {
 				this.setAdblockClassicSettingValue('enabled', '0', { syncOnly: true });
 				this.setAdblockClassicSettingValue('safesearch', '0', { syncOnly: true });
@@ -1723,6 +1725,7 @@ export default class NetworkModule {
 				if (configStatusEl) {
 					configStatusEl.innerHTML = this.core.renderBadge('error', 'CONFIG MISSING');
 				}
+				if (installHintEl) installHintEl.classList.remove('hidden');
 			}
 			this.syncAdblockClassicButtons();
 
@@ -1791,6 +1794,7 @@ export default class NetworkModule {
 	async loadAdblock() {
 		await this.core.loadResource('adblock-targets-table', 4, 'adblock_fast', async () => {
 			this.syncAdblockSettingsPanel();
+			const installHintEl = document.getElementById('adblock-fast-install-hint');
 			const tbody = document.querySelector('#adblock-targets-table tbody');
 			if (!tbody) return;
 
@@ -1803,8 +1807,10 @@ export default class NetworkModule {
 					4,
 					'Adblock-Fast config not found. Install adblock-fast/luci-app-adblock-fast first.'
 				);
+				if (installHintEl) installHintEl.classList.remove('hidden');
 				return;
 			}
+			if (installHintEl) installHintEl.classList.add('hidden');
 
 			let mainSection = null;
 			const rows = [];
