@@ -1927,18 +1927,54 @@ export default class NetworkModule {
 		if (!data || typeof data !== 'object') return { topRows: [], dnsRows: [] };
 
 		const asArray = value => (Array.isArray(value) ? value : []);
+		const normalizeTopEntries = value => {
+			if (Array.isArray(value)) {
+				return value.map(item => {
+					if (item && typeof item === 'object') {
+						return {
+							name: String(item.client ?? item.domain ?? item.name ?? item.value ?? item.addr ?? ''),
+							count: Number(item.count ?? item.hits ?? item.total ?? 0) || 0
+						};
+					}
+					return { name: String(item || ''), count: 0 };
+				});
+			}
+			if (value && typeof value === 'object') {
+				return Object.entries(value).map(([k, v]) => ({
+					name: String(k || ''),
+					count: Number(v ?? 0) || 0
+				}));
+			}
+			return [];
+		};
 		const pickArray = (obj, keys) => {
 			for (const key of keys) {
 				if (Array.isArray(obj?.[key])) return obj[key];
 			}
 			return [];
 		};
+		const pickTopEntries = (containers, keys) => {
+			for (const container of containers) {
+				if (!container || typeof container !== 'object') continue;
+				for (const key of keys) {
+					if (Object.prototype.hasOwnProperty.call(container, key)) {
+						const rows = normalizeTopEntries(container[key]);
+						if (rows.length) return rows;
+					}
+				}
+			}
+			return [];
+		};
 
 		const topSection =
-			data.top_statistics || data.top || data.statistics || data.stats || data.report?.top_statistics || {};
-		const clients = pickArray(topSection, ['clients', 'top_clients', 'client', 'src', 'sources']) || [];
-		const domains = pickArray(topSection, ['domains', 'top_domains', 'domain']) || [];
-		const blocked = pickArray(topSection, ['blocked_domains', 'blocked', 'top_blocked', 'deny']) || [];
+			data.top_statistics || data.top || data.statistics || data.stats || data.report?.top_statistics || null;
+		const topContainers = [topSection, data, data.report].filter(Boolean);
+		const clients =
+			pickTopEntries(topContainers, ['clients', 'top_clients', 'client', 'src', 'sources', 'top_client']) || [];
+		const domains =
+			pickTopEntries(topContainers, ['domains', 'top_domains', 'domain', 'top_domain']) || [];
+		const blocked =
+			pickTopEntries(topContainers, ['blocked_domains', 'blocked', 'top_blocked', 'deny', 'blocked_domain']) || [];
 
 		const maxTop = Math.max(clients.length, domains.length, blocked.length);
 		const topRows = [];
