@@ -19,7 +19,7 @@ export default class NetworkModule {
 					firewall: () => this.loadFirewall(),
 					dhcp: () => this.loadDHCP(),
 					dns: () => this.loadDNS(),
-					adblock: () => this.loadAdblockClassic(),
+					'adblock-classic': () => this.loadAdblockClassic(),
 					'adblock-fast': () => this.loadAdblock(),
 					pbr: () => this.loadPBR(),
 					ddns: () => this.loadDDNS(),
@@ -34,7 +34,8 @@ export default class NetworkModule {
 				this.setupDiagnostics();
 			}
 
-			const tab = subPaths[0] || 'interfaces';
+			const tabRaw = subPaths[0] || 'interfaces';
+			const tab = tabRaw === 'adblock' ? 'adblock-classic' : tabRaw;
 			this.subTabs.showSubTab(tab);
 		});
 	}
