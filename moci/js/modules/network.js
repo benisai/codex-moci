@@ -1917,6 +1917,77 @@ export default class NetworkModule {
 		return { topRows, dnsRows };
 	}
 
+	parseAdblockClassicJsonReport(raw) {
+		let data;
+		try {
+			data = JSON.parse(String(raw || '').trim());
+		} catch {
+			return { topRows: [], dnsRows: [] };
+		}
+		if (!data || typeof data !== 'object') return { topRows: [], dnsRows: [] };
+
+		const asArray = value => (Array.isArray(value) ? value : []);
+		const pickArray = (obj, keys) => {
+			for (const key of keys) {
+				if (Array.isArray(obj?.[key])) return obj[key];
+			}
+			return [];
+		};
+
+		const topSection =
+			data.top_statistics || data.top || data.statistics || data.stats || data.report?.top_statistics || {};
+		const clients = pickArray(topSection, ['clients', 'top_clients', 'client', 'src', 'sources']) || [];
+		const domains = pickArray(topSection, ['domains', 'top_domains', 'domain']) || [];
+		const blocked = pickArray(topSection, ['blocked_domains', 'blocked', 'top_blocked', 'deny']) || [];
+
+		const maxTop = Math.max(clients.length, domains.length, blocked.length);
+		const topRows = [];
+		for (let i = 0; i < maxTop; i += 1) {
+			const c = clients[i] || {};
+			const d = domains[i] || {};
+			const b = blocked[i] || {};
+			topRows.push({
+				clientCount: String(c.count ?? c.hits ?? c.total ?? ''),
+				client: String(c.client ?? c.name ?? c.value ?? c.addr ?? ''),
+				domainCount: String(d.count ?? d.hits ?? d.total ?? ''),
+				domain: String(d.domain ?? d.name ?? d.value ?? ''),
+				blockedCount: String(b.count ?? b.hits ?? b.total ?? ''),
+				blockedDomain: String(b.domain ?? b.name ?? b.value ?? '')
+			});
+		}
+
+		const dnsCandidates = [
+			...asArray(data.latest_dns_requests),
+			...asArray(data.latest_requests),
+			...asArray(data.requests),
+			...asArray(data.dns_requests),
+			...asArray(data.report?.latest_dns_requests),
+			...asArray(data.report?.requests)
+		];
+		const dnsRows = dnsCandidates.map(item => {
+			const ts = String(item.datetime || item.timestamp || item.ts || '').trim();
+			let date = String(item.date || '').trim();
+			let time = String(item.time || '').trim();
+			if ((!date || !time) && ts) {
+				const parts = ts.replace('T', ' ').split(' ');
+				if (!date && parts[0]) date = parts[0];
+				if (!time && parts[1]) time = parts[1].replace('Z', '');
+			}
+			return {
+				date,
+				time,
+				client: String(item.client || item.src || item.source || item.ip || '').trim(),
+				iface: String(item.interface || item.iface || item.ifname || '').trim(),
+				type: String(item.type || item.query_type || item.qtype || '').trim(),
+				domain: String(item.domain || item.query || item.qname || '').trim(),
+				answer: String(item.answer || item.rcode || item.result || item.reply || '').trim(),
+				action: String(item.action || item.list_action || item.policy || '').trim()
+			};
+		});
+
+		return { topRows, dnsRows };
+	}
+
 	renderAdblockClassicTopStats(rows) {
 		const tbody = document.querySelector('#adblock-classic-topstats-table tbody');
 		if (!tbody) return;
@@ -1973,7 +2044,11 @@ export default class NetworkModule {
 		if (forceGenerate) {
 			cmdParts.push('/etc/init.d/adblock report gen >/dev/null 2>&1 || true');
 		}
-		cmdParts.push('[ -s /tmp/adblock-report ] && cat /tmp/adblock-report || true');
+		cmdParts.push(
+			'if [ -s /tmp/adblock-report/adb_report.jsn ]; then cat /tmp/adblock-report/adb_report.jsn; ' +
+				'elif [ -s /tmp/adblock-report ]; then cat /tmp/adblock-report; ' +
+				'else true; fi'
+		);
 		const cmd = cmdParts.join('; ');
 
 		try {
@@ -1996,7 +2071,9 @@ export default class NetworkModule {
 				return;
 			}
 
-			const parsed = this.parseAdblockClassicReport(reportRaw);
+			const parsed = reportRaw.trim().startsWith('{')
+				? this.parseAdblockClassicJsonReport(reportRaw)
+				: this.parseAdblockClassicReport(reportRaw);
 			this.renderAdblockClassicTopStats(parsed.topRows);
 			this.renderAdblockClassicLatestDns(parsed.dnsRows);
 			if (statusEl) {
