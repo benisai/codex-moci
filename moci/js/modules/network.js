@@ -2057,7 +2057,7 @@ export default class NetworkModule {
 		tbody.innerHTML = data
 			.map(row => {
 				const answer = String(row.answer || '').trim().toUpperCase();
-				const derivedAction = answer === 'NX' ? 'Allowlist...' : answer === 'OK' ? 'Blocklist...' : '';
+				const derivedAction = answer === 'NX' ? 'Allow' : answer === 'OK' ? 'Block' : '';
 				const actionLabel = String(row.action || '').trim() || derivedAction || '-';
 				const answerBadge =
 					answer === 'NX'
@@ -2065,7 +2065,7 @@ export default class NetworkModule {
 						: answer === 'OK'
 							? this.core.renderBadge('success', 'OK')
 							: this.core.renderBadge('info', answer || 'N/A');
-				const actionBtnClass = actionLabel.startsWith('Allowlist') ? 'action-btn-sm success' : 'action-btn-sm danger';
+				const actionBtnClass = /^allow/i.test(actionLabel) ? 'action-btn-sm success' : 'action-btn-sm danger';
 				const actionButton =
 					actionLabel === '-'
 						? '-'
