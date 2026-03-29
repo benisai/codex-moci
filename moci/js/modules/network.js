@@ -1801,26 +1801,28 @@ export default class NetworkModule {
 					const runtimeRunning = Boolean(svcInfo?.instances && Object.keys(svcInfo.instances).length > 0);
 					if (runtimeRunning) {
 						serviceStatusEl.innerHTML = this.core.renderBadge('success', 'RUNNING');
-						return;
 					}
 
 					// Fallback for platforms where adblock may not expose runtime instances.
-					const [runStatus, runResult] = await this.core.ubusCall('file', 'exec', {
-						command: '/etc/init.d/adblock',
-						params: ['running']
-					});
-					const running = runStatus === 0 && Number(runResult?.code ?? 1) === 0;
-					if (running) {
-						serviceStatusEl.innerHTML = this.core.renderBadge('success', 'RUNNING');
-						return;
+					if (!runtimeRunning) {
+						const [runStatus, runResult] = await this.core.ubusCall('file', 'exec', {
+							command: '/etc/init.d/adblock',
+							params: ['running']
+						});
+						const running = runStatus === 0 && Number(runResult?.code ?? 1) === 0;
+						if (running) {
+							serviceStatusEl.innerHTML = this.core.renderBadge('success', 'RUNNING');
+						}
 					}
 
-					const configEnabled =
-						sectionCfg && this.isEnabledValue(sectionCfg.adb_enabled ?? sectionCfg.enabled ?? '0');
-					serviceStatusEl.innerHTML = this.core.renderBadge(
-						configEnabled ? 'success' : 'error',
-						configEnabled ? 'ENABLED' : 'DISABLED'
-					);
+					if (!runtimeRunning && !String(serviceStatusEl.innerHTML || '').includes('RUNNING')) {
+						const configEnabled =
+							sectionCfg && this.isEnabledValue(sectionCfg.adb_enabled ?? sectionCfg.enabled ?? '0');
+						serviceStatusEl.innerHTML = this.core.renderBadge(
+							configEnabled ? 'success' : 'error',
+							configEnabled ? 'ENABLED' : 'DISABLED'
+						);
+					}
 				} catch {
 					serviceStatusEl.innerHTML = this.core.renderBadge('error', 'UNKNOWN');
 				}
