@@ -2007,7 +2007,7 @@ export default class NetworkModule {
 				iface: String(item.interface || item.iface || item.ifname || '').trim(),
 				type: String(item.type || item.query_type || item.qtype || '').trim(),
 				domain: String(item.domain || item.query || item.qname || '').trim(),
-				answer: String(item.answer || item.rcode || item.result || item.reply || '').trim(),
+				answer: String(item.answer || item.rc || item.rcode || item.result || item.reply || '').trim(),
 				action: String(item.action || item.list_action || item.policy || '').trim()
 			};
 		});
@@ -2059,6 +2059,17 @@ export default class NetworkModule {
 				const answer = String(row.answer || '').trim().toUpperCase();
 				const derivedAction = answer === 'NX' ? 'Allowlist...' : answer === 'OK' ? 'Blocklist...' : '';
 				const actionLabel = String(row.action || '').trim() || derivedAction || '-';
+				const answerBadge =
+					answer === 'NX'
+						? this.core.renderBadge('error', 'NX')
+						: answer === 'OK'
+							? this.core.renderBadge('success', 'OK')
+							: this.core.renderBadge('info', answer || 'N/A');
+				const actionBtnClass = actionLabel.startsWith('Allowlist') ? 'action-btn-sm success' : 'action-btn-sm danger';
+				const actionButton =
+					actionLabel === '-'
+						? '-'
+						: `<button class="${actionBtnClass}" type="button" disabled style="font-size:11px;padding:4px 8px;line-height:1.2;opacity:0.95;cursor:default">${this.core.escapeHtml(actionLabel)}</button>`;
 				return `<tr>
 				<td>${this.core.escapeHtml(row.date || '')}</td>
 				<td>${this.core.escapeHtml(row.time || '')}</td>
@@ -2066,8 +2077,8 @@ export default class NetworkModule {
 				<td>${this.core.escapeHtml(row.iface || '')}</td>
 				<td>${this.core.escapeHtml(row.type || '')}</td>
 				<td>${this.core.escapeHtml(row.domain || '')}</td>
-				<td>${this.core.escapeHtml(row.answer || '')}</td>
-				<td>${this.core.escapeHtml(actionLabel)}</td>
+				<td>${answerBadge}</td>
+				<td>${actionButton}</td>
 			</tr>`
 			})
 			.join('');
