@@ -37,6 +37,8 @@ export default class NetworkModule {
 			const tabRaw = subPaths[0] || 'interfaces';
 			const tab = tabRaw === 'adblock' ? 'adblock-classic' : tabRaw;
 			this.subTabs.showSubTab(tab);
+			if (tab === 'adblock-classic') this.loadAdblockClassic();
+			if (tab === 'adblock-fast') this.loadAdblock();
 		});
 	}
 
@@ -1658,13 +1660,23 @@ export default class NetworkModule {
 	}
 
 	async loadAdblockClassic() {
-		await this.core.loadResource('adblock-classic-config-card', 1, 'adblock', async () => {
-			const serviceStatusEl = document.getElementById('adblock-classic-service-status');
-			const configStatusEl = document.getElementById('adblock-classic-config-status');
-			const installHintEl = document.getElementById('adblock-classic-install-hint');
-			const dnsEl = document.getElementById('adblock-classic-dns');
-			const triggerEl = document.getElementById('adblock-classic-trigger');
-			const feedsEl = document.getElementById('adblock-classic-feeds');
+		const serviceStatusEl = document.getElementById('adblock-classic-service-status');
+		const configStatusEl = document.getElementById('adblock-classic-config-status');
+		const installHintEl = document.getElementById('adblock-classic-install-hint');
+		const dnsEl = document.getElementById('adblock-classic-dns');
+		const triggerEl = document.getElementById('adblock-classic-trigger');
+		const feedsEl = document.getElementById('adblock-classic-feeds');
+
+		if (!this.core.isFeatureEnabled('adblock')) {
+			if (serviceStatusEl) serviceStatusEl.innerHTML = this.core.renderBadge('warning', 'DISABLED');
+			if (configStatusEl) configStatusEl.innerHTML = this.core.renderBadge('warning', 'DISABLED');
+			return;
+		}
+
+		this.core.showSkeleton('adblock-classic-config-card');
+		try {
+			if (serviceStatusEl) serviceStatusEl.innerHTML = this.core.renderBadge('warning', 'CHECKING');
+			if (configStatusEl) configStatusEl.innerHTML = this.core.renderBadge('warning', 'CHECKING');
 
 			let config = null;
 			try {
@@ -1741,7 +1753,13 @@ export default class NetworkModule {
 					serviceStatusEl.innerHTML = this.core.renderBadge('error', 'UNKNOWN');
 				}
 			}
-		});
+		} catch (err) {
+			console.error('Failed to load classic AdBlock config:', err);
+			if (serviceStatusEl) serviceStatusEl.innerHTML = this.core.renderBadge('error', 'ERROR');
+			if (configStatusEl) configStatusEl.innerHTML = this.core.renderBadge('error', 'ERROR');
+		} finally {
+			this.core.hideSkeleton('adblock-classic-config-card');
+		}
 	}
 
 	async saveAdblockClassicSettings() {
