@@ -1932,7 +1932,9 @@ export default class NetworkModule {
 				return value.map(item => {
 					if (item && typeof item === 'object') {
 						return {
-							name: String(item.client ?? item.domain ?? item.name ?? item.value ?? item.addr ?? ''),
+							name: String(
+								item.client ?? item.domain ?? item.address ?? item.name ?? item.value ?? item.addr ?? ''
+							),
 							count: Number(item.count ?? item.hits ?? item.total ?? 0) || 0
 						};
 					}
