@@ -1743,25 +1743,32 @@ export default class NetworkModule {
 
 			if (serviceStatusEl) {
 				try {
-					const [status, result] = await this.core.ubusCall('file', 'exec', {
+					// Prefer ubus service runtime state (matches SYSTEM -> STARTUP and LuCI behavior).
+					const [svcStatus, svcResult] = await this.core.ubusCall('service', 'list', { name: 'adblock' });
+					const svcInfo = svcStatus === 0 && svcResult ? svcResult.adblock : null;
+					const runtimeRunning = Boolean(svcInfo?.instances && Object.keys(svcInfo.instances).length > 0);
+					if (runtimeRunning) {
+						serviceStatusEl.innerHTML = this.core.renderBadge('success', 'RUNNING');
+						return;
+					}
+
+					// Fallback for platforms where adblock may not expose runtime instances.
+					const [runStatus, runResult] = await this.core.ubusCall('file', 'exec', {
 						command: '/etc/init.d/adblock',
 						params: ['running']
 					});
-					const running = status === 0 && Number(result?.code ?? 1) === 0;
+					const running = runStatus === 0 && Number(runResult?.code ?? 1) === 0;
 					if (running) {
 						serviceStatusEl.innerHTML = this.core.renderBadge('success', 'RUNNING');
-					} else {
-						// Classic adblock is usually on-demand/oneshot, so "running" is often false.
-						const [enabledStatus, enabledResult] = await this.core.ubusCall('file', 'exec', {
-							command: '/etc/init.d/adblock',
-							params: ['enabled']
-						});
-						const bootEnabled = enabledStatus === 0 && Number(enabledResult?.code ?? 1) === 0;
-						serviceStatusEl.innerHTML = this.core.renderBadge(
-							bootEnabled ? 'success' : 'error',
-							bootEnabled ? 'ENABLED' : 'DISABLED'
-						);
+						return;
 					}
+
+					const configEnabled =
+						sectionCfg && this.isEnabledValue(sectionCfg.adb_enabled ?? sectionCfg.enabled ?? '0');
+					serviceStatusEl.innerHTML = this.core.renderBadge(
+						configEnabled ? 'success' : 'error',
+						configEnabled ? 'ENABLED' : 'DISABLED'
+					);
 				} catch {
 					serviceStatusEl.innerHTML = this.core.renderBadge('error', 'UNKNOWN');
 				}
