@@ -230,6 +230,9 @@ export default class NetworkModule {
 		document.getElementById('save-adblock-settings-btn')?.addEventListener('click', () => this.saveAdblockSettings());
 		document.getElementById('refresh-adblock-btn')?.addEventListener('click', () => this.loadAdblock());
 		document.getElementById('save-adblock-classic-btn')?.addEventListener('click', () => this.saveAdblockClassicSettings());
+		document
+			.getElementById('save-adblock-classic-config-btn')
+			?.addEventListener('click', () => this.saveAdblockClassicSettings());
 		document.getElementById('refresh-adblock-classic-btn')?.addEventListener('click', () => this.loadAdblockClassic());
 		document
 			.getElementById('refresh-adblock-classic-report-btn')
@@ -257,6 +260,9 @@ export default class NetworkModule {
 			this.resetAdblockListForm();
 			this.core.openModal('adblock-list-modal');
 		});
+		document.getElementById('adblock-classic-settings-toggle-btn')?.addEventListener('click', () =>
+			this.toggleAdblockClassicSettingsPanel()
+		);
 		document.getElementById('adblock-settings-toggle-btn')?.addEventListener('click', () =>
 			this.toggleAdblockSettingsPanel()
 		);
@@ -320,6 +326,7 @@ export default class NetworkModule {
 			this.core.openModal('pbr-include-add-modal');
 		});
 		this.syncAdblockSettingsPanel();
+		this.syncAdblockClassicSettingsPanel();
 		this.syncAdblockSettingsButtons();
 		this.syncPbrSettingsPanel();
 		this.syncAllPbrSectionPanels();
@@ -391,6 +398,44 @@ export default class NetworkModule {
 		if (!body || !icon || !btn) return;
 
 		const expanded = localStorage.getItem('adblock_settings_expanded') === '1';
+		if (expanded) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+		}
+	}
+
+	toggleAdblockClassicSettingsPanel() {
+		const body = document.getElementById('adblock-classic-settings-body');
+		const icon = document.getElementById('adblock-classic-settings-toggle-icon');
+		const btn = document.getElementById('adblock-classic-settings-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const isHidden = body.style.display === 'none' || body.style.display === '';
+		if (isHidden) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+			localStorage.setItem('adblock_classic_settings_expanded', '1');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+			localStorage.setItem('adblock_classic_settings_expanded', '0');
+		}
+	}
+
+	syncAdblockClassicSettingsPanel() {
+		const body = document.getElementById('adblock-classic-settings-body');
+		const icon = document.getElementById('adblock-classic-settings-toggle-icon');
+		const btn = document.getElementById('adblock-classic-settings-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const expanded = localStorage.getItem('adblock_classic_settings_expanded') === '1';
 		if (expanded) {
 			body.style.display = 'block';
 			icon.textContent = '▾';
@@ -1680,6 +1725,7 @@ export default class NetworkModule {
 		}
 
 		this.core.showSkeleton('adblock-classic-config-card');
+		this.syncAdblockClassicSettingsPanel();
 		try {
 			if (serviceStatusEl) serviceStatusEl.innerHTML = this.core.renderBadge('warning', 'CHECKING');
 			if (configStatusEl) configStatusEl.innerHTML = this.core.renderBadge('warning', 'CHECKING');

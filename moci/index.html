@@ -1473,65 +1473,17 @@
 						</div>
 
 						<div class="tab-content hidden" id="tab-adblock-classic" data-feature="adblock">
-							<div class="stat-card" id="adblock-classic-config-card">
-								<div class="section-title">ADBLOCK CONFIGURATION</div>
-								<div
-									id="adblock-classic-install-hint"
-									class="hidden"
-									style="margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--glass-border); border-radius: 6px; color: var(--steel-muted); font-size: 12px"
-								>
-									AdBlock package not found. Install <code>adblock</code> (and optional LuCI package) first.
-								</div>
+							<div class="stat-card">
+								<div class="section-title">ADBLOCK LIST</div>
 								<input type="hidden" id="adblock-classic-enabled" value="0" />
 								<input type="hidden" id="adblock-classic-safesearch" value="0" />
 								<div class="form-group">
-									<label class="form-label">SERVICE STATUS</label>
-									<div id="adblock-classic-service-status">Loading...</div>
-								</div>
-								<div class="form-group">
-									<label class="form-label">CONFIG STATUS</label>
-									<div id="adblock-classic-config-status">Loading...</div>
-								</div>
-								<div class="form-group">
-									<label class="form-label">ENABLE ADBLOCK</label>
-									<div class="action-buttons">
-										<button class="action-btn-sm status-indicator-btn" id="adblock-classic-enabled-on-btn" type="button">ENABLED</button>
-										<button class="action-btn-sm status-indicator-btn" id="adblock-classic-enabled-off-btn" type="button">DISABLED</button>
-									</div>
-								</div>
-								<div class="form-group">
-									<label class="form-label">ENABLE SAFESEARCH</label>
-									<div class="action-buttons">
-										<button class="action-btn-sm status-indicator-btn" id="adblock-classic-safesearch-on-btn" type="button">ENABLED</button>
-										<button class="action-btn-sm status-indicator-btn" id="adblock-classic-safesearch-off-btn" type="button">DISABLED</button>
-									</div>
-								</div>
-								<div class="form-group">
-									<label class="form-label">DNS BACKEND</label>
-									<select id="adblock-classic-dns" class="form-input">
-										<option value="">auto</option>
-										<option value="dnsmasq">dnsmasq</option>
-										<option value="unbound">unbound</option>
-										<option value="named">named</option>
-										<option value="kresd">kresd</option>
-										<option value="smartdns">smartdns</option>
-										<option value="raw">raw</option>
-									</select>
-								</div>
-								<div class="form-group">
-									<label class="form-label">STARTUP TRIGGER INTERFACE</label>
-									<input type="text" id="adblock-classic-trigger" class="form-input" placeholder="wan (leave empty for time-based startup)" />
-								</div>
-								<div class="form-group">
 									<label class="form-label">FEEDS (one per line)</label>
-									<textarea id="adblock-classic-feeds" class="form-input" rows="5" placeholder="adguard&#10;adguard_tracking&#10;certpl"></textarea>
+									<textarea id="adblock-classic-feeds" class="form-input" rows="6" placeholder="adguard&#10;adguard_tracking&#10;certpl"></textarea>
 								</div>
 								<div class="quick-actions">
-									<button class="action-btn" id="save-adblock-classic-btn">SAVE CONFIGURATION</button>
+									<button class="action-btn" id="save-adblock-classic-btn">SAVE LIST</button>
 									<button class="action-btn" id="refresh-adblock-classic-btn">REFRESH</button>
-									<button class="action-btn success" id="adblock-classic-start-btn">START</button>
-									<button class="action-btn danger" id="adblock-classic-stop-btn">STOP</button>
-									<button class="action-btn warning" id="adblock-classic-restart-btn">RESTART</button>
 								</div>
 							</div>
 
@@ -1594,6 +1546,70 @@
 										</tr>
 									</tbody>
 								</table>
+							</div>
+
+							<div class="stat-card netify-collapsible-card" id="adblock-classic-config-card" style="margin-top: 24px">
+								<div class="netify-collapsible-header">
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">
+										ADBLOCK CONFIGURATION
+									</div>
+									<button class="netify-toggle-btn" id="adblock-classic-settings-toggle-btn" type="button" aria-expanded="false">
+										<span id="adblock-classic-settings-toggle-icon">▸</span>
+									</button>
+								</div>
+								<div id="adblock-classic-settings-body" style="margin-top: 16px; display: none">
+									<div
+										id="adblock-classic-install-hint"
+										class="hidden"
+										style="margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--glass-border); border-radius: 6px; color: var(--steel-muted); font-size: 12px"
+									>
+										AdBlock package not found. Install <code>adblock</code> (and optional LuCI package) first.
+									</div>
+									<div class="form-group">
+										<label class="form-label">SERVICE STATUS</label>
+										<div id="adblock-classic-service-status">Loading...</div>
+									</div>
+									<div class="form-group">
+										<label class="form-label">CONFIG STATUS</label>
+										<div id="adblock-classic-config-status">Loading...</div>
+									</div>
+									<div class="form-group">
+										<label class="form-label">ENABLE ADBLOCK</label>
+										<div class="action-buttons">
+											<button class="action-btn-sm status-indicator-btn" id="adblock-classic-enabled-on-btn" type="button">ENABLED</button>
+											<button class="action-btn-sm status-indicator-btn" id="adblock-classic-enabled-off-btn" type="button">DISABLED</button>
+										</div>
+									</div>
+									<div class="form-group">
+										<label class="form-label">ENABLE SAFESEARCH</label>
+										<div class="action-buttons">
+											<button class="action-btn-sm status-indicator-btn" id="adblock-classic-safesearch-on-btn" type="button">ENABLED</button>
+											<button class="action-btn-sm status-indicator-btn" id="adblock-classic-safesearch-off-btn" type="button">DISABLED</button>
+										</div>
+									</div>
+									<div class="form-group">
+										<label class="form-label">DNS BACKEND</label>
+										<select id="adblock-classic-dns" class="form-input">
+											<option value="">auto</option>
+											<option value="dnsmasq">dnsmasq</option>
+											<option value="unbound">unbound</option>
+											<option value="named">named</option>
+											<option value="kresd">kresd</option>
+											<option value="smartdns">smartdns</option>
+											<option value="raw">raw</option>
+										</select>
+									</div>
+									<div class="form-group">
+										<label class="form-label">STARTUP TRIGGER INTERFACE</label>
+										<input type="text" id="adblock-classic-trigger" class="form-input" placeholder="wan (leave empty for time-based startup)" />
+									</div>
+									<div class="quick-actions">
+										<button class="action-btn" id="save-adblock-classic-config-btn">SAVE CONFIGURATION</button>
+										<button class="action-btn success" id="adblock-classic-start-btn">START</button>
+										<button class="action-btn danger" id="adblock-classic-stop-btn">STOP</button>
+										<button class="action-btn warning" id="adblock-classic-restart-btn">RESTART</button>
+									</div>
+								</div>
 							</div>
 						</div>
 
