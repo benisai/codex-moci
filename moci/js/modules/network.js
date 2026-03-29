@@ -2055,8 +2055,11 @@ export default class NetworkModule {
 			return;
 		}
 		tbody.innerHTML = data
-			.map(
-				row => `<tr>
+			.map(row => {
+				const answer = String(row.answer || '').trim().toUpperCase();
+				const derivedAction = answer === 'NX' ? 'Allowlist...' : answer === 'OK' ? 'Blocklist...' : '';
+				const actionLabel = String(row.action || '').trim() || derivedAction || '-';
+				return `<tr>
 				<td>${this.core.escapeHtml(row.date || '')}</td>
 				<td>${this.core.escapeHtml(row.time || '')}</td>
 				<td>${this.core.escapeHtml(row.client || '')}</td>
@@ -2064,9 +2067,9 @@ export default class NetworkModule {
 				<td>${this.core.escapeHtml(row.type || '')}</td>
 				<td>${this.core.escapeHtml(row.domain || '')}</td>
 				<td>${this.core.escapeHtml(row.answer || '')}</td>
-				<td>${this.core.escapeHtml(row.action || '')}</td>
+				<td>${this.core.escapeHtml(actionLabel)}</td>
 			</tr>`
-			)
+			})
 			.join('');
 	}
 
