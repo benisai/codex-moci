@@ -236,9 +236,6 @@ export default class NetworkModule {
 		document.getElementById('refresh-adblock-classic-btn')?.addEventListener('click', () => this.loadAdblockClassic());
 		document
 			.getElementById('refresh-adblock-classic-report-btn')
-			?.addEventListener('click', () => this.loadAdblockClassicReport(false));
-		document
-			.getElementById('generate-adblock-classic-report-btn')
 			?.addEventListener('click', () => this.loadAdblockClassicReport(true));
 		document
 			.getElementById('adblock-classic-enabled-on-btn')
