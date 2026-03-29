@@ -7,6 +7,8 @@ export default class NetworkModule {
 		this.connectionsRefreshTimer = null;
 		this.isRefreshingConnections = false;
 		this.adblockClassicSection = 'global';
+		this.adblockClassicReportMaxTop = 10;
+		this.adblockClassicReportMaxResults = 50;
 
 		this.core.registerRoute('/network', (path, subPaths) => {
 			const pageElement = document.getElementById('network-page');
@@ -237,6 +239,9 @@ export default class NetworkModule {
 		document
 			.getElementById('refresh-adblock-classic-report-btn')
 			?.addEventListener('click', () => this.loadAdblockClassicReport(true));
+		document
+			.getElementById('save-adblock-classic-report-settings-btn')
+			?.addEventListener('click', () => this.saveAdblockClassicReportSettings());
 		document
 			.getElementById('adblock-classic-enabled-on-btn')
 			?.addEventListener('click', () => this.setAdblockClassicSettingValue('enabled', '1'));
@@ -1789,6 +1794,7 @@ export default class NetworkModule {
 				if (installHintEl) installHintEl.classList.remove('hidden');
 			}
 			this.syncAdblockClassicButtons();
+			await this.loadAdblockClassicReportSettings();
 
 			if (serviceStatusEl) {
 				try {
@@ -2014,12 +2020,66 @@ export default class NetworkModule {
 		return { topClients, topDomains, topBlocked, dnsRows };
 	}
 
+	async loadAdblockClassicReportSettings() {
+		let maxTop = 10;
+		let maxResults = 50;
+		try {
+			const [status, result] = await this.core.uciGet('moci', 'adblock_report');
+			if (status === 0 && result?.values) {
+				maxTop = Number(result.values.max_top || maxTop);
+				maxResults = Number(result.values.max_results || maxResults);
+			}
+		} catch {}
+		if (!Number.isFinite(maxTop) || maxTop < 1) maxTop = 10;
+		if (!Number.isFinite(maxResults) || maxResults < 1) maxResults = 50;
+		this.adblockClassicReportMaxTop = Math.min(Math.max(Math.round(maxTop), 1), 500);
+		this.adblockClassicReportMaxResults = Math.min(Math.max(Math.round(maxResults), 1), 5000);
+
+		const maxTopEl = document.getElementById('adblock-classic-max-top');
+		const maxResultsEl = document.getElementById('adblock-classic-max-results');
+		if (maxTopEl) maxTopEl.value = String(this.adblockClassicReportMaxTop);
+		if (maxResultsEl) maxResultsEl.value = String(this.adblockClassicReportMaxResults);
+	}
+
+	async saveAdblockClassicReportSettings() {
+		const maxTopEl = document.getElementById('adblock-classic-max-top');
+		const maxResultsEl = document.getElementById('adblock-classic-max-results');
+		let maxTop = Number(maxTopEl?.value || 10);
+		let maxResults = Number(maxResultsEl?.value || 50);
+
+		if (!Number.isFinite(maxTop) || maxTop < 1) maxTop = 10;
+		if (!Number.isFinite(maxResults) || maxResults < 1) maxResults = 50;
+		maxTop = Math.min(Math.max(Math.round(maxTop), 1), 500);
+		maxResults = Math.min(Math.max(Math.round(maxResults), 1), 5000);
+
+		try {
+			const [sectionStatus] = await this.core.uciGet('moci', 'adblock_report');
+			if (sectionStatus !== 0) {
+				await this.core.uciAdd('moci', 'adblock_report', 'adblock_report');
+			}
+			await this.core.uciSet('moci', 'adblock_report', {
+				max_top: String(maxTop),
+				max_results: String(maxResults)
+			});
+			await this.core.uciCommit('moci');
+			this.adblockClassicReportMaxTop = maxTop;
+			this.adblockClassicReportMaxResults = maxResults;
+			if (maxTopEl) maxTopEl.value = String(maxTop);
+			if (maxResultsEl) maxResultsEl.value = String(maxResults);
+			this.core.showToast('AdBlock report settings saved', 'success');
+			await this.loadAdblockClassicReport(false);
+		} catch {
+			this.core.showToast('Failed to save AdBlock report settings', 'error');
+		}
+	}
+
 	renderAdblockClassicTopStats(topClients, topDomains, topBlocked) {
 		const tbody = document.querySelector('#adblock-classic-topstats-table tbody');
 		if (!tbody) return;
-		const clients = Array.isArray(topClients) ? topClients : [];
-		const domains = Array.isArray(topDomains) ? topDomains : [];
-		const blocked = Array.isArray(topBlocked) ? topBlocked : [];
+		const limit = this.adblockClassicReportMaxTop || 10;
+		const clients = (Array.isArray(topClients) ? topClients : []).slice(0, limit);
+		const domains = (Array.isArray(topDomains) ? topDomains : []).slice(0, limit);
+		const blocked = (Array.isArray(topBlocked) ? topBlocked : []).slice(0, limit);
 
 		const maxRows = Math.max(clients.length, domains.length, blocked.length);
 		if (maxRows === 0) {
@@ -2048,7 +2108,8 @@ export default class NetworkModule {
 	renderAdblockClassicLatestDns(rows) {
 		const tbody = document.querySelector('#adblock-classic-latestdns-table tbody');
 		if (!tbody) return;
-		const data = Array.isArray(rows) ? rows : [];
+		const limit = this.adblockClassicReportMaxResults || 50;
+		const data = (Array.isArray(rows) ? rows : []).slice(0, limit);
 		if (data.length === 0) {
 			this.core.renderEmptyTable(tbody, 8, 'No DNS request rows available');
 			return;
