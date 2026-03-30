@@ -90,6 +90,20 @@ save_copy() {
 	cp -f "$src" "$dst" 2>/dev/null || true
 }
 
+save_netify_archives() {
+	local netify_db="$1"
+	local state_dir="$2"
+	local src_dir dst_dir
+	src_dir="$(dirname "$netify_db")"
+	dst_dir="$state_dir/netify-archives"
+	mkdir -p "$dst_dir"
+	rm -f "$dst_dir"/netify.* 2>/dev/null || true
+	for f in "$src_dir"/netify.*; do
+		[ -f "$f" ] || continue
+		cp -f "$f" "$dst_dir/" 2>/dev/null || true
+	done
+}
+
 save_vnstat_dir() {
 	local src="/var/lib/vnstat"
 	local dst="$1/vnstat"
@@ -103,6 +117,20 @@ restore_copy() {
 	local dst="$2"
 	[ -f "$src" ] || return 0
 	cp -f "$src" "$dst" 2>/dev/null || true
+}
+
+restore_netify_archives() {
+	local netify_db="$1"
+	local state_dir="$2"
+	local src_dir dst_dir
+	dst_dir="$(dirname "$netify_db")"
+	src_dir="$state_dir/netify-archives"
+	[ -d "$src_dir" ] || return 0
+	mkdir -p "$dst_dir"
+	for f in "$src_dir"/netify.*; do
+		[ -f "$f" ] || continue
+		cp -f "$f" "$dst_dir/" 2>/dev/null || true
+	done
 }
 
 restore_vnstat_dir() {
@@ -122,6 +150,7 @@ save_state() {
 
 	mkdir -p "$state_dir"
 	save_sqlite "$netify_db" "$state_dir/moci-netify.sqlite"
+	save_netify_archives "$netify_db" "$state_dir"
 	save_copy "$ping_file" "$state_dir/moci-ping-monitor.txt"
 	save_copy "$speedtest_file" "$state_dir/moci-speedtest-monitor.txt"
 	save_copy "/etc/config/moci" "$state_dir/moci.config"
@@ -138,6 +167,7 @@ restore_state() {
 
 	[ -d "$state_dir" ] || return 0
 	restore_copy "$state_dir/moci-netify.sqlite" "$netify_db"
+	restore_netify_archives "$netify_db" "$state_dir"
 	restore_copy "$state_dir/moci-ping-monitor.txt" "$ping_file"
 	restore_copy "$state_dir/moci-speedtest-monitor.txt" "$speedtest_file"
 	restore_copy "$state_dir/moci.config" "/etc/config/moci"
