@@ -25,6 +25,7 @@ IGNORE_WAN_SOURCE="$DEFAULT_IGNORE_WAN_SOURCE"
 WAN_PREFIX=""
 SQLITE_BIN=""
 NETIFY_FEATURE_ENABLED="1"
+LAST_DB_DAY=""
 
 log() {
 	printf "%s %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -170,6 +171,7 @@ refresh_runtime_config() {
 	IGNORE_WAN_SOURCE="$(sanitize_int "$IGNORE_WAN_SOURCE" "$DEFAULT_IGNORE_WAN_SOURCE")"
 	derive_wan_prefix
 	ensure_db_file
+	[ -n "$LAST_DB_DAY" ] || LAST_DB_DAY="$(date '+%Y-%m-%d')"
 }
 
 require_dependencies() {
@@ -189,6 +191,51 @@ ensure_db_file() {
 	mkdir -p "$dir"
 	[ -f "$NETIFY_DB" ] || : >"$NETIFY_DB"
 	init_db
+}
+
+day_suffix() {
+	local day y m d
+	day="$1"
+	y="${day%%-*}"
+	day="${day#*-}"
+	m="${day%%-*}"
+	d="${day#*-}"
+	printf "%s.%s.%s" "$m" "$d" "$y"
+}
+
+rotate_db_if_new_day() {
+	local today old_day suffix dir backup backup_try n
+	today="$(date '+%Y-%m-%d')"
+	if [ -z "$LAST_DB_DAY" ]; then
+		LAST_DB_DAY="$today"
+		return 0
+	fi
+	[ "$today" = "$LAST_DB_DAY" ] && return 0
+
+	old_day="$LAST_DB_DAY"
+	LAST_DB_DAY="$today"
+	dir="$(dirname "$NETIFY_DB")"
+	mkdir -p "$dir"
+	suffix="$(day_suffix "$old_day")"
+	backup="$dir/netify.$suffix"
+
+	n=1
+	backup_try="$backup"
+	while [ -e "$backup_try" ]; do
+		backup_try="$backup.$n"
+		n=$((n + 1))
+	done
+	backup="$backup_try"
+
+	log "daily rollover detected ($old_day -> $today), rotating sqlite db"
+	sql_exec "PRAGMA wal_checkpoint(TRUNCATE);" || true
+	if [ -f "$NETIFY_DB" ]; then
+		mv "$NETIFY_DB" "$backup" 2>/dev/null || cp "$NETIFY_DB" "$backup" 2>/dev/null || true
+	fi
+	rm -f "${NETIFY_DB}-wal" "${NETIFY_DB}-shm"
+	: >"$NETIFY_DB"
+	init_db
+	log "netify db rotated: $backup"
 }
 
 init_db() {
@@ -290,6 +337,7 @@ consume_stream() {
 
 	nc -w "$STREAM_TIMEOUT" "$NETIFY_HOST" "$NETIFY_PORT" | while IFS= read -r line; do
 		[ -n "$line" ] || continue
+		rotate_db_if_new_day
 		if ! is_flow_event "$line"; then
 			continue
 		fi
