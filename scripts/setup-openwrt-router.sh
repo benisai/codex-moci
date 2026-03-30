@@ -287,6 +287,32 @@ uci set uhttpd.main.home='/www'
 uci commit uhttpd
 /etc/init.d/uhttpd restart || true
 
+log "Ensuring moci-state-sync restore runs from rc.local"
+if [ -f /etc/rc.local ]; then
+	if ! grep -q '/usr/bin/moci-state-sync restore' /etc/rc.local 2>/dev/null; then
+		RC_TMP="/tmp/.moci_rc_local.$$"
+		awk '
+			BEGIN { added=0 }
+			/^exit 0$/ && !added { print "/usr/bin/moci-state-sync restore"; added=1 }
+			{ print }
+			END {
+				if (!added) {
+					print "/usr/bin/moci-state-sync restore"
+					print "exit 0"
+				}
+			}
+		' /etc/rc.local >"$RC_TMP"
+		cp "$RC_TMP" /etc/rc.local
+		rm -f "$RC_TMP"
+	fi
+else
+	cat <<'EOF' >/etc/rc.local
+/usr/bin/moci-state-sync restore
+exit 0
+EOF
+fi
+chmod +x /etc/rc.local
+
 log "Setup complete."
 log "Open: http://$(uci -q get network.lan.ipaddr 2>/dev/null || echo 192.168.1.1)/moci/"
 log "Log out/in after ACL changes to refresh ubus session permissions."
