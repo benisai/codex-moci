@@ -236,7 +236,6 @@ log "Initializing data files"
 /usr/bin/moci-speedtest-monitor --init-file || true
 /usr/bin/moci-state-sync restore || true
 /usr/bin/moci-state-sync sync-cron || true
-/usr/bin/moci-state-sync save || true
 
 if ! have_cmd nc; then
 	log "WARNING: nc command not found; netify collector will not ingest flows."

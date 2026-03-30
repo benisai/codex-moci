@@ -112,15 +112,6 @@ save_vnstat_dir() {
 	( cd "$src" && tar -cf - . ) | ( cd "$dst" && tar -xf - ) 2>/dev/null || true
 }
 
-save_moci_web() {
-	local src="/www/moci"
-	local dst="$1/www-moci"
-	[ -d "$src" ] || return 0
-	rm -rf "$dst" 2>/dev/null || true
-	mkdir -p "$dst"
-	( cd "$src" && tar -cf - . ) | ( cd "$dst" && tar -xf - ) 2>/dev/null || true
-}
-
 restore_copy() {
 	local src="$1"
 	local dst="$2"
@@ -172,7 +163,6 @@ save_state() {
 	save_copy "$speedtest_file" "$state_dir/moci-speedtest-monitor.txt"
 	save_copy "/etc/config/moci" "$state_dir/moci.config"
 	save_vnstat_dir "$state_dir"
-	save_moci_web "$state_dir"
 	date +%s >"$STATE_TS_FILE" 2>/dev/null || true
 }
 
