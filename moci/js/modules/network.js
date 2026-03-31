@@ -26,6 +26,7 @@ export default class NetworkModule {
 					pbr: () => this.loadPBR(),
 					ddns: () => this.loadDDNS(),
 					qos: () => this.loadQoS(),
+					qosify: () => this.loadQoSify(),
 					vpn: () => this.loadVPN(),
 					connections: () => this.loadConnections(),
 					diagnostics: () => this.loadDiagnostics(),
@@ -235,6 +236,12 @@ export default class NetworkModule {
 		}
 
 		document.getElementById('save-qos-config-btn')?.addEventListener('click', () => this.saveQoSConfig());
+		document.getElementById('save-qosify-config-btn')?.addEventListener('click', () => this.saveQoSifyConfig());
+		document.getElementById('qosify-start-btn')?.addEventListener('click', () => this.runQoSifyServiceAction('start'));
+		document.getElementById('qosify-stop-btn')?.addEventListener('click', () => this.runQoSifyServiceAction('stop'));
+		document.getElementById('qosify-restart-btn')?.addEventListener('click', () => this.runQoSifyServiceAction('restart'));
+		document.getElementById('qosify-enable-btn')?.addEventListener('click', () => this.runQoSifyServiceAction('enable'));
+		document.getElementById('qosify-disable-btn')?.addEventListener('click', () => this.runQoSifyServiceAction('disable'));
 		document.getElementById('save-wg-config-btn')?.addEventListener('click', () => this.saveWgConfig());
 		document.getElementById('generate-wg-keys-btn')?.addEventListener('click', () => this.generateWgKeys());
 		document.getElementById('import-wg-profile-btn')?.addEventListener('click', () => {
@@ -3490,6 +3497,165 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 			this.loadQoS();
 		} catch {
 			this.core.showToast('Failed to delete QoS rule', 'error');
+		}
+	}
+
+	async readQoSifyConfig() {
+		try {
+			const [status, result] = await this.core.uciGet('qosify');
+			if (status === 0 && result?.values) return result;
+		} catch {}
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', 'uci -q show qosify 2>/dev/null || true']
+			});
+			if (status !== 0 || !result?.stdout) return null;
+			return { values: this.parseUciShowToConfig(String(result.stdout || ''), 'qosify') || null };
+		} catch {
+			return null;
+		}
+	}
+
+	setQoSifyStatusBadges(serviceState, bootState) {
+		const serviceEl = document.getElementById('qosify-service-status');
+		const bootEl = document.getElementById('qosify-boot-status');
+		if (serviceEl) {
+			serviceEl.innerHTML =
+				serviceState === 'RUNNING'
+					? this.core.renderBadge('success', 'RUNNING')
+					: serviceState === 'STOPPED'
+						? this.core.renderBadge('error', 'STOPPED')
+						: this.core.renderBadge('warning', serviceState || 'UNKNOWN');
+		}
+		if (bootEl) {
+			bootEl.innerHTML =
+				bootState === 'ENABLED'
+					? this.core.renderBadge('success', 'ENABLED')
+					: bootState === 'DISABLED'
+						? this.core.renderBadge('error', 'DISABLED')
+						: this.core.renderBadge('warning', bootState || 'UNKNOWN');
+		}
+	}
+
+	async refreshQoSifyServiceStatus() {
+		const [status, result] = await this.core.ubusCall('file', 'exec', {
+			command: '/bin/sh',
+			params: [
+				'-c',
+				`if [ ! -x /etc/init.d/qosify ]; then echo "SERVICE=MISSING"; echo "BOOT=MISSING"; exit 0; fi
+/etc/init.d/qosify status >/dev/null 2>&1 && echo "SERVICE=RUNNING" || echo "SERVICE=STOPPED"
+/etc/init.d/qosify enabled >/dev/null 2>&1 && echo "BOOT=ENABLED" || echo "BOOT=DISABLED"`
+			]
+		});
+
+		if (status !== 0) {
+			this.setQoSifyStatusBadges('UNKNOWN', 'UNKNOWN');
+			return;
+		}
+		const out = String(result?.stdout || '');
+		const serviceState = out.match(/SERVICE=([A-Z]+)/)?.[1] || 'UNKNOWN';
+		const bootState = out.match(/BOOT=([A-Z]+)/)?.[1] || 'UNKNOWN';
+		this.setQoSifyStatusBadges(serviceState, bootState);
+	}
+
+	async loadQoSify() {
+		const installHintEl = document.getElementById('qosify-install-hint');
+		const enabledEl = document.getElementById('qosify-enabled');
+		const ifaceEl = document.getElementById('qosify-interface');
+		const downloadEl = document.getElementById('qosify-download');
+		const uploadEl = document.getElementById('qosify-upload');
+		if (!enabledEl || !ifaceEl || !downloadEl || !uploadEl) return;
+
+		try {
+			const config = await this.readQoSifyConfig();
+			let sectionCfg = null;
+			if (config?.values) {
+				for (const cfg of Object.values(config.values)) {
+					const type = String(cfg?.['.type'] || '');
+					if (type === 'qosify' || type === 'defaults') {
+						sectionCfg = cfg;
+						break;
+					}
+				}
+				if (!sectionCfg) {
+					const first = Object.values(config.values)[0];
+					if (first && typeof first === 'object') sectionCfg = first;
+				}
+			}
+
+			if (!sectionCfg) {
+				enabledEl.value = '0';
+				ifaceEl.value = '';
+				downloadEl.value = '';
+				uploadEl.value = '';
+				if (installHintEl) installHintEl.classList.remove('hidden');
+			} else {
+				enabledEl.value = this.isEnabledValue(sectionCfg.enabled ?? '0') ? '1' : '0';
+				ifaceEl.value = String(sectionCfg.interface || '');
+				downloadEl.value = String(sectionCfg.download || '');
+				uploadEl.value = String(sectionCfg.upload || '');
+				if (installHintEl) installHintEl.classList.add('hidden');
+			}
+		} catch {
+			enabledEl.value = '0';
+			ifaceEl.value = '';
+			downloadEl.value = '';
+			uploadEl.value = '';
+			if (installHintEl) installHintEl.classList.remove('hidden');
+		}
+
+		await this.refreshQoSifyServiceStatus();
+	}
+
+	async ensureQoSifyConfigSection() {
+		const [status, result] = await this.core.uciGet('qosify');
+		if (status === 0 && result?.values) {
+			for (const [section, cfg] of Object.entries(result.values)) {
+				const type = String(cfg?.['.type'] || '');
+				if (type === 'qosify' || type === 'defaults') return section;
+			}
+			const firstSection = Object.keys(result.values)[0];
+			if (firstSection) return firstSection;
+		}
+		const [addStatus, addResult] = await this.core.uciAdd('qosify', 'qosify', 'qosify');
+		if (addStatus !== 0 || !addResult?.section) throw new Error('Unable to create qosify config section');
+		return addResult.section;
+	}
+
+	async saveQoSifyConfig() {
+		const enabled = String(document.getElementById('qosify-enabled')?.value || '0') === '1' ? '1' : '0';
+		const iface = String(document.getElementById('qosify-interface')?.value || '').trim();
+		const download = String(document.getElementById('qosify-download')?.value || '').trim();
+		const upload = String(document.getElementById('qosify-upload')?.value || '').trim();
+		try {
+			const section = await this.ensureQoSifyConfigSection();
+			await this.core.uciSet('qosify', section, {
+				enabled,
+				interface: iface,
+				download,
+				upload
+			});
+			await this.core.uciCommit('qosify');
+			this.core.showToast('QoSify configuration saved', 'success');
+			await this.loadQoSify();
+		} catch {
+			this.core.showToast('Failed to save QoSify configuration', 'error');
+		}
+	}
+
+	async runQoSifyServiceAction(action) {
+		if (!action) return;
+		try {
+			const [status] = await this.core.ubusCall('file', 'exec', {
+				command: '/etc/init.d/qosify',
+				params: [String(action)]
+			});
+			if (status !== 0) throw new Error('service action failed');
+			this.core.showToast(`QoSify ${action} completed`, 'success');
+			await this.refreshQoSifyServiceStatus();
+		} catch {
+			this.core.showToast(`Failed to ${action} QoSify service`, 'error');
 		}
 	}
 
