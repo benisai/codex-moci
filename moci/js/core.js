@@ -604,6 +604,19 @@ export class OpenWrtCore {
 		const listeners = [];
 
 		const showSubTab = tab => {
+			const tabButtons = Array.from(document.querySelectorAll(`#${pageId} .tab-btn[data-tab]`));
+			const isAllowed = btn => {
+				const feature = btn.getAttribute('data-feature');
+				return !feature || this.isFeatureEnabled(feature);
+			};
+
+			let resolvedTab = tab;
+			const requestedBtn = tabButtons.find(btn => btn.getAttribute('data-tab') === tab);
+			if (!requestedBtn || !isAllowed(requestedBtn)) {
+				const fallbackBtn = tabButtons.find(isAllowed);
+				resolvedTab = fallbackBtn ? fallbackBtn.getAttribute('data-tab') : tab;
+			}
+
 			document.querySelectorAll(`#${pageId} .tab-content`).forEach(content => {
 				content.classList.add('hidden');
 			});
@@ -611,14 +624,14 @@ export class OpenWrtCore {
 				btn.classList.remove('active');
 			});
 
-			const tabContent = document.getElementById(`tab-${tab}`);
+			const tabContent = document.getElementById(`tab-${resolvedTab}`);
 			if (tabContent) tabContent.classList.remove('hidden');
 
-			const tabBtn = document.querySelector(`#${pageId} .tab-btn[data-tab="${tab}"]`);
+			const tabBtn = document.querySelector(`#${pageId} .tab-btn[data-tab="${resolvedTab}"]`);
 			if (tabBtn) tabBtn.classList.add('active');
 
-			if (loadHandlers[tab]) {
-				loadHandlers[tab]();
+			if (loadHandlers[resolvedTab]) {
+				loadHandlers[resolvedTab]();
 			}
 		};
 

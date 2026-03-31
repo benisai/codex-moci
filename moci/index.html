@@ -328,19 +328,19 @@
 						<h2>NETWORK</h2>
 						<div class="tabs">
 							<button class="tab-btn active" data-tab="interfaces">INTERFACES</button>
-							<button class="tab-btn" data-tab="wireless">WIRELESS</button>
+							<button class="tab-btn" data-tab="wireless" data-feature="wireless">WIRELESS</button>
 							<button class="tab-btn" data-tab="firewall">FIREWALL</button>
 							<button class="tab-btn" data-tab="dhcp" data-feature="dhcp">DHCP</button>
-							<button class="tab-btn" data-tab="dns">DNS & HOSTS</button>
+							<button class="tab-btn" data-tab="dns" data-feature="dns">DNS & HOSTS</button>
 							<button class="tab-btn" data-tab="adblock-classic" data-feature="adblock">ADBLOCK</button>
 							<button class="tab-btn" data-tab="adblock-fast" data-feature="adblock_fast">ADBLOCK-FAST</button>
 							<button class="tab-btn" data-tab="pbr" data-feature="pbr">PBR</button>
-							<button class="tab-btn" data-tab="ddns">DDNS</button>
-							<button class="tab-btn" data-tab="qos">QOS</button>
+							<button class="tab-btn" data-tab="ddns" data-feature="ddns">DDNS</button>
+							<button class="tab-btn" data-tab="qos" data-feature="qos">QOS</button>
 							<button class="tab-btn" data-tab="qosify" data-feature="qosify">QOSIFY</button>
-							<button class="tab-btn" data-tab="vpn">VPN</button>
+							<button class="tab-btn" data-tab="vpn" data-feature="wireguard">VPN</button>
 							<button class="tab-btn" data-tab="connections">CONNECTIONS</button>
-							<button class="tab-btn" data-tab="diagnostics">DIAGNOSTICS</button>
+							<button class="tab-btn" data-tab="diagnostics" data-feature="diagnostics">DIAGNOSTICS</button>
 							<button class="tab-btn" data-tab="quarantine" data-feature="quarantine">QUARANTINE</button>
 						</div>
 
@@ -520,7 +520,7 @@
 							</div>
 						</div>
 
-						<div class="tab-content hidden" id="tab-wireless">
+						<div class="tab-content hidden" id="tab-wireless" data-feature="wireless">
 							<div class="stat-card">
 								<table class="data-table" id="wireless-table">
 									<thead>
@@ -818,7 +818,7 @@
 							</div>
 						</div>
 
-						<div class="tab-content hidden" id="tab-dns">
+						<div class="tab-content hidden" id="tab-dns" data-feature="dns">
 							<div class="stat-card">
 								<div class="section-title">CUSTOM DNS ENTRIES</div>
 								<button class="action-btn" id="add-dns-entry-btn" style="margin-bottom: 16px">
@@ -866,7 +866,7 @@
 							</div>
 						</div>
 
-						<div class="tab-content hidden" id="tab-ddns">
+						<div class="tab-content hidden" id="tab-ddns" data-feature="ddns">
 							<div class="stat-card">
 								<div class="section-title">DYNAMIC DNS SERVICES</div>
 								<button class="action-btn" id="add-ddns-btn" style="margin-bottom: 16px">
@@ -894,7 +894,7 @@
 							</div>
 						</div>
 
-						<div class="tab-content hidden" id="tab-qos">
+						<div class="tab-content hidden" id="tab-qos" data-feature="qos">
 							<div class="stat-card">
 								<div class="section-title">QOS CONFIGURATION</div>
 								<div class="form-group">
@@ -1444,7 +1444,7 @@ Endpoint = host:51820"
 							</div>
 						</div>
 
-						<div class="tab-content hidden" id="tab-vpn">
+						<div class="tab-content hidden" id="tab-vpn" data-feature="wireguard">
 							<div class="stat-card">
 								<div class="section-title">WIREGUARD SERVER CONFIGURATION</div>
 								<div class="form-group">
@@ -1933,7 +1933,7 @@ Endpoint = host:51820"
 							</div>
 						</div>
 
-						<div class="tab-content hidden" id="tab-diagnostics">
+						<div class="tab-content hidden" id="tab-diagnostics" data-feature="diagnostics">
 							<div class="stat-card">
 								<div class="section-title">PING</div>
 								<div class="diagnostic-form">
@@ -2731,14 +2731,14 @@ Endpoint = host:51820"
 						<div class="tabs">
 							<button class="tab-btn active" data-tab="general">GENERAL</button>
 							<button class="tab-btn" data-tab="admin">ADMINISTRATION</button>
-							<button class="tab-btn" data-tab="backup">BACKUP/RESTORE</button>
-							<button class="tab-btn" data-tab="software">SOFTWARE</button>
-							<button class="tab-btn" data-tab="startup">STARTUP</button>
+							<button class="tab-btn" data-tab="backup" data-feature="backup">BACKUP/RESTORE</button>
+							<button class="tab-btn" data-tab="software" data-feature="packages">SOFTWARE</button>
+							<button class="tab-btn" data-tab="startup" data-feature="services">STARTUP</button>
 							<button class="tab-btn" data-tab="cron">SCHEDULED TASKS</button>
-							<button class="tab-btn" data-tab="ssh-keys">SSH KEYS</button>
-							<button class="tab-btn" data-tab="mounts">STORAGE</button>
-							<button class="tab-btn" data-tab="led">LED</button>
-							<button class="tab-btn" data-tab="upgrade">FIRMWARE</button>
+							<button class="tab-btn" data-tab="ssh-keys" data-feature="ssh_keys">SSH KEYS</button>
+							<button class="tab-btn" data-tab="mounts" data-feature="storage">STORAGE</button>
+							<button class="tab-btn" data-tab="led" data-feature="leds">LED</button>
+							<button class="tab-btn" data-tab="upgrade" data-feature="firmware">FIRMWARE</button>
 						</div>
 
 						<div class="tab-content" id="tab-general">
@@ -2809,7 +2809,7 @@ Endpoint = host:51820"
 							</div>
 						</div>
 
-						<div class="tab-content hidden" id="tab-backup">
+						<div class="tab-content hidden" id="tab-backup" data-feature="backup">
 							<div class="stat-card">
 								<div class="section-title">BACKUP / RESTORE</div>
 								<div class="quick-actions">
@@ -2841,7 +2841,7 @@ Endpoint = host:51820"
 							</div>
 						</div>
 
-						<div class="tab-content hidden" id="tab-software">
+						<div class="tab-content hidden" id="tab-software" data-feature="packages">
 							<div class="stat-card">
 								<div class="section-title">ROOT STORAGE (/)</div>
 								<div style="margin-bottom: 20px">
@@ -2891,7 +2891,7 @@ Endpoint = host:51820"
 							</div>
 						</div>
 
-						<div class="tab-content hidden" id="tab-startup">
+						<div class="tab-content hidden" id="tab-startup" data-feature="services">
 							<div class="stat-card">
 								<div class="section-title">SYSTEM SERVICES</div>
 								<table class="data-table" id="services-table">
@@ -2940,7 +2940,7 @@ Endpoint = host:51820"
 							</div>
 						</div>
 
-						<div class="tab-content hidden" id="tab-ssh-keys">
+						<div class="tab-content hidden" id="tab-ssh-keys" data-feature="ssh_keys">
 							<div class="stat-card">
 								<div class="section-title">SSH AUTHORIZED KEYS</div>
 								<div class="quick-actions" style="margin-bottom: 16px">
@@ -2966,7 +2966,7 @@ Endpoint = host:51820"
 							</div>
 						</div>
 
-						<div class="tab-content hidden" id="tab-mounts">
+						<div class="tab-content hidden" id="tab-mounts" data-feature="storage">
 							<div class="stat-card">
 								<div class="section-title">STORAGE OVERVIEW</div>
 								<div
@@ -3004,7 +3004,7 @@ Endpoint = host:51820"
 							</div>
 						</div>
 
-						<div class="tab-content hidden" id="tab-led">
+						<div class="tab-content hidden" id="tab-led" data-feature="leds">
 							<div class="stat-card">
 								<div class="section-title">LED CONFIGURATION</div>
 								<table class="data-table" id="led-table">
@@ -3026,7 +3026,7 @@ Endpoint = host:51820"
 							</div>
 						</div>
 
-						<div class="tab-content hidden" id="tab-upgrade">
+						<div class="tab-content hidden" id="tab-upgrade" data-feature="firmware">
 							<div class="stat-card">
 								<div class="section-title">FIRMWARE UPGRADE</div>
 								<div
