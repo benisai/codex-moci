@@ -126,6 +126,14 @@ export default class NetworkModule {
 		});
 
 		this.core.setupModal({
+			modalId: 'wg-import-modal',
+			closeBtnId: 'close-wg-import-modal',
+			cancelBtnId: 'cancel-wg-import-btn',
+			saveBtnId: 'save-wg-import-btn',
+			saveHandler: () => this.importWgProfile()
+		});
+
+		this.core.setupModal({
 			modalId: 'adblock-list-modal',
 			closeBtnId: 'close-adblock-list-modal',
 			cancelBtnId: 'cancel-adblock-list-btn',
@@ -229,6 +237,10 @@ export default class NetworkModule {
 		document.getElementById('save-qos-config-btn')?.addEventListener('click', () => this.saveQoSConfig());
 		document.getElementById('save-wg-config-btn')?.addEventListener('click', () => this.saveWgConfig());
 		document.getElementById('generate-wg-keys-btn')?.addEventListener('click', () => this.generateWgKeys());
+		document.getElementById('import-wg-profile-btn')?.addEventListener('click', () => {
+			this.core.resetModal('wg-import-modal');
+			this.core.openModal('wg-import-modal');
+		});
 		document.getElementById('save-adblock-settings-btn')?.addEventListener('click', () => this.saveAdblockSettings());
 		document.getElementById('refresh-adblock-btn')?.addEventListener('click', () => this.loadAdblock());
 		document.getElementById('save-adblock-classic-btn')?.addEventListener('click', () => this.saveAdblockClassicSettings());
@@ -3589,6 +3601,209 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 					});
 				} catch {}
 			}
+		}
+	}
+
+	parseWgProfileConfig(raw) {
+		const text = String(raw || '').replace(/\r/g, '');
+		const lines = text.split('\n');
+		let section = '';
+		const iface = {};
+		const peer = {};
+		for (const lineRaw of lines) {
+			const line = String(lineRaw || '').trim();
+			if (!line || line.startsWith('#') || line.startsWith(';')) continue;
+			if (line.startsWith('[') && line.endsWith(']')) {
+				section = line.slice(1, -1).trim().toLowerCase();
+				continue;
+			}
+			const eqIdx = line.indexOf('=');
+			if (eqIdx < 0) continue;
+			const key = line.slice(0, eqIdx).trim();
+			const value = line.slice(eqIdx + 1).trim();
+			if (!key) continue;
+
+			if (section === 'interface') {
+				if (key === 'Address') iface.address = value;
+				else if (key === 'PrivateKey') iface.privateKey = value;
+				else if (key === 'DNS') iface.dns = value;
+			} else if (section === 'peer') {
+				if (key === 'PublicKey') peer.publicKey = value;
+				else if (key === 'AllowedIPs') peer.allowedIps = value;
+				else if (key === 'Endpoint') peer.endpoint = value;
+				else if (key === 'PersistentKeepalive') peer.keepalive = value;
+				else if (key === 'PresharedKey') peer.presharedKey = value;
+			}
+		}
+
+		const endpoint = String(peer.endpoint || '').trim();
+		let endpointHost = '';
+		let endpointPort = '';
+		if (endpoint) {
+			const m = endpoint.match(/^\[([^\]]+)\]:(\d+)$/) || endpoint.match(/^([^:]+):(\d+)$/);
+			if (m) {
+				endpointHost = String(m[1] || '').trim();
+				endpointPort = String(m[2] || '').trim();
+			}
+		}
+
+		const splitList = value =>
+			String(value || '')
+				.split(',')
+				.map(v => String(v || '').trim())
+				.filter(Boolean);
+
+		const addresses = splitList(iface.address);
+		const dns = splitList(iface.dns);
+		const allowedIps = splitList(peer.allowedIps);
+
+		if (allowedIps.length === 0) allowedIps.push('0.0.0.0/0');
+		if (!allowedIps.includes('0.0.0.0/0')) allowedIps.unshift('0.0.0.0/0');
+
+		return {
+			addresses,
+			privateKey: String(iface.privateKey || '').trim(),
+			dns,
+			publicKey: String(peer.publicKey || '').trim(),
+			allowedIps,
+			endpointHost,
+			endpointPort,
+			keepalive: String(peer.keepalive || '').trim(),
+			presharedKey: String(peer.presharedKey || '').trim()
+		};
+	}
+
+	async ensureWgClientFirewall() {
+		const [status, result] = await this.core.uciGet('firewall');
+		const values = status === 0 && result?.values ? result.values : {};
+
+		let zoneSection = '';
+		let lanZoneName = 'lan';
+		let forwardExists = false;
+
+		for (const [section, cfg] of Object.entries(values)) {
+			if (String(cfg?.['.type'] || '') === 'zone') {
+				const name = String(cfg.name || '').trim();
+				const networks = Array.isArray(cfg.network)
+					? cfg.network.map(v => String(v || '').trim())
+					: String(cfg.network || '')
+							.split(/\s+/)
+							.map(v => String(v || '').trim())
+							.filter(Boolean);
+				if (name === 'wgclient' || networks.includes('wgclient')) zoneSection = section;
+				if (name === 'lan') lanZoneName = 'lan';
+			}
+			if (String(cfg?.['.type'] || '') === 'forwarding') {
+				const src = String(cfg.src || '').trim();
+				const dest = String(cfg.dest || '').trim();
+				if (src === 'lan' && dest === 'wgclient') forwardExists = true;
+			}
+		}
+
+		const zoneValues = {
+			name: 'wgclient',
+			network: ['wgclient'],
+			input: 'REJECT',
+			output: 'ACCEPT',
+			forward: 'REJECT',
+			masq: '1',
+			mtu_fix: '1'
+		};
+		if (zoneSection) {
+			await this.core.uciSet('firewall', zoneSection, zoneValues);
+		} else {
+			const [, addRes] = await this.core.uciAdd('firewall', 'zone');
+			if (addRes?.section) await this.core.uciSet('firewall', addRes.section, zoneValues);
+		}
+
+		if (!forwardExists) {
+			const [, fwdRes] = await this.core.uciAdd('firewall', 'forwarding');
+			if (fwdRes?.section) {
+				await this.core.uciSet('firewall', fwdRes.section, {
+					src: lanZoneName || 'lan',
+					dest: 'wgclient'
+				});
+			}
+		}
+	}
+
+	async importWgProfile() {
+		const raw = String(document.getElementById('wg-import-config')?.value || '');
+		const parsed = this.parseWgProfileConfig(raw);
+
+		if (!parsed.privateKey || !parsed.publicKey || !parsed.endpointHost || !parsed.endpointPort) {
+			this.core.showToast('Invalid profile: missing private/public key or endpoint', 'error');
+			return;
+		}
+		if (!Array.isArray(parsed.addresses) || parsed.addresses.length === 0) {
+			this.core.showToast('Invalid profile: missing interface Address', 'error');
+			return;
+		}
+
+		try {
+			const ifaceName = 'wgclient';
+			await this.core.uciSet('network', ifaceName, {
+				proto: 'wireguard',
+				private_key: parsed.privateKey,
+				addresses: parsed.addresses,
+				dns: parsed.dns,
+				peerdns: parsed.dns.length > 0 ? '0' : '1',
+				auto: '1',
+				disabled: '0'
+			});
+
+			const [nStatus, nResult] = await this.core.uciGet('network');
+			let peerSection = '';
+			if (nStatus === 0 && nResult?.values) {
+				for (const [section, cfg] of Object.entries(nResult.values)) {
+					if (String(cfg?.['.type'] || '') !== `wireguard_${ifaceName}`) continue;
+					if (String(cfg.public_key || '').trim() === parsed.publicKey) {
+						peerSection = section;
+						break;
+					}
+				}
+			}
+			if (!peerSection) {
+				const [, addRes] = await this.core.uciAdd('network', `wireguard_${ifaceName}`);
+				peerSection = String(addRes?.section || '').trim();
+			}
+			if (!peerSection) throw new Error('Failed to create WireGuard peer');
+
+			await this.core.uciSet('network', peerSection, {
+				public_key: parsed.publicKey,
+				allowed_ips: parsed.allowedIps,
+				endpoint_host: parsed.endpointHost,
+				endpoint_port: parsed.endpointPort,
+				route_allowed_ips: '1',
+				persistent_keepalive: parsed.keepalive || '25',
+				preshared_key: parsed.presharedKey || ''
+			});
+
+			await this.core.uciCommit('network');
+			await this.ensureWgClientFirewall();
+			await this.core.uciCommit('firewall');
+			try {
+				await this.exec('/etc/init.d/network', ['restart']);
+			} catch {}
+			try {
+				await this.exec('/etc/init.d/firewall', ['restart']);
+			} catch {}
+
+			const wgIfaceEl = document.getElementById('wg-interface');
+			const wgEnabledEl = document.getElementById('wg-enabled');
+			const wgPrivateKeyEl = document.getElementById('wg-private-key');
+			const wgAddressEl = document.getElementById('wg-address');
+			if (wgIfaceEl) wgIfaceEl.value = ifaceName;
+			if (wgEnabledEl) wgEnabledEl.value = '1';
+			if (wgPrivateKeyEl) wgPrivateKeyEl.value = parsed.privateKey;
+			if (wgAddressEl) wgAddressEl.value = parsed.addresses[0] || '';
+
+			this.core.closeModal('wg-import-modal');
+			this.core.showToast('WireGuard VPN profile imported', 'success');
+			await this.loadVPN();
+		} catch (err) {
+			console.error('Failed to import WireGuard profile:', err);
+			this.core.showToast('Failed to import WireGuard profile', 'error');
 		}
 	}
 
