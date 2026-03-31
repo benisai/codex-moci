@@ -36,6 +36,7 @@ export default class NetifyModule {
 		this.cardsRefreshIntervalMs = 10000;
 		this.lastTopAppsRefreshAt = 0;
 		this.isRefreshingTopApps = false;
+		this.pbrBypassAvailable = false;
 
 		this.core.registerRoute('/netify', async () => {
 			const pageElement = document.getElementById('netify-page');
@@ -156,6 +157,7 @@ export default class NetifyModule {
 		this.userPausedAutoRefresh = true;
 		this.updateAutoRefreshToggleUi();
 		await this.loadConfig();
+		await this.refreshPbrBypassAvailability();
 		this.syncCollectorPanel();
 		this.startPolling();
 		await this.refresh(false, true);
@@ -894,6 +896,9 @@ pgrep -fa moci-netify-collector || true
 		const actionType = document.getElementById('netify-action-type');
 		if (actionType) {
 			actionType.value = domainInput?.value ? 'domain' : 'ip';
+			if (!this.pbrBypassAvailable && actionType.value === 'vpn_bypass') {
+				actionType.value = domainInput?.value ? 'domain' : 'ip';
+			}
 		}
 		this.syncActionTypeUi();
 		this.core.openModal('netify-flow-action-modal');
@@ -904,7 +909,8 @@ pgrep -fa moci-netify-collector || true
 		const domainGroup = document.getElementById('netify-domain-group');
 		const ipGroup = document.getElementById('netify-ip-block-group');
 		if (!domainGroup || !ipGroup) return;
-		const isDomain = type === 'domain';
+		const currentDomain = this.sanitizeDomain(document.getElementById('netify-action-domain')?.value || '');
+		const isDomain = type === 'domain' || (type === 'vpn_bypass' && !!currentDomain);
 		domainGroup.classList.toggle('hidden', !isDomain);
 		ipGroup.classList.toggle('hidden', isDomain);
 	}
@@ -936,10 +942,15 @@ pgrep -fa moci-netify-collector || true
 				}
 				await this.blockDomainInCustomDns(domain);
 				this.core.showToast(`Blocked domain via custom DNS: ${domain}`, 'success');
-			} else {
+			} else if (type === 'ip') {
 				const scope = document.getElementById('netify-action-scope')?.value || 'all_sources';
 				await this.blockDestinationIp(flow, scope);
 				this.core.showToast('Firewall block rule added', 'success');
+			} else if (type === 'vpn_bypass') {
+				await this.addPbrVpnBypass(flow);
+				this.core.showToast('PBR VPN bypass rule added', 'success');
+			} else {
+				throw new Error('Unsupported action type');
 			}
 
 			this.core.closeModal('netify-flow-action-modal');
@@ -1024,6 +1035,84 @@ pgrep -fa moci-netify-collector || true
 		} catch (err) {
 			console.warn('Firewall restart failed after rule commit:', err);
 		}
+	}
+
+	async refreshPbrBypassAvailability() {
+		let available = false;
+		const featureEnabled = this.core.isFeatureEnabled('pbr');
+		if (featureEnabled) {
+			try {
+				const [status, result] = await this.core.uciGet('pbr');
+				available = status === 0 && !!result?.values;
+				if (!available) {
+					const [s2, r2] = await this.exec('/bin/sh', ['-c', 'uci -q show pbr 2>/dev/null | head -n 1']);
+					available = s2 === 0 && String(r2?.stdout || '').trim().length > 0;
+				}
+			} catch {
+				available = false;
+			}
+		}
+		this.pbrBypassAvailable = available;
+
+		const bypassOpt = document.getElementById('netify-action-type-vpn-bypass');
+		const actionType = document.getElementById('netify-action-type');
+		if (bypassOpt) {
+			bypassOpt.classList.toggle('hidden', !available);
+			bypassOpt.disabled = !available;
+		}
+		if (!available && actionType?.value === 'vpn_bypass') {
+			actionType.value = 'domain';
+		}
+	}
+
+	async addPbrVpnBypass(flow) {
+		if (!this.pbrBypassAvailable) {
+			throw new Error('PBR is not available/enabled');
+		}
+
+		const inputDomain = this.sanitizeDomain(document.getElementById('netify-action-domain')?.value || '');
+		const domainScope = document.getElementById('netify-action-domain-scope')?.value || 'full';
+		const rootDomain = this.extractRootDomain(inputDomain);
+		const domainTarget = domainScope === 'root' ? rootDomain || inputDomain : inputDomain;
+
+		let destTarget = '';
+		if (domainTarget) {
+			destTarget = domainTarget;
+		} else if (this.isValidIp(flow.destIp)) {
+			destTarget = String(flow.destIp || '').trim();
+		}
+		if (!destTarget) {
+			throw new Error('No valid domain/IP found for VPN bypass');
+		}
+
+		const ruleNameBase = `VPN-Bypass ${destTarget}`;
+		const ruleName = ruleNameBase.length > 64 ? ruleNameBase.slice(0, 64) : ruleNameBase;
+		const values = {
+			enabled: '1',
+			name: ruleName,
+			src_addr: '',
+			src_port: '',
+			dest_addr: destTarget,
+			dest_port: '',
+			proto: 'all',
+			chain: 'prerouting',
+			interface: 'wan'
+		};
+
+		if (!domainTarget) {
+			const scope = document.getElementById('netify-action-scope')?.value || 'all_sources';
+			if (scope === 'source_dest' && this.isValidIp(flow.localIp)) {
+				values.src_addr = String(flow.localIp || '').trim();
+			}
+		}
+
+		const [status, result] = await this.core.uciAdd('pbr', 'policy');
+		if (status !== 0 || !result?.section) throw new Error('Failed to create PBR policy');
+		await this.core.uciSet('pbr', result.section, values);
+		await this.core.uciCommit('pbr');
+		try {
+			await this.exec('/etc/init.d/pbr', ['restart']);
+		} catch {}
 	}
 
 	sanitizeDomain(value) {
