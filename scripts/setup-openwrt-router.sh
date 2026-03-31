@@ -137,6 +137,8 @@ for pkg in \
 	luci-app-vnstat2 \
 	nlbwmon \
 	luci-app-nlbwmon \
+	qos-scripts \
+	luci-app-qos \
 	wireguard-tools \
 	kmod-wireguard \
 	luci-proto-wireguard \
