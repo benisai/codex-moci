@@ -217,6 +217,7 @@ export default class SystemModule {
 		try {
 			await this.core.uciSet('moci', 'features', values);
 			await this.core.uciCommit('moci');
+			await this.syncManagedFeatureServices(values);
 			await this.core.ubusCall('file', 'exec', {
 				command: '/etc/init.d/uhttpd',
 				params: ['restart']
@@ -226,6 +227,85 @@ export default class SystemModule {
 			this.core.showToast('MoCI config saved (uhttpd restarted)', 'success');
 		} catch {
 			this.core.showToast('Failed to save MoCI config', 'error');
+		}
+	}
+
+	async syncManagedFeatureServices(values) {
+		const netifyEnabled = String(values.netify ?? '1') === '1';
+		const monitoringEnabled = String(values.monitoring ?? '1') === '1';
+		const quarantineEnabled = String(values.quarantine ?? '1') === '1';
+
+		try {
+			if (!netifyEnabled) {
+				await this.core.uciSet('moci', 'collector', { enabled: '0' });
+			}
+			if (!monitoringEnabled) {
+				await this.core.uciSet('moci', 'ping_monitor', { enabled: '0' });
+				await this.core.uciSet('moci', 'speedtest_monitor', { enabled: '0' });
+			}
+			if (!quarantineEnabled) {
+				await this.core.uciSet('moci', 'quarantine', { enabled: '0' });
+			}
+			if (!netifyEnabled || !monitoringEnabled || !quarantineEnabled) {
+				await this.core.uciCommit('moci');
+			}
+		} catch (err) {
+			console.error('Failed to apply managed feature UCI state:', err);
+		}
+
+		try {
+			if (netifyEnabled) {
+				await this.core.ubusCall('file', 'exec', {
+					command: '/bin/sh',
+					params: ['-c', '/etc/init.d/netify-collector enable >/dev/null 2>&1 || true']
+				});
+			} else {
+				await this.core.ubusCall('file', 'exec', {
+					command: '/bin/sh',
+					params: ['-c', '/etc/init.d/netify-collector stop >/dev/null 2>&1 || true; /etc/init.d/netify-collector disable >/dev/null 2>&1 || true']
+				});
+			}
+		} catch (err) {
+			console.error('Failed syncing netify service state:', err);
+		}
+
+		try {
+			if (monitoringEnabled) {
+				await this.core.ubusCall('file', 'exec', {
+					command: '/bin/sh',
+					params: ['-c', '/etc/init.d/ping-monitor enable >/dev/null 2>&1 || true']
+				});
+			} else {
+				await this.core.ubusCall('file', 'exec', {
+					command: '/bin/sh',
+					params: [
+						'-c',
+						'/etc/init.d/ping-monitor stop >/dev/null 2>&1 || true; /etc/init.d/ping-monitor disable >/dev/null 2>&1 || true; ' +
+							'CR=/etc/crontabs/root; TMP=/tmp/.moci_speedtest_cron.$$; ' +
+							'if [ -f "$CR" ]; then grep -v "MOCI_SPEEDTEST_MONITOR" "$CR" > "$TMP" 2>/dev/null || : > "$TMP"; else : > "$TMP"; fi; ' +
+							'cp "$TMP" "$CR"; rm -f "$TMP"; ' +
+							'/etc/init.d/cron reload 2>/dev/null || /etc/init.d/cron restart 2>/dev/null || /etc/init.d/crond reload 2>/dev/null || /etc/init.d/crond restart 2>/dev/null || killall -HUP crond 2>/dev/null || true'
+					]
+				});
+			}
+		} catch (err) {
+			console.error('Failed syncing monitoring service state:', err);
+		}
+
+		try {
+			if (quarantineEnabled) {
+				await this.core.ubusCall('file', 'exec', {
+					command: '/bin/sh',
+					params: ['-c', '/etc/init.d/moci-device-quarantine enable >/dev/null 2>&1 || true']
+				});
+			} else {
+				await this.core.ubusCall('file', 'exec', {
+					command: '/bin/sh',
+					params: ['-c', '/etc/init.d/moci-device-quarantine stop >/dev/null 2>&1 || true; /etc/init.d/moci-device-quarantine disable >/dev/null 2>&1 || true']
+				});
+			}
+		} catch (err) {
+			console.error('Failed syncing quarantine service state:', err);
 		}
 	}
 
