@@ -184,6 +184,7 @@ set_uci uhttpd.main.home "/www"
 uci commit uhttpd
 
 log "Applying MoCI runtime defaults"
+set_uci moci.features.qosify "1"
 set_uci moci.collector.enabled "1"
 set_uci moci.collector.host "127.0.0.1"
 set_uci moci.collector.port "7150"

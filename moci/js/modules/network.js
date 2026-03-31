@@ -9,8 +9,9 @@ export default class NetworkModule {
 		this.adblockClassicSection = 'global';
 		this.adblockClassicReportMaxTop = 10;
 		this.adblockClassicReportMaxResults = 50;
+		this.qosifyInstalled = null;
 
-		this.core.registerRoute('/network', (path, subPaths) => {
+		this.core.registerRoute('/network', async (path, subPaths) => {
 			const pageElement = document.getElementById('network-page');
 			if (pageElement) pageElement.classList.remove('hidden');
 
@@ -37,8 +38,13 @@ export default class NetworkModule {
 				this.setupDiagnostics();
 			}
 
+			await this.refreshQosifyAvailability();
+
 			const tabRaw = subPaths[0] || 'interfaces';
-			const tab = tabRaw === 'adblock' ? 'adblock-classic' : tabRaw;
+			let tab = tabRaw === 'adblock' ? 'adblock-classic' : tabRaw;
+			if (tab === 'qosify' && !this.canShowQosifyTab()) {
+				tab = 'interfaces';
+			}
 			this.subTabs.showSubTab(tab);
 			if (tab === 'adblock-classic') this.loadAdblockClassic();
 			if (tab === 'adblock-fast') this.loadAdblock();
@@ -3500,6 +3506,35 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 		}
 	}
 
+	canShowQosifyTab() {
+		return this.core.isFeatureEnabled('qosify') && this.qosifyInstalled === true;
+	}
+
+	applyQosifyTabVisibility() {
+		const btn = document.querySelector('#network-page .tab-btn[data-tab="qosify"]');
+		const content = document.getElementById('tab-qosify');
+		const visible = this.canShowQosifyTab();
+		if (btn) btn.classList.toggle('hidden', !visible);
+		if (content) content.classList.toggle('hidden', !visible);
+	}
+
+	async refreshQosifyAvailability() {
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', '[ -x /etc/init.d/qosify ] && echo INSTALLED || echo MISSING']
+			});
+			if (status === 0) {
+				this.qosifyInstalled = String(result?.stdout || '').trim() === 'INSTALLED';
+			} else {
+				this.qosifyInstalled = false;
+			}
+		} catch {
+			this.qosifyInstalled = false;
+		}
+		this.applyQosifyTabVisibility();
+	}
+
 	async readQoSifyConfig() {
 		try {
 			const [status, result] = await this.core.uciGet('qosify');
@@ -3560,6 +3595,8 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 	}
 
 	async loadQoSify() {
+		await this.refreshQosifyAvailability();
+		if (!this.canShowQosifyTab()) return;
 		const installHintEl = document.getElementById('qosify-install-hint');
 		const enabledEl = document.getElementById('qosify-enabled');
 		const ifaceEl = document.getElementById('qosify-interface');

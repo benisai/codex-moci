@@ -144,6 +144,7 @@ export class OpenWrtCore {
 			pbr: '1',
 			wireguard: '1',
 			qos: '1',
+			qosify: '1',
 			ddns: '1',
 			diagnostics: '1',
 			quarantine: '1',
