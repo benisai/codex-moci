@@ -2067,7 +2067,7 @@ export default class NetworkModule {
 			if (maxTopEl) maxTopEl.value = String(maxTop);
 			if (maxResultsEl) maxResultsEl.value = String(maxResults);
 			this.core.showToast('AdBlock report settings saved', 'success');
-			await this.loadAdblockClassicReport(false);
+			await this.loadAdblockClassicReport(true);
 		} catch {
 			this.core.showToast('Failed to save AdBlock report settings', 'error');
 		}
@@ -2152,7 +2152,11 @@ export default class NetworkModule {
 
 		const cmdParts = [];
 		if (forceGenerate) {
-			cmdParts.push('/etc/init.d/adblock report gen >/dev/null 2>&1 || true');
+			const maxTop = Math.min(Math.max(Number(this.adblockClassicReportMaxTop) || 10, 1), 500);
+			const maxResults = Math.min(Math.max(Number(this.adblockClassicReportMaxResults) || 50, 1), 5000);
+			cmdParts.push(
+				`/etc/init.d/adblock report gen ${maxTop} ${maxResults} >/dev/null 2>&1 || /etc/init.d/adblock report gen >/dev/null 2>&1 || true`
+			);
 		}
 		cmdParts.push(
 			'if [ -s /tmp/adblock-report/adb_report.jsn ]; then cat /tmp/adblock-report/adb_report.jsn; ' +
