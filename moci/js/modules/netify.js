@@ -1085,34 +1085,58 @@ pgrep -fa moci-netify-collector || true
 			throw new Error('No valid domain/IP found for VPN bypass');
 		}
 
-		const ruleNameBase = `VPN-Bypass ${destTarget}`;
-		const ruleName = ruleNameBase.length > 64 ? ruleNameBase.slice(0, 64) : ruleNameBase;
+		const bypassName = 'VPN-Bypass';
+		const [pbrStatus, pbrResult] = await this.core.uciGet('pbr');
+		let targetSection = '';
+		let existingDest = '';
+		if (pbrStatus === 0 && pbrResult?.values) {
+			for (const [section, cfg] of Object.entries(pbrResult.values)) {
+				if (String(cfg?.['.type'] || '') !== 'policy') continue;
+				const name = String(cfg?.name || '').trim();
+				if (name === bypassName || name.startsWith(`${bypassName} `)) {
+					targetSection = section;
+					existingDest = String(cfg?.dest_addr || '').trim();
+					break;
+				}
+			}
+		}
+
+		const mergedDest = this.mergeTargetList(existingDest, destTarget);
 		const values = {
 			enabled: '1',
-			name: ruleName,
+			name: bypassName,
 			src_addr: '',
 			src_port: '',
-			dest_addr: destTarget,
+			dest_addr: mergedDest,
 			dest_port: '',
 			proto: 'all',
 			chain: 'prerouting',
 			interface: 'wan'
 		};
 
-		if (!domainTarget) {
-			const scope = document.getElementById('netify-action-scope')?.value || 'all_sources';
-			if (scope === 'source_dest' && this.isValidIp(flow.localIp)) {
-				values.src_addr = String(flow.localIp || '').trim();
-			}
+		if (targetSection) {
+			await this.core.uciSet('pbr', targetSection, values);
+		} else {
+			const [status, result] = await this.core.uciAdd('pbr', 'policy');
+			if (status !== 0 || !result?.section) throw new Error('Failed to create PBR policy');
+			await this.core.uciSet('pbr', result.section, values);
 		}
-
-		const [status, result] = await this.core.uciAdd('pbr', 'policy');
-		if (status !== 0 || !result?.section) throw new Error('Failed to create PBR policy');
-		await this.core.uciSet('pbr', result.section, values);
 		await this.core.uciCommit('pbr');
 		try {
 			await this.exec('/etc/init.d/pbr', ['restart']);
 		} catch {}
+	}
+
+	mergeTargetList(currentValue, nextValue) {
+		const tokens = String(currentValue || '')
+			.split(/[\s,]+/)
+			.map(v => String(v || '').trim())
+			.filter(Boolean);
+		const set = new Set(tokens);
+		set.add(String(nextValue || '').trim());
+		return Array.from(set)
+			.filter(Boolean)
+			.join(' ');
 	}
 
 	sanitizeDomain(value) {
