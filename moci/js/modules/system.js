@@ -156,8 +156,9 @@ export default class SystemModule {
 
 	getMociFeatureKeys() {
 		const defaults = this.core.getDefaultFeatures ? this.core.getDefaultFeatures() : {};
+		const hiddenCoreKeys = new Set(['network', 'system', 'firewall', 'dhcp', 'dns', 'backup']);
 		return Object.keys(defaults)
-			.filter(key => key !== 'dashboard')
+			.filter(key => key !== 'dashboard' && !hiddenCoreKeys.has(key))
 			.sort((a, b) => a.localeCompare(b));
 	}
 

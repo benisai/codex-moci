@@ -160,6 +160,8 @@ export class OpenWrtCore {
 	}
 
 	isFeatureEnabled(feature) {
+		const alwaysEnabled = new Set(['network', 'system', 'firewall', 'dhcp', 'dns', 'backup']);
+		if (alwaysEnabled.has(feature)) return true;
 		if (feature === 'adblock_fast') {
 			const value = this.features.adblock_fast ?? this.features.adblock;
 			return value === '1';
