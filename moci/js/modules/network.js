@@ -3749,7 +3749,15 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 				hasIface = String(cfg?.['.type'] || '') === 'interface';
 			}
 			if (!hasIface) {
-				await this.core.uciAdd('network', 'interface', ifaceName);
+				const [addStatus] = await this.core.uciAdd('network', 'interface', ifaceName);
+				if (addStatus !== 0) {
+					await this.core.ubusCall('uci', 'set', {
+						config: 'network',
+						section: ifaceName,
+						type: 'interface',
+						values: {}
+					});
+				}
 			}
 			await this.core.uciSet('network', ifaceName, {
 				proto: 'wireguard',
@@ -3789,6 +3797,12 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 			});
 
 			await this.core.uciCommit('network');
+
+			const [verifyStatus, verifyResult] = await this.core.uciGet('network', ifaceName);
+			if (verifyStatus !== 0 || String(verifyResult?.values?.['.type'] || '') !== 'interface') {
+				throw new Error('WireGuard interface was not created');
+			}
+
 			await this.ensureWgClientFirewall();
 			await this.core.uciCommit('firewall');
 			try {
