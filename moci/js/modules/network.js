@@ -3742,6 +3742,15 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 
 		try {
 			const ifaceName = 'wgclient';
+			const [n0Status, n0Result] = await this.core.uciGet('network');
+			let hasIface = false;
+			if (n0Status === 0 && n0Result?.values) {
+				const cfg = n0Result.values[ifaceName];
+				hasIface = String(cfg?.['.type'] || '') === 'interface';
+			}
+			if (!hasIface) {
+				await this.core.uciAdd('network', 'interface', ifaceName);
+			}
 			await this.core.uciSet('network', ifaceName, {
 				proto: 'wireguard',
 				private_key: parsed.privateKey,
