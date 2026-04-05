@@ -26,6 +26,7 @@
 				"file": ["read"],
 				"system": ["info", "board"],
 				"luci-rpc": ["getDHCPLeases"],
+				"luci.bandix": ["getStatus", "getMetrics"],
 				"service": ["list"]
 			},
 			"uci": ["moci"]

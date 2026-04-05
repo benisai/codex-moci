@@ -132,6 +132,9 @@ What does the shell script do?:
   - `/etc/init.d/moci-device-quarantine`
 - installs `/etc/config/moci` defaults for Monitoring + Netify
 - enables/restarts `rpcd`, `uhttpd`, `netify-collector`, `ping-monitor`, `moci-state-sync`, `vnstat`, `nlbwmon`, `netifyd`
+- seeds dashboard traffic settings in UCI (`moci.dashboard.*`) with:
+  - `provider='auto'` (prefer Bandix when available, fallback to interface counters)
+  - `window_seconds='900'` (15-minute realtime window)
 
 After running script, open:
 - `http://<router-lan-ip>/moci/`
@@ -360,6 +363,37 @@ uci set moci.features.traffic_history='1'   # show
 uci set moci.features.traffic_history='0'   # hide
 uci commit moci
 ```
+
+---
+
+## Realtime Activity Source (Dashboard)
+
+The dashboard card **NETWORK ACTIVITY** keeps an in-memory rolling window (default **15 minutes**).
+
+- Default source behavior is `moci.dashboard.provider='auto'`:
+  - tries `luci.bandix` (`getMetrics` / `getStatus`) when Bandix is installed
+  - falls back to local interface counters from `/proc/net/dev`
+- Top hero DOWNLOAD/UPLOAD values show:
+  - current rate
+  - cumulative total
+
+### UCI options
+
+```bash
+config traffic 'dashboard'
+	option provider 'auto'      # auto | interface | bandix
+	option window_seconds '900' # 60..3600
+```
+
+### Example overrides
+
+```bash
+uci set moci.dashboard.provider='bandix'
+uci set moci.dashboard.window_seconds='900'
+uci commit moci
+```
+
+If you use Bandix data in MoCI, ensure `luci-app-bandix` and backend `bandix` versions match (`0.12.x` with `0.12.x`).
 
 ---
 
