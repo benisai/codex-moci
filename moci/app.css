@@ -220,6 +220,55 @@ body {
 }
 
 @media (max-width: 960px) {
+	#tab-software #packages-table thead {
+		display: none;
+	}
+
+	#tab-software #packages-table,
+	#tab-software #packages-table tbody,
+	#tab-software #packages-table tr,
+	#tab-software #packages-table td {
+		display: block;
+		width: 100%;
+	}
+
+	#tab-software #packages-table tr {
+		border: 1px solid var(--glass-border);
+		border-radius: 8px;
+		background: rgba(255, 255, 255, 0.015);
+		margin-bottom: 12px;
+	}
+
+	#tab-software #packages-table td {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 8px 10px;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+		overflow-wrap: anywhere;
+		word-break: break-word;
+	}
+
+	#tab-software #packages-table td:last-child {
+		border-bottom: none;
+	}
+
+	#tab-software #packages-table td::before {
+		content: attr(data-label);
+		font-family: var(--font-mono);
+		font-size: 10px;
+		letter-spacing: 0.08em;
+		color: var(--steel-muted);
+		text-transform: uppercase;
+		flex: 0 0 108px;
+	}
+
+	#packages-pagination {
+		justify-content: flex-start !important;
+		flex-wrap: wrap;
+	}
+
 	#network-page .tabs,
 	#system-page .tabs {
 		flex-wrap: nowrap;
@@ -280,6 +329,20 @@ body {
 }
 
 @media (max-width: 640px) {
+	#tab-software #packages-table td {
+		gap: 8px;
+		padding: 8px;
+	}
+
+	#tab-software #packages-table td::before {
+		flex-basis: 92px;
+		font-size: 9px;
+	}
+
+	#packages-pagination {
+		gap: 6px !important;
+	}
+
 	#network-page .tabs,
 	#system-page .tabs {
 		gap: 4px;

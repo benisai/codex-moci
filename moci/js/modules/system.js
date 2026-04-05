@@ -728,9 +728,9 @@ export default class SystemModule {
 		tbody.innerHTML = pageRows
 			.map(
 				p => `<tr>
-				<td>${this.core.escapeHtml(p.name)}</td>
-				<td>${this.core.escapeHtml(p.version)}</td>
-				<td>${this.core.renderBadge('success', 'Installed')}</td>
+				<td data-label="Package">${this.core.escapeHtml(p.name)}</td>
+				<td data-label="Version">${this.core.escapeHtml(p.version)}</td>
+				<td data-label="Status">${this.core.renderBadge('success', 'Installed')}</td>
 			</tr>`
 			)
 			.join('');
