@@ -6,6 +6,10 @@ export default class NetworkModule {
 		this.hostsRaw = '';
 		this.connectionsRefreshTimer = null;
 		this.isRefreshingConnections = false;
+		this.connectionsDnsLookupEnabled = localStorage.getItem('network_connections_dns_lookup') === '1';
+		this.connectionsDestinationDnsCache = new Map();
+		this.connectionsLeaseHostByIpCache = new Map();
+		this.connectionsLeaseCacheAt = 0;
 		this.adblockClassicSection = 'global';
 		this.adblockClassicReportMaxTop = 10;
 		this.adblockClassicReportMaxResults = 50;
@@ -326,6 +330,9 @@ export default class NetworkModule {
 		);
 		document.getElementById('network-connections-refresh-btn')?.addEventListener('click', () =>
 			this.refreshConnectionsManually()
+		);
+		document.getElementById('network-connections-dns-toggle-btn')?.addEventListener('click', () =>
+			this.toggleConnectionsDnsLookup()
 		);
 		document.getElementById('quarantine-enable-btn')?.addEventListener('click', () => this.saveQuarantineSettings(true));
 		document.getElementById('quarantine-disable-btn')?.addEventListener('click', () => this.saveQuarantineSettings(false));
@@ -4144,6 +4151,7 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 
 	async loadConnections() {
 		this.startConnectionsAutoRefresh();
+		this.updateConnectionsDnsToggleButton();
 		await this.core.loadResource('network-active-connections-table', 5, null, async () => {
 			await this.renderConnectionsTable();
 		});
@@ -4155,6 +4163,10 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 
 		let connections = await this.fetchConnections();
 		if (!Array.isArray(connections)) connections = [];
+		const leaseByIp = await this.fetchConnectionLeaseHostByIpMap();
+		if (this.connectionsDnsLookupEnabled) {
+			await this.resolveDestinationHostnames(connections);
+		}
 
 		if (connections.length === 0) {
 			this.core.renderEmptyTable(tbody, 5, 'No active conntrack connections');
@@ -4163,8 +4175,8 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 
 		tbody.innerHTML = connections
 			.map(conn => {
-				const source = conn.source || 'N/A';
-				const destination = conn.destination || 'N/A';
+				const source = this.formatConnectionSource(conn, leaseByIp);
+				const destination = this.formatConnectionDestination(conn);
 				const protocol = (conn.protocol || 'N/A').toUpperCase();
 				const status = conn.state || 'ACTIVE';
 				const transfer = this.formatConntrackTransfer(conn);
@@ -4267,13 +4279,163 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 		const packets = [...text.matchAll(/\bpackets=(\d+)/g)].reduce((sum, m) => sum + (Number(m[1]) || 0), 0);
 
 		return {
-			source: src ? `${src}${sport ? `:${sport}` : ''}` : 'N/A',
-			destination: dst ? `${dst}${dport ? `:${dport}` : ''}` : 'N/A',
+			source: src ? this.formatConntrackEndpoint(src, sport) : 'N/A',
+			destination: dst ? this.formatConntrackEndpoint(dst, dport) : 'N/A',
+			sourceIp: src || '',
+			sourcePort: sport || '',
+			destinationIp: dst || '',
+			destinationPort: dport || '',
 			protocol: protocol || 'unknown',
 			state: stateMatch ? stateMatch[1].toUpperCase() : 'ACTIVE',
 			transferBytes: bytes,
 			transferPackets: packets
 		};
+	}
+
+	formatConntrackEndpoint(ip, port) {
+		const addr = this.isLikelyIpv6(ip) && !String(ip).startsWith('[') ? `[${ip}]` : String(ip || '');
+		return port ? `${addr}:${port}` : addr;
+	}
+
+	isLikelyIpv4(ip) {
+		const text = String(ip || '').trim();
+		if (!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(text)) return false;
+		return text.split('.').every(part => {
+			const n = Number(part);
+			return Number.isInteger(n) && n >= 0 && n <= 255;
+		});
+	}
+
+	isLikelyIpv6(ip) {
+		const text = String(ip || '').trim();
+		return text.includes(':');
+	}
+
+	isLikelyIpAddress(ip) {
+		return this.isLikelyIpv4(ip) || this.isLikelyIpv6(ip);
+	}
+
+	async fetchConnectionLeaseHostByIpMap() {
+		const now = Date.now();
+		if (now - this.connectionsLeaseCacheAt < 30000) {
+			return this.connectionsLeaseHostByIpCache;
+		}
+
+		const map = new Map();
+		try {
+			const [status, result] = await this.core.ubusCall('luci-rpc', 'getDHCPLeases', {});
+			if (status === 0 && Array.isArray(result?.dhcp_leases)) {
+				for (const lease of result.dhcp_leases) {
+					const ip = String(lease?.ipaddr || '').trim();
+					const hostname = String(lease?.hostname || '').trim();
+					if (!ip || !hostname || hostname === '*') continue;
+					map.set(ip, hostname);
+				}
+			}
+		} catch {}
+
+		this.connectionsLeaseHostByIpCache = map;
+		this.connectionsLeaseCacheAt = now;
+		return map;
+	}
+
+	formatConnectionSource(conn, leaseByIp) {
+		const ip = String(conn?.sourceIp || '').trim();
+		const port = String(conn?.sourcePort || '').trim();
+		if (!ip) return conn?.source || 'N/A';
+		const hostname = leaseByIp?.get(ip);
+		if (!hostname) return conn?.source || this.formatConntrackEndpoint(ip, port);
+		return `${hostname} (${this.formatConntrackEndpoint(ip, port)})`;
+	}
+
+	formatConnectionDestination(conn) {
+		const ip = String(conn?.destinationIp || '').trim();
+		const port = String(conn?.destinationPort || '').trim();
+		const endpoint = ip ? this.formatConntrackEndpoint(ip, port) : conn?.destination || 'N/A';
+		if (!ip) return endpoint;
+		const resolved = this.connectionsDestinationDnsCache.get(ip);
+		if (resolved) return `${resolved} (${endpoint})`;
+		return endpoint;
+	}
+
+	async resolveDestinationHostnames(connections) {
+		const unresolvedIps = [
+			...new Set(
+				(connections || [])
+					.map(conn => String(conn?.destinationIp || '').trim())
+					.filter(ip => ip && this.isLikelyIpAddress(ip) && !this.connectionsDestinationDnsCache.has(ip))
+			)
+		];
+		if (unresolvedIps.length === 0) return;
+
+		const batch = unresolvedIps.slice(0, 12);
+		const byIp = await this.reverseLookupIps(batch);
+		for (const ip of batch) {
+			const name = String(byIp.get(ip) || '').trim();
+			this.connectionsDestinationDnsCache.set(ip, name);
+		}
+	}
+
+	async reverseLookupIps(ips) {
+		const results = new Map();
+		const list = Array.isArray(ips) ? ips.filter(Boolean) : [];
+		if (list.length === 0) return results;
+
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: [
+					'-c',
+					`for ip in "$@"; do
+name=""
+if command -v nslookup >/dev/null 2>&1; then
+	if command -v timeout >/dev/null 2>&1; then
+		name="$(timeout 2 nslookup "$ip" 2>/dev/null | sed -n 's/^.*name = //p' | head -n 1 | sed 's/\\.$//')"
+	else
+		name="$(nslookup "$ip" 2>/dev/null | sed -n 's/^.*name = //p' | head -n 1 | sed 's/\\.$//')"
+	fi
+fi
+if [ -z "$name" ] && command -v getent >/dev/null 2>&1; then
+	name="$(getent hosts "$ip" 2>/dev/null | awk '{print $2}' | head -n 1)"
+fi
+if [ -z "$name" ] && [ -r /etc/hosts ]; then
+	name="$(awk -v ip="$ip" '$1==ip {print $2; exit}' /etc/hosts 2>/dev/null)"
+fi
+printf '%s\\t%s\\n' "$ip" "$name"
+done`,
+					'sh',
+					...list
+				]
+			});
+
+			if (status !== 0) return results;
+			const lines = String(result?.stdout || '').split('\n');
+			for (const line of lines) {
+				const raw = String(line || '').replace(/\r$/, '');
+				if (!raw) continue;
+				const tab = raw.indexOf('\t');
+				if (tab < 0) continue;
+				const ip = raw.slice(0, tab).trim();
+				const name = raw.slice(tab + 1).trim();
+				if (ip) results.set(ip, name);
+			}
+		} catch {}
+
+		return results;
+	}
+
+	updateConnectionsDnsToggleButton() {
+		const btn = document.getElementById('network-connections-dns-toggle-btn');
+		if (!btn) return;
+		btn.textContent = this.connectionsDnsLookupEnabled ? 'DNS LOOKUP: ON' : 'DNS LOOKUP: OFF';
+		btn.classList.toggle('success', this.connectionsDnsLookupEnabled);
+	}
+
+	async toggleConnectionsDnsLookup() {
+		this.connectionsDnsLookupEnabled = !this.connectionsDnsLookupEnabled;
+		localStorage.setItem('network_connections_dns_lookup', this.connectionsDnsLookupEnabled ? '1' : '0');
+		this.updateConnectionsDnsToggleButton();
+		await this.refreshConnectionsManually();
 	}
 
 	formatConntrackTransfer(conn) {
