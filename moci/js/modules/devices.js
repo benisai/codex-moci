@@ -600,13 +600,13 @@ rm -f "$tmp"
 				const ipText = this.renderDeviceIp(row.ip, row.pinned);
 
 				const mainRow = `<tr ${isExpandable ? `class="devices-row-expandable" data-device-mac="${this.core.escapeHtml(row.mac)}"` : ''}>
-					<td>${this.core.escapeHtml(`${marker}${row.hostname}`)}</td>
-					<td>${ipText}</td>
-					<td>${this.core.escapeHtml(row.mac)}</td>
-					<td>${this.core.escapeHtml(upload)}</td>
-					<td>${this.core.escapeHtml(download)}</td>
-					<td>${this.renderDeviceStatusBadge(row)}</td>
-					<td>${pinBtn}</td>
+					<td data-label="HOSTNAME">${this.core.escapeHtml(`${marker}${row.hostname}`)}</td>
+					<td data-label="IP ADDRESS">${ipText}</td>
+					<td data-label="MAC ADDRESS">${this.core.escapeHtml(row.mac)}</td>
+					<td data-label="UPLOAD">${this.core.escapeHtml(upload)}</td>
+					<td data-label="DOWNLOAD">${this.core.escapeHtml(download)}</td>
+					<td data-label="ONLINE">${this.renderDeviceStatusBadge(row)}</td>
+					<td data-label="ACTIONS">${pinBtn}</td>
 				</tr>`;
 
 				if (!isExpanded) return mainRow;
