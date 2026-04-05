@@ -585,6 +585,12 @@ body {
 	background: rgba(255, 255, 255, 0.02);
 }
 
+#network-active-connections-table td:nth-child(1),
+#network-active-connections-table td:nth-child(2) {
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
 #netify-flows-table tbody tr:nth-child(odd) {
 	background: rgba(255, 255, 255, 0.012);
 }
@@ -2111,6 +2117,19 @@ select.form-input {
 
 	#network-page .data-table td[data-label='Actions' i] .action-btn-sm,
 	#network-page .data-table td[data-label='Action' i] .action-btn-sm {
+		margin-bottom: 6px;
+	}
+
+	#network-active-connections-table td[data-label='Source' i],
+	#network-active-connections-table td[data-label='Destination' i] {
+		display: block;
+		overflow-wrap: anywhere;
+		word-break: break-word;
+	}
+
+	#network-active-connections-table td[data-label='Source' i]::before,
+	#network-active-connections-table td[data-label='Destination' i]::before {
+		display: block;
 		margin-bottom: 6px;
 	}
 
