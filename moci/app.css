@@ -1925,6 +1925,10 @@ select.form-input {
 		display: none;
 	}
 
+	#netify-flows-table td:nth-child(4) .netify-fqdn-ellipsis {
+		max-width: 38vw;
+	}
+
 	#netify-collector-body .stats-grid {
 		grid-template-columns: 1fr !important;
 	}
@@ -2008,6 +2012,10 @@ select.form-input {
 	#netify-collector-body .quick-actions .action-btn {
 		flex-basis: 100%;
 		min-width: 0;
+	}
+
+	#netify-flows-table td:nth-child(4) .netify-fqdn-ellipsis {
+		max-width: 46vw;
 	}
 
 	.monitoring-metrics-grid {
