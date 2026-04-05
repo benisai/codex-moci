@@ -220,6 +220,27 @@ body {
 }
 
 @media (max-width: 960px) {
+	#network-page .tabs,
+	#system-page .tabs {
+		flex-wrap: nowrap;
+		overflow-x: auto;
+		overflow-y: hidden;
+		white-space: nowrap;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: none;
+		padding-bottom: 4px;
+	}
+
+	#network-page .tabs::-webkit-scrollbar,
+	#system-page .tabs::-webkit-scrollbar {
+		display: none;
+	}
+
+	#network-page .tabs .tab-btn,
+	#system-page .tabs .tab-btn {
+		flex: 0 0 auto;
+	}
+
 	.header {
 		padding: 0 12px;
 		gap: 10px;
@@ -259,6 +280,17 @@ body {
 }
 
 @media (max-width: 640px) {
+	#network-page .tabs,
+	#system-page .tabs {
+		gap: 4px;
+	}
+
+	#network-page .tabs .tab-btn,
+	#system-page .tabs .tab-btn {
+		padding: 10px 14px;
+		font-size: 10px;
+	}
+
 	.logo span {
 		display: none;
 	}
