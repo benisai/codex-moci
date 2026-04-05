@@ -414,8 +414,9 @@ export default class SystemModule {
 		try {
 			const [status, result] = await this.core.uciGet('moci', 'state_backup');
 			const values = status === 0 && result?.values ? result.values : {};
-			const backupTime = Number(values.backup_time || 60);
-			timeEl.value = String(Number.isFinite(backupTime) ? Math.max(5, Math.min(10080, backupTime)) : 60);
+			const backupTimeMin = Number(values.backup_time || 720);
+			const backupTimeHours = Number.isFinite(backupTimeMin) ? Math.round(backupTimeMin / 60) : 12;
+			timeEl.value = String(Math.max(1, Math.min(168, backupTimeHours || 12)));
 			dirEl.value = String(values.state_dir || '/overlay/moci-state');
 
 			const [cronStatus, cronResult] = await this.core.ubusCall('file', 'read', { path: '/etc/crontabs/root' });
@@ -437,10 +438,10 @@ export default class SystemModule {
 		const dirEl = document.getElementById('moci-state-backup-dir');
 		if (!timeEl || !dirEl) return;
 
-		const backupTime = Number(timeEl.value || 60);
+		const backupHours = Number(timeEl.value || 12);
 		const stateDir = String(dirEl.value || '').trim() || '/overlay/moci-state';
-		if (!Number.isFinite(backupTime) || backupTime < 5 || backupTime > 10080) {
-			this.core.showToast('Backup interval must be between 5 and 10080 minutes', 'error');
+		if (!Number.isFinite(backupHours) || backupHours < 1 || backupHours > 168) {
+			this.core.showToast('Backup interval must be between 1 and 168 hours', 'error');
 			return;
 		}
 		if (!stateDir.startsWith('/')) {
@@ -449,8 +450,9 @@ export default class SystemModule {
 		}
 
 		try {
+			const backupMinutes = Math.round(backupHours) * 60;
 			await this.core.uciSet('moci', 'state_backup', {
-				backup_time: String(Math.round(backupTime)),
+				backup_time: String(backupMinutes),
 				state_dir: stateDir
 			});
 			await this.core.uciCommit('moci');

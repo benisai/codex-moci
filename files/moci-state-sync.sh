@@ -20,12 +20,12 @@ read_backup_time_min() {
 	raw="$(uci_get moci.state_backup.backup_time)"
 	case "$raw" in
 	''|*[!0-9]*)
-		echo "60"
+		echo "720"
 		return
 		;;
 	esac
-	if [ "$raw" -lt 5 ]; then
-		echo "5"
+	if [ "$raw" -lt 60 ]; then
+		echo "60"
 		return
 	fi
 	if [ "$raw" -gt 10080 ]; then

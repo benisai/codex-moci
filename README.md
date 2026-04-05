@@ -297,7 +297,7 @@ MoCI keeps high-write data in `/tmp` to reduce flash wear, and checkpoints to pe
 
 **Config keys (`/etc/config/moci`)**
 - `config state_backup 'state_backup'`
-- `option backup_time '60'`  (minutes)
+- `option backup_time '720'`  (minutes; 12 hours default)
 - `option state_dir '/overlay/moci-state'`
 
 **Manual control**

@@ -211,7 +211,7 @@ set_uci moci.quarantine.interval "15"
 set_uci moci.quarantine.leases_file "/tmp/dhcp.leases"
 set_uci moci.quarantine.state_file "/tmp/moci-quarantine-known.txt"
 set_uci moci.quarantine.rule_prefix "moci_quarantine_"
-set_uci moci.state_backup.backup_time "60"
+set_uci moci.state_backup.backup_time "720"
 set_uci moci.state_backup.state_dir "/overlay/moci-state"
 uci commit moci
 
