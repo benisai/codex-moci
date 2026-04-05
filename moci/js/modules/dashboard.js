@@ -335,20 +335,16 @@ export default class DashboardModule {
 		return { rxRate, txRate };
 	}
 
-	renderBandwidthRates(rates, totals = null) {
+	isValidBandwidthRates(rates) {
+		return Number.isFinite(Number(rates?.rxRate)) && Number.isFinite(Number(rates?.txRate));
+	}
+
+	renderBandwidthRates(rates) {
+		if (!this.isValidBandwidthRates(rates)) return;
 		const downEl = document.getElementById('bandwidth-down');
 		const upEl = document.getElementById('bandwidth-up');
-
-		const downRate = rates ? this.core.formatRate(rates.rxRate) : 'N/A';
-		const upRate = rates ? this.core.formatRate(rates.txRate) : 'N/A';
-		const downTotal = Number(totals?.rx);
-		const upTotal = Number(totals?.tx);
-		const downText =
-			Number.isFinite(downTotal) && downTotal >= 0 ? `${downRate} · ${this.core.formatBytes(downTotal)}` : downRate;
-		const upText = Number.isFinite(upTotal) && upTotal >= 0 ? `${upRate} · ${this.core.formatBytes(upTotal)}` : upRate;
-
-		if (downEl) downEl.textContent = downText;
-		if (upEl) upEl.textContent = upText;
+		if (downEl) downEl.textContent = this.core.formatRate(Number(rates.rxRate));
+		if (upEl) upEl.textContent = this.core.formatRate(Number(rates.txRate));
 	}
 
 	updateBandwidthHistory(rxRate, txRate) {
@@ -502,17 +498,26 @@ export default class DashboardModule {
 		return this.fetchInterfaceTrafficSnapshot();
 	}
 
+	async fetchActivityTrafficSnapshot(interfaceSnapshot) {
+		if (this.trafficProviderPreference === 'interface') return interfaceSnapshot;
+		const bandix = await this.fetchBandixTrafficSnapshot();
+		if (bandix && this.isValidBandwidthRates(bandix.rates)) return bandix;
+		return interfaceSnapshot;
+	}
+
 	async updateNetworkStats() {
 		try {
-			const snapshot = await this.fetchTrafficSnapshot();
-			const rates = snapshot?.rates || null;
-			const totals = snapshot?.totals || null;
-			this.renderBandwidthRates(rates, totals);
-			if (rates) this.updateBandwidthHistory(rates.rxRate, rates.txRate);
+			const interfaceSnapshot = await this.fetchInterfaceTrafficSnapshot();
+			this.renderBandwidthRates(interfaceSnapshot?.rates || null);
+
+			const activitySnapshot = await this.fetchActivityTrafficSnapshot(interfaceSnapshot);
+			const activityRates = activitySnapshot?.rates || null;
+			if (this.isValidBandwidthRates(activityRates)) {
+				this.updateBandwidthHistory(Number(activityRates.rxRate), Number(activityRates.txRate));
+			}
 			this.updateBandwidthGraph();
 		} catch (err) {
 			console.error('updateNetworkStats error:', err);
-			this.renderBandwidthRates(null, null);
 		}
 	}
 
