@@ -685,12 +685,10 @@ pgrep -fa moci-netify-collector || true
 		const flowCount = Number(totalFlowCount) > 0 ? totalFlowCount : sourceFlows.length;
 		const devices = new Set(sourceFlows.map(f => f.device).filter(v => v && v !== 'unknown'));
 		const apps = new Set(sourceFlows.map(f => f.app).filter(Boolean));
-		const totalBytes = sourceFlows.reduce((sum, f) => sum + (f.bytes || 0), 0);
 
 		document.getElementById('netify-flow-count').textContent = String(flowCount);
 		document.getElementById('netify-device-count').textContent = String(devices.size);
 		document.getElementById('netify-app-count').textContent = String(apps.size);
-		document.getElementById('netify-total-bytes').textContent = this.core.formatBytes(totalBytes);
 	}
 
 	recomputeTopAppsRows(sourceFlows = this.flows) {
