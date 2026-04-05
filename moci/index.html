@@ -2729,6 +2729,7 @@ Endpoint = host:51820"
 							<button class="tab-btn" data-tab="admin">ADMINISTRATION</button>
 							<button class="tab-btn" data-tab="backup" data-feature="backup">BACKUP/RESTORE</button>
 							<button class="tab-btn" data-tab="software" data-feature="packages">SOFTWARE</button>
+							<button class="tab-btn" data-tab="processes">PROCESSES</button>
 							<button class="tab-btn" data-tab="startup" data-feature="services">STARTUP</button>
 							<button class="tab-btn" data-tab="cron">SCHEDULED TASKS</button>
 							<button class="tab-btn" data-tab="ssh-keys" data-feature="ssh_keys">SSH KEYS</button>
@@ -2904,6 +2905,55 @@ Endpoint = host:51820"
 											<td colspan="4" style="text-align: center; color: var(--steel-muted)">
 												Loading...
 											</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+
+						<div class="tab-content hidden" id="tab-processes">
+							<div class="stat-card">
+								<div
+									style="
+										display: flex;
+										align-items: center;
+										justify-content: space-between;
+										gap: 12px;
+										flex-wrap: wrap;
+									"
+								>
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">
+										CURRENT PROCESSES (5S)
+									</div>
+									<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+										<label for="processes-sort" class="form-label" style="margin: 0">SORT</label>
+										<select id="processes-sort" class="form-input" style="min-width: 120px; padding: 8px 10px">
+											<option value="cpu">CPU</option>
+											<option value="mem">MEMORY</option>
+											<option value="pid">PID</option>
+										</select>
+										<button class="action-btn-sm danger" id="processes-pause-btn" type="button">PAUSE</button>
+									</div>
+								</div>
+								<div
+									id="processes-status"
+									style="font-family: var(--font-mono); font-size: 11px; color: var(--steel-muted); margin-top: 10px"
+								>
+									Loading...
+								</div>
+								<table class="data-table" id="processes-table">
+									<thead>
+										<tr>
+											<th>PID</th>
+											<th>USER</th>
+											<th>CPU %</th>
+											<th>MEMORY</th>
+											<th>COMMAND</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td colspan="5" style="text-align: center; color: var(--steel-muted)">Loading...</td>
 										</tr>
 									</tbody>
 								</table>

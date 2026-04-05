@@ -11,6 +11,11 @@ export default class SystemModule {
 		this.packagesPage = 0;
 		this.packagesPageSize = 50;
 		this.packagesQuery = '';
+		this.processesRefreshTimer = null;
+		this.isRefreshingProcesses = false;
+		this.processesPaused = false;
+		this.processesSort = 'cpu';
+		this.processesLastSample = { totalJiffies: 0, pidTicks: new Map() };
 
 		this.core.registerRoute('/system', (path, subPaths) => {
 			const pageElement = document.getElementById('system-page');
@@ -22,6 +27,7 @@ export default class SystemModule {
 					admin: () => this.loadAdmin(),
 					backup: () => this.loadBackup(),
 					software: () => this.loadPackages(),
+					processes: () => this.loadProcesses(),
 					startup: () => this.loadStartup(),
 					cron: () => this.loadCron(),
 					'ssh-keys': () => this.loadSSHKeys(),
@@ -49,6 +55,12 @@ export default class SystemModule {
 		document.getElementById('moci-state-backup-apply-btn')?.addEventListener('click', () => this.saveMociStateBackupSettings());
 		document.getElementById('moci-state-backup-save-btn')?.addEventListener('click', () => this.runMociStateBackupAction('save'));
 		document.getElementById('moci-state-backup-restore-btn')?.addEventListener('click', () => this.runMociStateBackupAction('restore'));
+		document.getElementById('processes-pause-btn')?.addEventListener('click', () => this.toggleProcessesPause());
+		document.getElementById('processes-sort')?.addEventListener('change', event => {
+			const nextSort = String(event?.target?.value || 'cpu').trim().toLowerCase();
+			this.processesSort = ['cpu', 'mem', 'pid'].includes(nextSort) ? nextSort : 'cpu';
+			this.renderProcessesTable();
+		});
 		document.getElementById('packages-search')?.addEventListener('input', event => {
 			this.packagesQuery = String(event?.target?.value || '')
 				.trim()
@@ -129,6 +141,7 @@ export default class SystemModule {
 	}
 
 	cleanup() {
+		this.stopProcessesAutoRefresh();
 		if (this.subTabs) {
 			this.subTabs.cleanup();
 			this.subTabs = null;
@@ -740,6 +753,185 @@ export default class SystemModule {
 		if (infoEl) infoEl.textContent = `${startIdx + 1}-${endIdx} of ${total}`;
 		if (prevBtn) prevBtn.disabled = this.packagesPage <= 0;
 		if (nextBtn) nextBtn.disabled = this.packagesPage >= maxPage;
+	}
+
+	async loadProcesses() {
+		await this.core.loadResource('processes-table', 5, null, async () => {
+			await this.renderProcessesTable();
+		});
+		this.startProcessesAutoRefresh();
+		this.updateProcessesPauseButton();
+	}
+
+	startProcessesAutoRefresh() {
+		if (this.processesRefreshTimer) return;
+		this.processesRefreshTimer = setInterval(async () => {
+			if (document.hidden || this.processesPaused) return;
+			if (!this.core.currentRoute || !this.core.currentRoute.startsWith('/system/processes')) return;
+			if (this.isRefreshingProcesses) return;
+			this.isRefreshingProcesses = true;
+			try {
+				await this.renderProcessesTable();
+			} finally {
+				this.isRefreshingProcesses = false;
+			}
+		}, 5000);
+	}
+
+	stopProcessesAutoRefresh() {
+		if (!this.processesRefreshTimer) return;
+		clearInterval(this.processesRefreshTimer);
+		this.processesRefreshTimer = null;
+	}
+
+	toggleProcessesPause() {
+		this.processesPaused = !this.processesPaused;
+		this.updateProcessesPauseButton();
+		if (!this.processesPaused) {
+			this.renderProcessesTable();
+		}
+	}
+
+	updateProcessesPauseButton() {
+		const btn = document.getElementById('processes-pause-btn');
+		const status = document.getElementById('processes-status');
+		if (btn) {
+			btn.textContent = this.processesPaused ? 'RESUME' : 'PAUSE';
+			btn.classList.toggle('danger', !this.processesPaused);
+			btn.classList.toggle('success', this.processesPaused);
+		}
+		if (status) {
+			const mode = this.processesPaused ? 'Paused' : 'Live';
+			const sortText = (this.processesSort || 'cpu').toUpperCase();
+			status.textContent = `${mode} · sorted by ${sortText} · refresh every 5s`;
+		}
+	}
+
+	async fetchProcessesSnapshot() {
+		const script = `total="$(awk '/^cpu /{sum=0; for(i=2;i<=NF;i++) sum+=$i; print sum; exit}' /proc/stat 2>/dev/null || echo 0)"
+echo "__TOTAL|$total"
+for d in /proc/[0-9]*; do
+	pid="\${d#/proc/}"
+	[ -r "$d/stat" ] || continue
+	stat_line="$(cat "$d/stat" 2>/dev/null)" || continue
+	rest="\${stat_line#*) }"
+	set -- $rest
+	[ $# -ge 22 ] || continue
+	utime="$12"
+	stime="$13"
+	rss_pages="$22"
+	case "$utime$stime$rss_pages" in
+		*[!0-9]*|'') continue ;;
+	esac
+	cpu_ticks=$((utime + stime))
+	rss_kb=$((rss_pages * 4))
+	uid="$(awk '/^Uid:/ {print $2; exit}' "$d/status" 2>/dev/null)"
+	case "$uid" in
+		*[!0-9]*|'') uid="0" ;;
+	esac
+	cmd="$(tr '\\0' ' ' < "$d/cmdline" 2>/dev/null | sed 's/[[:space:]]\\+$//')"
+	[ -n "$cmd" ] || cmd="$(tr -d '\\n' < "$d/comm" 2>/dev/null)"
+	[ -n "$cmd" ] || cmd="[unknown]"
+	cmd="\${cmd%%|*}"
+	echo "$pid|$uid|$cpu_ticks|$rss_kb|$cmd"
+done`;
+		const [status, result] = await this.core.ubusCall(
+			'file',
+			'exec',
+			{
+				command: '/bin/sh',
+				params: ['-c', script]
+			},
+			{ timeout: 20000 }
+		);
+		if (status !== 0) throw new Error('Failed to fetch process snapshot');
+		return String(result?.stdout || '');
+	}
+
+	parseProcessesSnapshot(raw) {
+		let totalJiffies = 0;
+		const rows = [];
+		for (const line of String(raw || '').split('\n')) {
+			const trimmed = line.trim();
+			if (!trimmed) continue;
+			if (trimmed.startsWith('__TOTAL|')) {
+				const v = Number(trimmed.split('|')[1] || 0);
+				if (Number.isFinite(v)) totalJiffies = v;
+				continue;
+			}
+			const parts = trimmed.split('|');
+			if (parts.length < 5) continue;
+			const pid = Number(parts[0]);
+			const uid = String(parts[1] || '0');
+			const cpuTicks = Number(parts[2] || 0);
+			const memKb = Number(parts[3] || 0);
+			const command = String(parts.slice(4).join('|') || '[unknown]');
+			if (!Number.isFinite(pid) || pid <= 0) continue;
+			rows.push({ pid, uid, cpuTicks: Number.isFinite(cpuTicks) ? cpuTicks : 0, memKb: Number.isFinite(memKb) ? memKb : 0, command });
+		}
+		return { totalJiffies, rows };
+	}
+
+	calculateProcessUsage(snapshot) {
+		const prev = this.processesLastSample;
+		const deltaTotal = Math.max(1, snapshot.totalJiffies - (prev.totalJiffies || 0));
+		const nextPidTicks = new Map();
+		const rows = snapshot.rows.map(row => {
+			const prevTicks = prev.pidTicks.get(row.pid) ?? row.cpuTicks;
+			const deltaTicks = Math.max(0, row.cpuTicks - prevTicks);
+			const cpuPct = (deltaTicks / deltaTotal) * 100;
+			nextPidTicks.set(row.pid, row.cpuTicks);
+			return {
+				...row,
+				cpuPct: Number.isFinite(cpuPct) ? cpuPct : 0
+			};
+		});
+		this.processesLastSample = { totalJiffies: snapshot.totalJiffies, pidTicks: nextPidTicks };
+		return rows;
+	}
+
+	sortProcesses(rows) {
+		const source = Array.isArray(rows) ? [...rows] : [];
+		const sortBy = this.processesSort || 'cpu';
+		if (sortBy === 'mem') {
+			source.sort((a, b) => b.memKb - a.memKb || b.cpuPct - a.cpuPct || a.pid - b.pid);
+		} else if (sortBy === 'pid') {
+			source.sort((a, b) => a.pid - b.pid);
+		} else {
+			source.sort((a, b) => b.cpuPct - a.cpuPct || b.memKb - a.memKb || a.pid - b.pid);
+		}
+		return source;
+	}
+
+	async renderProcessesTable() {
+		const tbody = document.querySelector('#processes-table tbody');
+		if (!tbody) return;
+		try {
+			const raw = await this.fetchProcessesSnapshot();
+			const snapshot = this.parseProcessesSnapshot(raw);
+			const withUsage = this.calculateProcessUsage(snapshot);
+			const sorted = this.sortProcesses(withUsage).slice(0, 200);
+			if (sorted.length === 0) {
+				this.core.renderEmptyTable(tbody, 5, 'No process data');
+				this.updateProcessesPauseButton();
+				return;
+			}
+			tbody.innerHTML = sorted
+				.map(proc => {
+					const memMb = proc.memKb > 0 ? `${(proc.memKb / 1024).toFixed(1)} MB` : '0 MB';
+					return `<tr>
+					<td data-label="PID">${this.core.escapeHtml(String(proc.pid))}</td>
+					<td data-label="USER">${this.core.escapeHtml(proc.uid)}</td>
+					<td data-label="CPU %">${this.core.escapeHtml(proc.cpuPct.toFixed(1))}%</td>
+					<td data-label="MEMORY">${this.core.escapeHtml(memMb)}</td>
+					<td data-label="COMMAND" style="overflow-wrap:anywhere;word-break:break-word;">${this.core.escapeHtml(proc.command)}</td>
+				</tr>`;
+				})
+				.join('');
+			this.updateProcessesPauseButton();
+		} catch {
+			this.core.renderEmptyTable(tbody, 5, 'Failed to load processes');
+		}
 	}
 
 	async loadStartup() {
