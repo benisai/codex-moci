@@ -13,6 +13,7 @@ export default class DevicesModule {
 		this.deviceSqlChunkCalls = 15;
 		this.deviceMaxRows = 3000;
 		this.nlbwAvailable = false;
+		this.bandixAvailable = false;
 		this.netifyFeatureEnabled = true;
 		this.parentalByMac = new Map();
 		this.parentalRulePrefix = 'moci_parental_';
@@ -109,10 +110,11 @@ export default class DevicesModule {
 
 		try {
 			const leases = await this.fetchLeases();
-			const [pingReachableIps, conntrackIps, usage, staticByMac, netifyEnabled, parentalByMac, dnsHijackByMac, quarantineByMac] = await Promise.all([
+			const [pingReachableIps, conntrackIps, usage, bandixUsage, staticByMac, netifyEnabled, parentalByMac, dnsHijackByMac, quarantineByMac] = await Promise.all([
 				this.fetchPingReachableIps(leases),
 				this.fetchConntrackIps(),
 				this.fetchNlbwmonUsage(),
+				this.fetchBandixDeviceUsage(),
 				this.fetchStaticLeasesByMac(),
 				this.fetchNetifyFeatureFlag(),
 				this.fetchParentalRulesByMac(),
@@ -122,6 +124,7 @@ export default class DevicesModule {
 
 			this.staticByMac = staticByMac;
 			this.nlbwAvailable = Boolean(usage.available);
+			this.bandixAvailable = Boolean(bandixUsage.available);
 			this.netifyFeatureEnabled = Boolean(netifyEnabled);
 			this.parentalByMac = parentalByMac;
 			this.dnsHijackByMac = dnsHijackByMac instanceof Map ? dnsHijackByMac : new Map();
@@ -132,6 +135,7 @@ export default class DevicesModule {
 				pingReachableIps,
 				conntrackIps,
 				usage.totalsByClient,
+				bandixUsage.byMac,
 				staticByMac,
 				parentalByMac,
 				this.dnsHijackByMac,
@@ -471,7 +475,50 @@ rm -f "$tmp"
 		return { available: true, totalsByClient };
 	}
 
-	mergeRows(leases, pingReachableIps, conntrackIps, totalsByClient, staticByMac, parentalByMac, dnsHijackByMac, quarantineByMac) {
+	async fetchBandixDeviceUsage() {
+		const result = {
+			available: false,
+			byMac: new Map()
+		};
+
+		try {
+			const [status, payload] = await this.core.ubusCall('luci.bandix', 'getStatus', {});
+			if (status !== 0 || !Array.isArray(payload?.d)) return result;
+
+			for (const device of payload.d) {
+				const mac = this.normalizeMac(device?.mac || '');
+				if (!mac) continue;
+				const txRateBps = Number(device?.w_tx_r);
+				const rxRateBps = Number(device?.w_rx_r);
+				const txBytes = Number(device?.w_tx_b);
+				const rxBytes = Number(device?.w_rx_b);
+
+				result.byMac.set(mac, {
+					txRateBps: Number.isFinite(txRateBps) ? Math.max(txRateBps, 0) : null,
+					rxRateBps: Number.isFinite(rxRateBps) ? Math.max(rxRateBps, 0) : null,
+					txBytes: Number.isFinite(txBytes) ? Math.max(txBytes, 0) : null,
+					rxBytes: Number.isFinite(rxBytes) ? Math.max(rxBytes, 0) : null
+				});
+			}
+
+			result.available = result.byMac.size > 0;
+			return result;
+		} catch {
+			return result;
+		}
+	}
+
+	mergeRows(
+		leases,
+		pingReachableIps,
+		conntrackIps,
+		totalsByClient,
+		bandixByMac,
+		staticByMac,
+		parentalByMac,
+		dnsHijackByMac,
+		quarantineByMac
+	) {
 		const merged = [];
 		const seenMacs = new Set();
 
@@ -480,6 +527,7 @@ rm -f "$tmp"
 			const ip = String(lease.ipaddr || '');
 			const key = mac || ip;
 			const usage = totalsByClient.get(key) || totalsByClient.get(ip) || null;
+			const bandix = mac ? bandixByMac.get(mac) : null;
 			const pin = mac ? staticByMac.get(mac) : null;
 			const parental = mac ? parentalByMac.get(mac) : null;
 			const dnsHijack = mac ? dnsHijackByMac.get(mac) : null;
@@ -491,6 +539,10 @@ rm -f "$tmp"
 				mac: mac || 'N/A',
 				tx: usage ? usage.tx : null,
 				rx: usage ? usage.rx : null,
+				liveTxRateBps: bandix?.txRateBps ?? null,
+				liveRxRateBps: bandix?.rxRateBps ?? null,
+				liveTxBytes: bandix?.txBytes ?? null,
+				liveRxBytes: bandix?.rxBytes ?? null,
 				nlbwTopApps: this.extractTopNlbwApps(usage),
 				online: ip ? pingReachableIps.has(ip) || conntrackIps.has(ip) : false,
 				pinned: Boolean(pin?.ip),
@@ -509,6 +561,7 @@ rm -f "$tmp"
 		for (const [mac, pin] of staticByMac.entries()) {
 			if (!mac || seenMacs.has(mac)) continue;
 			const usage = totalsByClient.get(mac) || totalsByClient.get(pin?.ip || '') || null;
+			const bandix = bandixByMac.get(mac) || null;
 			const parental = parentalByMac.get(mac) || null;
 			const dnsHijack = dnsHijackByMac.get(mac) || null;
 			const quarantine = quarantineByMac.get(mac) || null;
@@ -519,6 +572,10 @@ rm -f "$tmp"
 				mac,
 				tx: usage ? usage.tx : null,
 				rx: usage ? usage.rx : null,
+				liveTxRateBps: bandix?.txRateBps ?? null,
+				liveRxRateBps: bandix?.rxRateBps ?? null,
+				liveTxBytes: bandix?.txBytes ?? null,
+				liveRxBytes: bandix?.rxBytes ?? null,
 				nlbwTopApps: this.extractTopNlbwApps(usage),
 				online:
 					(usage?.ip ? pingReachableIps.has(usage.ip) || conntrackIps.has(usage.ip) : false) ||
@@ -569,6 +626,19 @@ rm -f "$tmp"
 			.map(([name, bytes]) => ({ name, bytes }));
 	}
 
+	formatByteRate(bytesPerSec) {
+		const n = Number(bytesPerSec);
+		if (!Number.isFinite(n) || n <= 0) return '0 B/s';
+		const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+		let value = n;
+		let idx = 0;
+		while (value >= 1024 && idx < units.length - 1) {
+			value /= 1024;
+			idx += 1;
+		}
+		return `${parseFloat(value.toFixed(2))} ${units[idx]}`;
+	}
+
 	renderRows(rows) {
 		const tbody = document.querySelector('#devices-table tbody');
 		if (!tbody) return;
@@ -587,8 +657,18 @@ rm -f "$tmp"
 
 		tbody.innerHTML = rows
 			.map(row => {
-				const upload = row.tx == null ? 'N/A' : this.core.formatBytes(row.tx);
-				const download = row.rx == null ? 'N/A' : this.core.formatBytes(row.rx);
+				const hasLiveRates =
+					Number.isFinite(Number(row?.liveTxRateBps)) && Number.isFinite(Number(row?.liveRxRateBps)) && this.bandixAvailable;
+				const upload = hasLiveRates
+					? this.formatByteRate(Number(row.liveTxRateBps))
+					: row.tx == null
+						? 'N/A'
+						: this.core.formatBytes(row.tx);
+				const download = hasLiveRates
+					? this.formatByteRate(Number(row.liveRxRateBps))
+					: row.rx == null
+						? 'N/A'
+						: this.core.formatBytes(row.rx);
 				const isExpandable = row.mac && row.mac !== 'N/A';
 				const isExpanded = isExpandable && this.expandedMac === row.mac;
 				const marker = isExpandable ? (isExpanded ? '▾ ' : '▸ ') : '';
