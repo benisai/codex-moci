@@ -219,6 +219,64 @@ body {
 	color: var(--alert-red);
 }
 
+@media (max-width: 960px) {
+	.header {
+		padding: 0 12px;
+		gap: 10px;
+		overflow: hidden;
+	}
+
+	.logo {
+		flex: 0 0 auto;
+		min-width: max-content;
+	}
+
+	.nav {
+		flex: 1 1 auto;
+		min-width: 0;
+		margin-left: 8px;
+		gap: 16px;
+		overflow-x: auto;
+		overflow-y: hidden;
+		white-space: nowrap;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: none;
+	}
+
+	.nav::-webkit-scrollbar {
+		display: none;
+	}
+
+	.nav a {
+		flex: 0 0 auto;
+	}
+
+	.logout-btn {
+		margin-left: 0;
+		flex: 0 0 auto;
+		padding: 8px 10px;
+	}
+}
+
+@media (max-width: 640px) {
+	.logo span {
+		display: none;
+	}
+
+	.nav {
+		gap: 12px;
+	}
+
+	.nav a {
+		font-size: 10px;
+	}
+
+	.logout-btn {
+		font-size: 9px;
+		padding: 6px 8px;
+	}
+}
+
 .content {
 	padding: 48px;
 	max-width: 1600px;
