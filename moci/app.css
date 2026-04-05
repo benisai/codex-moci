@@ -1957,6 +1957,73 @@ select.form-input {
 		margin-bottom: 6px;
 	}
 
+	#firewall-table thead,
+	#fw-rules-table thead {
+		display: none;
+	}
+
+	#firewall-table,
+	#firewall-table tbody,
+	#firewall-table tr,
+	#firewall-table td,
+	#fw-rules-table,
+	#fw-rules-table tbody,
+	#fw-rules-table tr,
+	#fw-rules-table td {
+		display: block;
+		width: 100%;
+	}
+
+	#firewall-table tr,
+	#fw-rules-table tr {
+		border: 1px solid var(--glass-border);
+		border-radius: 8px;
+		background: rgba(255, 255, 255, 0.015);
+		margin-bottom: 12px;
+	}
+
+	#firewall-table td,
+	#fw-rules-table td {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 8px 10px;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+	}
+
+	#firewall-table td:last-child,
+	#fw-rules-table td:last-child {
+		border-bottom: none;
+	}
+
+	#firewall-table td::before,
+	#fw-rules-table td::before {
+		content: attr(data-label);
+		font-family: var(--font-mono);
+		font-size: 10px;
+		letter-spacing: 0.08em;
+		color: var(--steel-muted);
+		text-transform: uppercase;
+		flex: 0 0 108px;
+	}
+
+	#firewall-table td:nth-child(7),
+	#fw-rules-table td:nth-child(8) {
+		display: block;
+	}
+
+	#firewall-table td:nth-child(7)::before,
+	#fw-rules-table td:nth-child(8)::before {
+		display: block;
+		margin-bottom: 6px;
+	}
+
+	#firewall-table td:nth-child(7) .action-btn-sm,
+	#fw-rules-table td:nth-child(8) .action-btn-sm {
+		margin-bottom: 6px;
+	}
+
 	#netify-page .traffic-header-row {
 		flex-wrap: wrap;
 		gap: 8px;
@@ -2057,6 +2124,18 @@ select.form-input {
 	}
 
 	#interfaces-table td::before {
+		flex-basis: 92px;
+		font-size: 9px;
+	}
+
+	#firewall-table td,
+	#fw-rules-table td {
+		gap: 8px;
+		padding: 8px;
+	}
+
+	#firewall-table td::before,
+	#fw-rules-table td::before {
 		flex-basis: 92px;
 		font-size: 9px;
 	}

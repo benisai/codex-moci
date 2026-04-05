@@ -946,13 +946,13 @@ export default class NetworkModule {
 					fwTbody.innerHTML = forwards
 						.map(
 							f => `<tr>
-						<td>${this.core.escapeHtml(f.name || f.section)}</td>
-						<td>${this.core.escapeHtml(f.proto || 'tcp')}</td>
-						<td>${this.core.escapeHtml(f.src_dport || 'N/A')}</td>
-						<td>${this.core.escapeHtml(f.dest_ip || 'N/A')}</td>
-						<td>${this.core.escapeHtml(f.dest_port || f.src_dport || 'N/A')}</td>
-						<td>${this.core.renderStatusBadge(f.enabled !== '0')}</td>
-						<td>${this.core.renderActionButtons(f.section)}</td>
+						<td data-label="Name">${this.core.escapeHtml(f.name || f.section)}</td>
+						<td data-label="Protocol">${this.core.escapeHtml(f.proto || 'tcp')}</td>
+						<td data-label="External Port">${this.core.escapeHtml(f.src_dport || 'N/A')}</td>
+						<td data-label="Internal IP">${this.core.escapeHtml(f.dest_ip || 'N/A')}</td>
+						<td data-label="Internal Port">${this.core.escapeHtml(f.dest_port || f.src_dport || 'N/A')}</td>
+						<td data-label="Enabled">${this.core.renderStatusBadge(f.enabled !== '0')}</td>
+						<td data-label="Actions">${this.core.renderActionButtons(f.section)}</td>
 					</tr>`
 						)
 						.join('');
@@ -967,14 +967,14 @@ export default class NetworkModule {
 					rulesTbody.innerHTML = rules
 						.map(
 							r => `<tr>
-						<td>${this.core.escapeHtml(r.name || r.section)}</td>
-						<td>${this.core.escapeHtml(r.src || 'Any')}</td>
-						<td>${this.core.escapeHtml(r.src_ip || 'Any')}</td>
-						<td>${this.core.escapeHtml(r.dest || 'Any')}</td>
-						<td>${this.core.escapeHtml(r.proto || 'Any')}</td>
-						<td>${this.core.escapeHtml(r.dest_port || 'Any')}</td>
-						<td>${this.renderFirewallTargetBadge(r.target)}</td>
-						<td>${this.core.renderActionButtons(r.section)}</td>
+						<td data-label="Name">${this.core.escapeHtml(r.name || r.section)}</td>
+						<td data-label="Source">${this.core.escapeHtml(r.src || 'Any')}</td>
+						<td data-label="Source IP">${this.core.escapeHtml(r.src_ip || 'Any')}</td>
+						<td data-label="Destination">${this.core.escapeHtml(r.dest || 'Any')}</td>
+						<td data-label="Protocol">${this.core.escapeHtml(r.proto || 'Any')}</td>
+						<td data-label="Port">${this.core.escapeHtml(r.dest_port || 'Any')}</td>
+						<td data-label="Action">${this.renderFirewallTargetBadge(r.target)}</td>
+						<td data-label="Actions">${this.core.renderActionButtons(r.section)}</td>
 					</tr>`
 						)
 						.join('');
