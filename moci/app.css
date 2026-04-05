@@ -1944,14 +1944,6 @@ select.form-input {
 		flex: 0 0 108px;
 	}
 
-	/* Keep Interfaces concise on mobile/tablet */
-	#interfaces-table th:nth-child(2),
-	#interfaces-table th:nth-child(5),
-	#interfaces-table td:nth-child(2),
-	#interfaces-table td:nth-child(5) {
-		display: none;
-	}
-
 	#interfaces-table td:nth-child(6) {
 		display: block;
 	}
