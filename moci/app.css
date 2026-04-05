@@ -648,8 +648,8 @@ body {
 	background: rgba(255, 255, 255, 0.02);
 }
 
-#network-active-connections-table td:nth-child(1),
-#network-active-connections-table td:nth-child(2) {
+#network-active-connections-table td:nth-child(2),
+#network-active-connections-table td:nth-child(3) {
 	overflow-wrap: anywhere;
 	word-break: break-word;
 }

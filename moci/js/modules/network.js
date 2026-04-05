@@ -4169,9 +4169,9 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 				const status = conn.state || 'ACTIVE';
 				const transfer = this.formatConntrackTransfer(conn);
 				return `<tr>
+			<td data-label="Protocol">${this.core.escapeHtml(protocol)}</td>
 			<td data-label="Source">${this.core.escapeHtml(source)}</td>
 			<td data-label="Destination">${this.core.escapeHtml(destination)}</td>
-			<td data-label="Protocol">${this.core.escapeHtml(protocol)}</td>
 			<td data-label="Transfer">${this.core.escapeHtml(transfer)}</td>
 			<td data-label="Status">${this.renderConntrackStateBadge(status)}</td>
 		</tr>`;
