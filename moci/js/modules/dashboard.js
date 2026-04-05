@@ -360,6 +360,22 @@ export default class DashboardModule {
 		}
 	}
 
+	syncBandwidthHistoryFromSeries(series) {
+		if (!Array.isArray(series) || series.length === 0) return;
+		const down = [];
+		const up = [];
+		for (const point of series) {
+			const rxRate = Number(point?.rxRate || 0);
+			const txRate = Number(point?.txRate || 0);
+			if (!Number.isFinite(rxRate) || !Number.isFinite(txRate)) continue;
+			down.push(rxRate);
+			up.push(txRate);
+		}
+		if (down.length === 0) return;
+		this.bandwidthHistory.down = down.slice(-this.bandwidthHistoryMaxPoints);
+		this.bandwidthHistory.up = up.slice(-this.bandwidthHistoryMaxPoints);
+	}
+
 	async fetchInterfaceTrafficSnapshot() {
 		const content = await this.fetchNetworkStats();
 		const currentStats = this.parseNetworkStats(content);
@@ -460,11 +476,34 @@ export default class DashboardModule {
 		};
 	}
 
+	parseBandixMetricsSeries(metrics) {
+		if (!Array.isArray(metrics)) return [];
+		const points = [];
+		for (const row of metrics) {
+			if (!Array.isArray(row) || row.length < 3) continue;
+			let ts = Number(row[0]) || 0;
+			if (ts > 0 && ts < 1000000000000) ts *= 1000;
+			const totalRxRateBytes = Number(row[1]) || 0;
+			const totalTxRateBytes = Number(row[2]) || 0;
+			const totalRxBytes = Number(row[7]) || 0;
+			const totalTxBytes = Number(row[8]) || 0;
+			points.push({
+				ts,
+				rxRate: totalRxRateBytes / 1024,
+				txRate: totalTxRateBytes / 1024,
+				rxBytes: totalRxBytes,
+				txBytes: totalTxBytes
+			});
+		}
+		points.sort((a, b) => a.ts - b.ts);
+		return points;
+	}
+
 	async fetchBandixTrafficSnapshot() {
 		let metricsPayload = null;
 		let statusPayload = null;
 		try {
-			const [metricsStatus, metricsResult] = await this.core.ubusCall('luci.bandix', 'getMetrics', {});
+			const [metricsStatus, metricsResult] = await this.core.ubusCall('luci.bandix', 'getMetrics', { mac: '' });
 			if (metricsStatus !== 0) return null;
 			metricsPayload = metricsResult;
 		} catch {
@@ -476,17 +515,37 @@ export default class DashboardModule {
 			if (status === 0) statusPayload = result;
 		} catch {}
 
+		const series = this.parseBandixMetricsSeries(metricsPayload?.metrics);
+		const latestPoint = series.length > 0 ? series[series.length - 1] : null;
+		if (series.length > 1) {
+			this.syncBandwidthHistoryFromSeries(series);
+		}
+
+		const arrayRates = latestPoint
+			? {
+					rxRate: latestPoint.rxRate,
+					txRate: latestPoint.txRate
+				}
+			: null;
+		const arrayTotals = latestPoint
+			? {
+					rx: latestPoint.rxBytes,
+					tx: latestPoint.txBytes
+				}
+			: null;
+
 		const rates = this.resolveBandixPair(metricsPayload, 'rate') || this.resolveBandixPair(statusPayload, 'rate');
 		const totals = this.resolveBandixPair(metricsPayload, 'total') || this.resolveBandixPair(statusPayload, 'total');
-		const fallbackRates = this.computeRatesFromTotals(totals, this.lastBandixTotals);
-		if (totals) this.lastBandixTotals = totals;
-		const finalRates = rates || fallbackRates;
-		if (!finalRates && !totals) return null;
+		const finalTotals = arrayTotals || totals;
+		const fallbackRates = this.computeRatesFromTotals(finalTotals, this.lastBandixTotals);
+		if (finalTotals) this.lastBandixTotals = finalTotals;
+		const finalRates = arrayRates || rates || fallbackRates;
+		if (!finalRates && !finalTotals) return null;
 
 		this.activeTrafficProvider = 'bandix';
 		return {
 			rates: finalRates,
-			totals
+			totals: finalTotals
 		};
 	}
 
