@@ -1926,7 +1926,13 @@ select.form-input {
 	}
 
 	#netify-flows-table td:nth-child(4) .netify-fqdn-ellipsis {
-		max-width: 38vw;
+		max-width: none;
+		display: block;
+		white-space: normal;
+		overflow: visible;
+		text-overflow: clip;
+		overflow-wrap: anywhere;
+		word-break: break-word;
 	}
 
 	#netify-collector-body .stats-grid {
@@ -2015,7 +2021,7 @@ select.form-input {
 	}
 
 	#netify-flows-table td:nth-child(4) .netify-fqdn-ellipsis {
-		max-width: 46vw;
+		max-width: none;
 	}
 
 	.monitoring-metrics-grid {
