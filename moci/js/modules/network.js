@@ -4144,7 +4144,7 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 
 	async loadConnections() {
 		this.startConnectionsAutoRefresh();
-		await this.core.loadResource('network-active-connections-table', 4, null, async () => {
+		await this.core.loadResource('network-active-connections-table', 5, null, async () => {
 			await this.renderConnectionsTable();
 		});
 	}
@@ -4157,7 +4157,7 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 		if (!Array.isArray(connections)) connections = [];
 
 		if (connections.length === 0) {
-			this.core.renderEmptyTable(tbody, 4, 'No active conntrack connections');
+			this.core.renderEmptyTable(tbody, 5, 'No active conntrack connections');
 			return;
 		}
 
@@ -4167,10 +4167,12 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 				const destination = conn.destination || 'N/A';
 				const protocol = (conn.protocol || 'N/A').toUpperCase();
 				const status = conn.state || 'ACTIVE';
+				const transfer = this.formatConntrackTransfer(conn);
 				return `<tr>
 			<td data-label="Source">${this.core.escapeHtml(source)}</td>
 			<td data-label="Destination">${this.core.escapeHtml(destination)}</td>
 			<td data-label="Protocol">${this.core.escapeHtml(protocol)}</td>
+			<td data-label="Transfer">${this.core.escapeHtml(transfer)}</td>
 			<td data-label="Status">${this.renderConntrackStateBadge(status)}</td>
 		</tr>`;
 			})
@@ -4214,7 +4216,7 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 				command: '/bin/sh',
 				params: [
 					'-c',
-					'if command -v conntrack >/dev/null 2>&1; then conntrack -L 2>/dev/null | head -n 500; ' +
+					'if command -v conntrack >/dev/null 2>&1; then (conntrack -L -o extended 2>/dev/null || conntrack -L 2>/dev/null) | head -n 500; ' +
 						'elif [ -r /proc/net/nf_conntrack ]; then head -n 500 /proc/net/nf_conntrack 2>/dev/null; ' +
 						'elif [ -r /proc/net/ip_conntrack ]; then head -n 500 /proc/net/ip_conntrack 2>/dev/null; ' +
 						'fi'
@@ -4261,13 +4263,23 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 		const dst = dstMatches[0]?.[1] || '';
 		const sport = sportMatches[0]?.[1] || '';
 		const dport = dportMatches[0]?.[1] || '';
+		const bytes = [...text.matchAll(/\bbytes=(\d+)/g)].reduce((sum, m) => sum + (Number(m[1]) || 0), 0);
+		const packets = [...text.matchAll(/\bpackets=(\d+)/g)].reduce((sum, m) => sum + (Number(m[1]) || 0), 0);
 
 		return {
 			source: src ? `${src}${sport ? `:${sport}` : ''}` : 'N/A',
 			destination: dst ? `${dst}${dport ? `:${dport}` : ''}` : 'N/A',
 			protocol: protocol || 'unknown',
-			state: stateMatch ? stateMatch[1].toUpperCase() : 'ACTIVE'
+			state: stateMatch ? stateMatch[1].toUpperCase() : 'ACTIVE',
+			transferBytes: bytes,
+			transferPackets: packets
 		};
+	}
+
+	formatConntrackTransfer(conn) {
+		const bytes = Number(conn?.transferBytes || 0);
+		const packets = Number(conn?.transferPackets || 0);
+		return `${this.core.formatBytes(bytes)} (${packets} Pkts.)`;
 	}
 
 	renderConntrackStateBadge(state) {
