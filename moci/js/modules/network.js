@@ -665,12 +665,12 @@ export default class NetworkModule {
 					const rx = this.core.formatBytes(rxBytes);
 					const tx = this.core.formatBytes(txBytes);
 					return `<tr>
-					<td>${this.core.escapeHtml(iface.interface)}</td>
-					<td>${this.core.escapeHtml(iface.proto || 'none').toUpperCase()}</td>
-					<td>${this.renderInterfaceStatusBadge(Boolean(iface.up))}</td>
-					<td>${this.core.escapeHtml(ipv4)}</td>
-					<td>${rx} / ${tx}</td>
-					<td>${this.renderInterfaceActionButtons(iface.interface)}</td>
+					<td data-label="INTERFACE">${this.core.escapeHtml(iface.interface)}</td>
+					<td data-label="PROTOCOL">${this.core.escapeHtml(iface.proto || 'none').toUpperCase()}</td>
+					<td data-label="STATUS">${this.renderInterfaceStatusBadge(Boolean(iface.up))}</td>
+					<td data-label="IPV4 ADDRESS">${this.core.escapeHtml(ipv4)}</td>
+					<td data-label="RX/TX">${rx} / ${tx}</td>
+					<td data-label="ACTIONS">${this.renderInterfaceActionButtons(iface.interface)}</td>
 				</tr>`;
 				})
 				.join('');

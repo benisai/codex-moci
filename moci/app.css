@@ -1902,6 +1902,69 @@ select.form-input {
 		margin-left: auto;
 	}
 
+	#interfaces-table thead {
+		display: none;
+	}
+
+	#interfaces-table,
+	#interfaces-table tbody,
+	#interfaces-table tr,
+	#interfaces-table td {
+		display: block;
+		width: 100%;
+	}
+
+	#interfaces-table tr {
+		border: 1px solid var(--glass-border);
+		border-radius: 8px;
+		background: rgba(255, 255, 255, 0.015);
+		margin-bottom: 12px;
+	}
+
+	#interfaces-table td {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 8px 10px;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+	}
+
+	#interfaces-table td:last-child {
+		border-bottom: none;
+	}
+
+	#interfaces-table td::before {
+		content: attr(data-label);
+		font-family: var(--font-mono);
+		font-size: 10px;
+		letter-spacing: 0.08em;
+		color: var(--steel-muted);
+		text-transform: uppercase;
+		flex: 0 0 108px;
+	}
+
+	/* Keep Interfaces concise on mobile/tablet */
+	#interfaces-table th:nth-child(2),
+	#interfaces-table th:nth-child(5),
+	#interfaces-table td:nth-child(2),
+	#interfaces-table td:nth-child(5) {
+		display: none;
+	}
+
+	#interfaces-table td:nth-child(6) {
+		display: block;
+	}
+
+	#interfaces-table td:nth-child(6)::before {
+		display: block;
+		margin-bottom: 6px;
+	}
+
+	#interfaces-table td:nth-child(6) .action-btn-sm {
+		margin-bottom: 6px;
+	}
+
 	#netify-page .traffic-header-row {
 		flex-wrap: wrap;
 		gap: 8px;
@@ -1992,6 +2055,16 @@ select.form-input {
 	}
 
 	#devices-table td::before {
+		flex-basis: 92px;
+		font-size: 9px;
+	}
+
+	#interfaces-table td {
+		gap: 8px;
+		padding: 8px;
+	}
+
+	#interfaces-table td::before {
 		flex-basis: 92px;
 		font-size: 9px;
 	}
