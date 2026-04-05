@@ -840,12 +840,12 @@ export default class NetworkModule {
 					const radio = radios[iface.device] || {};
 					const disabled = iface.disabled === '1';
 					return `<tr>
-					<td>${this.core.escapeHtml(iface.device || 'N/A')}</td>
-					<td>${this.core.escapeHtml(iface.ssid || 'N/A')}</td>
-					<td>${this.core.escapeHtml(radio.channel || 'auto')}</td>
-					<td>${disabled ? this.core.renderBadge('error', 'DISABLED') : this.core.renderBadge('success', 'ENABLED')}</td>
-					<td>${this.core.escapeHtml(iface.encryption || 'none').toUpperCase()}</td>
-					<td>${this.core.renderActionButtons(iface.section)}</td>
+					<td data-label="Radio">${this.core.escapeHtml(iface.device || 'N/A')}</td>
+					<td data-label="SSID">${this.core.escapeHtml(iface.ssid || 'N/A')}</td>
+					<td data-label="Channel">${this.core.escapeHtml(radio.channel || 'auto')}</td>
+					<td data-label="Status">${disabled ? this.core.renderBadge('error', 'DISABLED') : this.core.renderBadge('success', 'ENABLED')}</td>
+					<td data-label="Security">${this.core.escapeHtml(iface.encryption || 'none').toUpperCase()}</td>
+					<td data-label="Actions">${this.core.renderActionButtons(iface.section)}</td>
 				</tr>`;
 				})
 				.join('');
@@ -1164,10 +1164,10 @@ export default class NetworkModule {
 					leasesTbody.innerHTML = leases
 						.map(
 							l => `<tr>
-						<td>${this.core.escapeHtml(l.hostname || 'Unknown')}</td>
-						<td>${this.core.escapeHtml(l.ipaddr || 'N/A')}</td>
-						<td>${this.core.escapeHtml(l.macaddr || 'N/A')}</td>
-						<td>${l.expires > 0 ? l.expires + 's' : 'Permanent'}</td>
+						<td data-label="Hostname">${this.core.escapeHtml(l.hostname || 'Unknown')}</td>
+						<td data-label="IP Address">${this.core.escapeHtml(l.ipaddr || 'N/A')}</td>
+						<td data-label="MAC Address">${this.core.escapeHtml(l.macaddr || 'N/A')}</td>
+						<td data-label="Expires">${l.expires > 0 ? l.expires + 's' : 'Permanent'}</td>
 					</tr>`
 						)
 						.join('');
@@ -1193,10 +1193,10 @@ export default class NetworkModule {
 								? this.core.escapeHtml(s.ip)
 								: `<span title="No static IP assigned; this entry only sets the device hostname." style="text-decoration: underline; text-underline-offset: 2px; cursor: help; color: var(--steel-light);">N/A</span>`;
 							return `<tr>
-						<td>${this.core.escapeHtml(s.name || 'N/A')}</td>
-						<td>${this.core.escapeHtml(s.mac || 'N/A')}</td>
-						<td>${ipCell}</td>
-						<td>${this.core.renderActionButtons(s.section)}</td>
+						<td data-label="Hostname">${this.core.escapeHtml(s.name || 'N/A')}</td>
+						<td data-label="MAC Address">${this.core.escapeHtml(s.mac || 'N/A')}</td>
+						<td data-label="IP Address">${ipCell}</td>
+						<td data-label="Actions">${this.core.renderActionButtons(s.section)}</td>
 					</tr>`;
 						})
 						.join('');
@@ -1272,9 +1272,9 @@ export default class NetworkModule {
 						dnsTbody.innerHTML = domains
 							.map(
 								d => `<tr>
-							<td>${this.core.escapeHtml(d.name || 'N/A')}</td>
-							<td>${this.core.escapeHtml(d.ip || 'N/A')}</td>
-							<td>${this.core.renderActionButtons(d.section)}</td>
+							<td data-label="Hostname">${this.core.escapeHtml(d.name || 'N/A')}</td>
+							<td data-label="IP Address">${this.core.escapeHtml(d.ip || 'N/A')}</td>
+							<td data-label="Actions">${this.core.renderActionButtons(d.section)}</td>
 						</tr>`
 							)
 							.join('');
@@ -1295,9 +1295,9 @@ export default class NetworkModule {
 							hostsTbody.innerHTML = entries
 								.map(
 									(e, i) => `<tr>
-								<td>${this.core.escapeHtml(e.ip)}</td>
-								<td>${this.core.escapeHtml(e.names)}</td>
-								<td>${this.core.renderActionButtons(String(i))}</td>
+								<td data-label="IP Address">${this.core.escapeHtml(e.ip)}</td>
+								<td data-label="Hostnames">${this.core.escapeHtml(e.names)}</td>
+								<td data-label="Actions">${this.core.renderActionButtons(String(i))}</td>
 							</tr>`
 								)
 								.join('');
@@ -2118,12 +2118,12 @@ export default class NetworkModule {
 			const d = domains[i] || {};
 			const b = blocked[i] || {};
 			rows.push(`<tr>
-				<td>${this.core.escapeHtml(c.count || '')}</td>
-				<td>${this.core.escapeHtml(c.value || '')}</td>
-				<td>${this.core.escapeHtml(d.count || '')}</td>
-				<td>${this.core.escapeHtml(d.value || '')}</td>
-				<td>${this.core.escapeHtml(b.count || '')}</td>
-				<td>${this.core.escapeHtml(b.value || '')}</td>
+				<td data-label="Client Count">${this.core.escapeHtml(c.count || '')}</td>
+				<td data-label="Client">${this.core.escapeHtml(c.value || '')}</td>
+				<td data-label="Domain Count">${this.core.escapeHtml(d.count || '')}</td>
+				<td data-label="Domain">${this.core.escapeHtml(d.value || '')}</td>
+				<td data-label="Blocked Count">${this.core.escapeHtml(b.count || '')}</td>
+				<td data-label="Blocked Domain">${this.core.escapeHtml(b.value || '')}</td>
 			</tr>`
 			);
 		}
@@ -2156,14 +2156,14 @@ export default class NetworkModule {
 						? '-'
 						: `<button class="${actionBtnClass}" type="button" disabled style="font-size:11px;padding:4px 8px;line-height:1.2;opacity:0.95;cursor:default">${this.core.escapeHtml(actionLabel)}</button>`;
 				return `<tr>
-				<td>${this.core.escapeHtml(row.date || '')}</td>
-				<td>${this.core.escapeHtml(row.time || '')}</td>
-				<td>${this.core.escapeHtml(row.client || '')}</td>
-				<td>${this.core.escapeHtml(row.iface || '')}</td>
-				<td>${this.core.escapeHtml(row.type || '')}</td>
-				<td>${this.core.escapeHtml(row.domain || '')}</td>
-				<td>${answerBadge}</td>
-				<td>${actionButton}</td>
+				<td data-label="Date">${this.core.escapeHtml(row.date || '')}</td>
+				<td data-label="Time">${this.core.escapeHtml(row.time || '')}</td>
+				<td data-label="Client">${this.core.escapeHtml(row.client || '')}</td>
+				<td data-label="Interface">${this.core.escapeHtml(row.iface || '')}</td>
+				<td data-label="Type">${this.core.escapeHtml(row.type || '')}</td>
+				<td data-label="Domain">${this.core.escapeHtml(row.domain || '')}</td>
+				<td data-label="Answer">${answerBadge}</td>
+				<td data-label="Action">${actionButton}</td>
 			</tr>`
 			})
 			.join('');
@@ -2349,10 +2349,10 @@ export default class NetworkModule {
 			tbody.innerHTML = rows
 				.map(
 					row => `<tr>
-				<td>${this.core.escapeHtml(row.name)}</td>
-				<td>${this.core.escapeHtml(row.url || 'N/A')}</td>
-				<td>${this.renderAdblockStatusBadge(row.enabled)}</td>
-				<td><div class="action-buttons">
+				<td data-label="Name">${this.core.escapeHtml(row.name)}</td>
+				<td data-label="URL">${this.core.escapeHtml(row.url || 'N/A')}</td>
+				<td data-label="Status">${this.renderAdblockStatusBadge(row.enabled)}</td>
+				<td data-label="Actions"><div class="action-buttons">
 					<button class="action-btn-sm" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">${row.enabled ? 'DISABLE' : 'ENABLE'}</button>
 					<button class="action-btn-sm danger" data-action="delete" data-id="${this.core.escapeHtml(row.id)}">DELETE</button>
 				</div></td>
@@ -2627,16 +2627,16 @@ export default class NetworkModule {
 				policyTbody.innerHTML = policyRows
 					.map(
 						row => `<tr>
-					<td>${this.core.escapeHtml(row.name)}</td>
-					<td>${this.core.escapeHtml(row.src_addr || 'Any')}</td>
-					<td>${this.core.escapeHtml(row.src_port || '')}</td>
-					<td>${this.core.escapeHtml(row.dest_addr || 'Any')}</td>
-					<td>${this.core.escapeHtml(row.dest_port || '')}</td>
-					<td>${this.core.escapeHtml(row.proto || 'all')}</td>
-					<td>${this.core.escapeHtml(row.chain || 'prerouting')}</td>
-					<td>${this.core.escapeHtml(row.interface || 'wan')}</td>
-					<td><button class="action-btn-sm status-indicator-btn ${row.enabled ? 'success' : 'danger'}" type="button" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
-					<td>${this.core.renderActionButtons(row.id)}</td>
+					<td data-label="Name">${this.core.escapeHtml(row.name)}</td>
+					<td data-label="Local Addr/Dev">${this.core.escapeHtml(row.src_addr || 'Any')}</td>
+					<td data-label="Local Ports">${this.core.escapeHtml(row.src_port || '')}</td>
+					<td data-label="Remote Addr/Domains">${this.core.escapeHtml(row.dest_addr || 'Any')}</td>
+					<td data-label="Remote Ports">${this.core.escapeHtml(row.dest_port || '')}</td>
+					<td data-label="Protocol">${this.core.escapeHtml(row.proto || 'all')}</td>
+					<td data-label="Chain">${this.core.escapeHtml(row.chain || 'prerouting')}</td>
+					<td data-label="Interface">${this.core.escapeHtml(row.interface || 'wan')}</td>
+					<td data-label="Status"><button class="action-btn-sm status-indicator-btn ${row.enabled ? 'success' : 'danger'}" type="button" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
+					<td data-label="Actions">${this.core.renderActionButtons(row.id)}</td>
 				</tr>`
 					)
 					.join('');
@@ -2648,11 +2648,11 @@ export default class NetworkModule {
 				dnsTbody.innerHTML = dnsRows
 					.map(
 						row => `<tr>
-					<td>${this.core.escapeHtml(row.name)}</td>
-					<td>${this.core.escapeHtml(row.src_addr || 'N/A')}</td>
-					<td>${this.core.escapeHtml(row.dest_dns || 'N/A')}</td>
-					<td><button class="action-btn-sm status-indicator-btn ${row.enabled ? 'success' : 'danger'}" type="button" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
-					<td>${this.core.renderActionButtons(row.id)}</td>
+					<td data-label="Name">${this.core.escapeHtml(row.name)}</td>
+					<td data-label="Source">${this.core.escapeHtml(row.src_addr || 'N/A')}</td>
+					<td data-label="Dest DNS">${this.core.escapeHtml(row.dest_dns || 'N/A')}</td>
+					<td data-label="Status"><button class="action-btn-sm status-indicator-btn ${row.enabled ? 'success' : 'danger'}" type="button" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">${row.enabled ? 'ENABLED' : 'DISABLED'}</button></td>
+					<td data-label="Actions">${this.core.renderActionButtons(row.id)}</td>
 				</tr>`
 					)
 					.join('');
@@ -2664,8 +2664,8 @@ export default class NetworkModule {
 				includeTbody.innerHTML = includeRows
 					.map(
 						row => `<tr>
-					<td>${this.core.escapeHtml(row.path || 'N/A')}</td>
-					<td><div class="action-buttons">
+					<td data-label="Path">${this.core.escapeHtml(row.path || 'N/A')}</td>
+					<td data-label="Actions"><div class="action-buttons">
 						<button class="action-btn-sm" data-action="edit" data-id="${this.core.escapeHtml(row.id)}">EDIT</button>
 						<button class="action-btn-sm danger" data-action="delete" data-id="${this.core.escapeHtml(row.id)}">DELETE</button>
 					</div></td>
@@ -3243,12 +3243,12 @@ export default class NetworkModule {
 					const enabled = String(s.enabled || '0') === '1';
 					const runtime = runtimeBySection.get(String(s.section)) || { state: 'UNKNOWN', ip: '' };
 					return `<tr>
-				<td>${this.core.escapeHtml(s.section)}</td>
-				<td>${this.core.escapeHtml(s.lookup_host || s.domain || 'N/A')}</td>
-				<td>${this.core.escapeHtml(s.service_name || 'Custom')}</td>
-				<td>${this.core.escapeHtml(runtime.ip || 'N/A')}</td>
-				<td><button class="action-btn-sm status-indicator-btn ${enabled ? 'success' : 'danger'}" type="button" data-action="toggle" data-id="${this.core.escapeHtml(s.section)}">${enabled ? 'ENABLED' : 'DISABLED'}</button></td>
-				<td>${this.core.renderActionButtons(s.section)}</td>
+				<td data-label="Name">${this.core.escapeHtml(s.section)}</td>
+				<td data-label="Domain">${this.core.escapeHtml(s.lookup_host || s.domain || 'N/A')}</td>
+				<td data-label="Service">${this.core.escapeHtml(s.service_name || 'Custom')}</td>
+				<td data-label="IP">${this.core.escapeHtml(runtime.ip || 'N/A')}</td>
+				<td data-label="Status"><button class="action-btn-sm status-indicator-btn ${enabled ? 'success' : 'danger'}" type="button" data-action="toggle" data-id="${this.core.escapeHtml(s.section)}">${enabled ? 'ENABLED' : 'DISABLED'}</button></td>
+				<td data-label="Actions">${this.core.renderActionButtons(s.section)}</td>
 			</tr>`;
 				})
 				.join('');
@@ -3422,12 +3422,12 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 			tbody.innerHTML = rules
 				.map(
 					r => `<tr>
-				<td>${this.core.escapeHtml(r.section)}</td>
-				<td>${this.core.escapeHtml(r.target || 'Normal')}</td>
-				<td>${this.core.escapeHtml(r.proto || 'Any')}</td>
-				<td>${this.core.escapeHtml(r.ports || 'Any')}</td>
-				<td>${this.core.escapeHtml(r.srchost || 'Any')}</td>
-				<td>${this.core.renderActionButtons(r.section)}</td>
+				<td data-label="Name">${this.core.escapeHtml(r.section)}</td>
+				<td data-label="Priority">${this.core.escapeHtml(r.target || 'Normal')}</td>
+				<td data-label="Protocol">${this.core.escapeHtml(r.proto || 'Any')}</td>
+				<td data-label="Ports">${this.core.escapeHtml(r.ports || 'Any')}</td>
+				<td data-label="Source Host">${this.core.escapeHtml(r.srchost || 'Any')}</td>
+				<td data-label="Actions">${this.core.renderActionButtons(r.section)}</td>
 			</tr>`
 				)
 				.join('');
@@ -3732,12 +3732,12 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 							? `${this.core.escapeHtml(p.endpoint_host)}:${this.core.escapeHtml(String(p.endpoint_port))}`
 							: 'N/A';
 					return `<tr>
-					<td>${this.core.escapeHtml(p.description || p.section)}</td>
-					<td>${pubKey}</td>
-					<td>${this.core.escapeHtml(Array.isArray(p.allowed_ips) ? p.allowed_ips.join(', ') : p.allowed_ips || 'N/A')}</td>
-					<td>${endpoint}</td>
-					<td>${this.core.renderBadge('success', 'CONFIGURED')}</td>
-					<td>${this.core.renderActionButtons(p.section)}</td>
+					<td data-label="Name">${this.core.escapeHtml(p.description || p.section)}</td>
+					<td data-label="Public Key">${pubKey}</td>
+					<td data-label="Allowed IPs">${this.core.escapeHtml(Array.isArray(p.allowed_ips) ? p.allowed_ips.join(', ') : p.allowed_ips || 'N/A')}</td>
+					<td data-label="Endpoint">${endpoint}</td>
+					<td data-label="Status">${this.core.renderBadge('success', 'CONFIGURED')}</td>
+					<td data-label="Actions">${this.core.renderActionButtons(p.section)}</td>
 				</tr>`;
 				})
 				.join('');
@@ -4168,10 +4168,10 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 				const protocol = (conn.protocol || 'N/A').toUpperCase();
 				const status = conn.state || 'ACTIVE';
 				return `<tr>
-			<td>${this.core.escapeHtml(source)}</td>
-			<td>${this.core.escapeHtml(destination)}</td>
-			<td>${this.core.escapeHtml(protocol)}</td>
-			<td>${this.renderConntrackStateBadge(status)}</td>
+			<td data-label="Source">${this.core.escapeHtml(source)}</td>
+			<td data-label="Destination">${this.core.escapeHtml(destination)}</td>
+			<td data-label="Protocol">${this.core.escapeHtml(protocol)}</td>
+			<td data-label="Status">${this.renderConntrackStateBadge(status)}</td>
 		</tr>`;
 			})
 			.join('');

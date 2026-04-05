@@ -2024,6 +2024,64 @@ select.form-input {
 		margin-bottom: 6px;
 	}
 
+	#network-page .data-table thead {
+		display: none;
+	}
+
+	#network-page .data-table,
+	#network-page .data-table tbody,
+	#network-page .data-table tr,
+	#network-page .data-table td {
+		display: block;
+		width: 100%;
+	}
+
+	#network-page .data-table tr {
+		border: 1px solid var(--glass-border);
+		border-radius: 8px;
+		background: rgba(255, 255, 255, 0.015);
+		margin-bottom: 12px;
+	}
+
+	#network-page .data-table td {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 8px 10px;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+	}
+
+	#network-page .data-table td:last-child {
+		border-bottom: none;
+	}
+
+	#network-page .data-table td::before {
+		content: attr(data-label);
+		font-family: var(--font-mono);
+		font-size: 10px;
+		letter-spacing: 0.08em;
+		color: var(--steel-muted);
+		text-transform: uppercase;
+		flex: 0 0 108px;
+	}
+
+	#network-page .data-table td[data-label='Actions' i],
+	#network-page .data-table td[data-label='Action' i] {
+		display: block;
+	}
+
+	#network-page .data-table td[data-label='Actions' i]::before,
+	#network-page .data-table td[data-label='Action' i]::before {
+		display: block;
+		margin-bottom: 6px;
+	}
+
+	#network-page .data-table td[data-label='Actions' i] .action-btn-sm,
+	#network-page .data-table td[data-label='Action' i] .action-btn-sm {
+		margin-bottom: 6px;
+	}
+
 	#netify-page .traffic-header-row {
 		flex-wrap: wrap;
 		gap: 8px;
@@ -2136,6 +2194,16 @@ select.form-input {
 
 	#firewall-table td::before,
 	#fw-rules-table td::before {
+		flex-basis: 92px;
+		font-size: 9px;
+	}
+
+	#network-page .data-table td {
+		gap: 8px;
+		padding: 8px;
+	}
+
+	#network-page .data-table td::before {
 		flex-basis: 92px;
 		font-size: 9px;
 	}
