@@ -810,11 +810,12 @@ export default class SystemModule {
 		const script = `top_out=""
 parsed=""
 if command -v top >/dev/null 2>&1; then
-	top_out="$(top -bn1 2>/dev/null || true)"
+	top_out="$(top -bn2 2>/dev/null || true)"
 fi
 if [ -n "$top_out" ]; then
 	parsed="$(printf "%s\\n" "$top_out" | awk '
 		/^[[:space:]]*PID[[:space:]]/ {
+			frame++
 			for (i = 1; i <= NF; i++) h[$i] = i
 			next
 		}
@@ -822,7 +823,7 @@ if [ -n "$top_out" ]; then
 			pid = $(h["PID"])
 			userIdx = h["USER"] ? h["USER"] : 0
 			cpuIdx = h["%CPU"] ? h["%CPU"] : (h["CPU%"] ? h["CPU%"] : 0)
-			memIdx = h["%MEM"] ? h["%MEM"] : (h["MEM%"] ? h["MEM%"] : 0)
+			memIdx = h["%MEM"] ? h["%MEM"] : (h["MEM%"] ? h["MEM%"] : (h["%VSZ"] ? h["%VSZ"] : (h["VSZ%"] ? h["VSZ%"] : 0)))
 			cmdIdx = h["COMMAND"] ? h["COMMAND"] : (h["CMD"] ? h["CMD"] : NF)
 			user = userIdx ? $(userIdx) : "root"
 			cpu = cpuIdx ? $(cpuIdx) : "0"
@@ -830,7 +831,13 @@ if [ -n "$top_out" ]; then
 			cmd = ""
 			for (i = cmdIdx; i <= NF; i++) cmd = cmd (i == cmdIdx ? "" : " ") $i
 			gsub(/[|]/, "/", cmd)
-			printf "%s|%s|%s|%s|%s\\n", pid, user, cpu, mem, cmd
+			line = sprintf("%s|%s|%s|%s|%s", pid, user, cpu, mem, cmd)
+			if (frame >= 2) second = second line "\\n"
+			else first = first line "\\n"
+		}
+		END {
+			if (length(second)) printf "%s", second
+			else printf "%s", first
 		}
 	')"
 fi
