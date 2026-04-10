@@ -597,12 +597,20 @@ rm -f "$tmp"
 	}
 
 	sortRows(rows) {
-		let key = String(this.sortKey || 'traffic');
-		if (key === 'upload' || key === 'download') key = 'traffic';
+		const key = String(this.sortKey || 'online');
 		const dir = this.sortDir === 'asc' ? 1 : -1;
 		const list = Array.isArray(rows) ? [...rows] : [];
 		const rankStatus = row => (row?.quarantined ? 3 : row?.parentalBlocked ? 2 : row?.online ? 1 : 0);
-		const totalTraffic = row => Number(row?.rx || 0) + Number(row?.tx || 0);
+		const uploadValue = row => {
+			const live = Number(row?.liveTxRateBps);
+			if (Number.isFinite(live) && live > 0) return live;
+			return Number(row?.tx || 0);
+		};
+		const downloadValue = row => {
+			const live = Number(row?.liveRxRateBps);
+			if (Number.isFinite(live) && live > 0) return live;
+			return Number(row?.rx || 0);
+		};
 		const numCmp = (a, b) => (a === b ? 0 : a > b ? 1 : -1);
 		const strCmp = (a, b) => String(a || '').localeCompare(String(b || ''));
 
@@ -611,8 +619,10 @@ rm -f "$tmp"
 			if (key === 'hostname') cmp = strCmp(a.hostname, b.hostname);
 			else if (key === 'ip') cmp = strCmp(a.ip, b.ip);
 			else if (key === 'mac') cmp = strCmp(a.mac, b.mac);
+			else if (key === 'upload') cmp = numCmp(uploadValue(a), uploadValue(b));
+			else if (key === 'download') cmp = numCmp(downloadValue(a), downloadValue(b));
 			else if (key === 'online') cmp = numCmp(rankStatus(a), rankStatus(b));
-			else cmp = numCmp(totalTraffic(a), totalTraffic(b));
+			else cmp = numCmp(rankStatus(a), rankStatus(b));
 			if (cmp !== 0) return cmp * dir;
 			return strCmp(a.hostname, b.hostname);
 		});
