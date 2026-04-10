@@ -343,6 +343,10 @@ body {
 		gap: 6px !important;
 	}
 
+	.process-sort-select {
+		min-width: 110px;
+	}
+
 	#network-page .tabs,
 	#system-page .tabs {
 		gap: 4px;
@@ -805,6 +809,25 @@ body {
 	line-height: 1.2;
 	padding: 6px 10px;
 	margin-right: 0;
+}
+
+.process-controls {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.process-controls-label {
+	font-family: var(--font-mono);
+	font-size: 10px;
+	letter-spacing: 0.1em;
+	color: var(--steel-muted);
+}
+
+.process-sort-select {
+	min-width: 130px;
+	padding: 8px 10px;
 }
 
 .section-title {

@@ -15,7 +15,6 @@ export default class SystemModule {
 		this.isRefreshingProcesses = false;
 		this.processesPaused = false;
 		this.processesSort = 'cpu';
-		this.processesLastSample = { totalJiffies: 0, pidTicks: new Map() };
 
 		this.core.registerRoute('/system', (path, subPaths) => {
 			const pageElement = document.getElementById('system-page');
@@ -808,33 +807,38 @@ export default class SystemModule {
 	}
 
 	async fetchProcessesSnapshot() {
-		const script = `total="$(awk '/^cpu /{sum=0; for(i=2;i<=NF;i++) sum+=$i; print sum; exit}' /proc/stat 2>/dev/null || echo 0)"
-echo "__TOTAL|$total"
-for d in /proc/[0-9]*; do
-	pid="\${d#/proc/}"
-	[ -r "$d/stat" ] || continue
-	stat_line="$(cat "$d/stat" 2>/dev/null)" || continue
-	rest="\${stat_line#*) }"
-	set -- $rest
-	[ $# -ge 22 ] || continue
-	utime="$12"
-	stime="$13"
-	rss_pages="$22"
-	case "$utime$stime$rss_pages" in
-		*[!0-9]*|'') continue ;;
-	esac
-	cpu_ticks=$((utime + stime))
-	rss_kb=$((rss_pages * 4))
-	uid="$(awk '/^Uid:/ {print $2; exit}' "$d/status" 2>/dev/null)"
-	case "$uid" in
-		*[!0-9]*|'') uid="0" ;;
-	esac
-	cmd="$(tr '\\0' ' ' < "$d/cmdline" 2>/dev/null | sed 's/[[:space:]]\\+$//')"
-	[ -n "$cmd" ] || cmd="$(tr -d '\\n' < "$d/comm" 2>/dev/null)"
-	[ -n "$cmd" ] || cmd="[unknown]"
-	cmd="\${cmd%%|*}"
-	echo "$pid|$uid|$cpu_ticks|$rss_kb|$cmd"
-done`;
+		const script = `top_out=""
+parsed=""
+if command -v top >/dev/null 2>&1; then
+	top_out="$(top -bn1 2>/dev/null || true)"
+fi
+if [ -n "$top_out" ]; then
+	parsed="$(printf "%s\\n" "$top_out" | awk '
+		/^[[:space:]]*PID[[:space:]]/ {
+			for (i = 1; i <= NF; i++) h[$i] = i
+			next
+		}
+		h["PID"] && $1 ~ /^[0-9]+$/ {
+			pid = $(h["PID"])
+			userIdx = h["USER"] ? h["USER"] : 0
+			cpuIdx = h["%CPU"] ? h["%CPU"] : (h["CPU%"] ? h["CPU%"] : 0)
+			memIdx = h["%MEM"] ? h["%MEM"] : (h["MEM%"] ? h["MEM%"] : 0)
+			cmdIdx = h["COMMAND"] ? h["COMMAND"] : (h["CMD"] ? h["CMD"] : NF)
+			user = userIdx ? $(userIdx) : "root"
+			cpu = cpuIdx ? $(cpuIdx) : "0"
+			mem = memIdx ? $(memIdx) : "0"
+			cmd = ""
+			for (i = cmdIdx; i <= NF; i++) cmd = cmd (i == cmdIdx ? "" : " ") $i
+			gsub(/[|]/, "/", cmd)
+			printf "%s|%s|%s|%s|%s\\n", pid, user, cpu, mem, cmd
+		}
+	')"
+fi
+if [ -n "$parsed" ]; then
+	printf "%s\\n" "$parsed"
+else
+	ps | awk 'NR>1 { pid=$1; user=$2; cmd=$NF; gsub(/[|]/, "/", cmd); printf "%s|%s|0|0|%s\\n", pid, user, cmd }'
+fi`;
 		const [status, result] = await this.core.ubusCall(
 			'file',
 			'exec',
@@ -849,44 +853,26 @@ done`;
 	}
 
 	parseProcessesSnapshot(raw) {
-		let totalJiffies = 0;
 		const rows = [];
 		for (const line of String(raw || '').split('\n')) {
 			const trimmed = line.trim();
 			if (!trimmed) continue;
-			if (trimmed.startsWith('__TOTAL|')) {
-				const v = Number(trimmed.split('|')[1] || 0);
-				if (Number.isFinite(v)) totalJiffies = v;
-				continue;
-			}
 			const parts = trimmed.split('|');
 			if (parts.length < 5) continue;
 			const pid = Number(parts[0]);
-			const uid = String(parts[1] || '0');
-			const cpuTicks = Number(parts[2] || 0);
-			const memKb = Number(parts[3] || 0);
+			const user = String(parts[1] || 'root');
+			const cpuPct = Number(String(parts[2] || '0').replace('%', '')) || 0;
+			const memPct = Number(String(parts[3] || '0').replace('%', '')) || 0;
 			const command = String(parts.slice(4).join('|') || '[unknown]');
 			if (!Number.isFinite(pid) || pid <= 0) continue;
-			rows.push({ pid, uid, cpuTicks: Number.isFinite(cpuTicks) ? cpuTicks : 0, memKb: Number.isFinite(memKb) ? memKb : 0, command });
+			rows.push({
+				pid,
+				user,
+				cpuPct: Number.isFinite(cpuPct) ? cpuPct : 0,
+				memPct: Number.isFinite(memPct) ? memPct : 0,
+				command
+			});
 		}
-		return { totalJiffies, rows };
-	}
-
-	calculateProcessUsage(snapshot) {
-		const prev = this.processesLastSample;
-		const deltaTotal = Math.max(1, snapshot.totalJiffies - (prev.totalJiffies || 0));
-		const nextPidTicks = new Map();
-		const rows = snapshot.rows.map(row => {
-			const prevTicks = prev.pidTicks.get(row.pid) ?? row.cpuTicks;
-			const deltaTicks = Math.max(0, row.cpuTicks - prevTicks);
-			const cpuPct = (deltaTicks / deltaTotal) * 100;
-			nextPidTicks.set(row.pid, row.cpuTicks);
-			return {
-				...row,
-				cpuPct: Number.isFinite(cpuPct) ? cpuPct : 0
-			};
-		});
-		this.processesLastSample = { totalJiffies: snapshot.totalJiffies, pidTicks: nextPidTicks };
 		return rows;
 	}
 
@@ -894,11 +880,11 @@ done`;
 		const source = Array.isArray(rows) ? [...rows] : [];
 		const sortBy = this.processesSort || 'cpu';
 		if (sortBy === 'mem') {
-			source.sort((a, b) => b.memKb - a.memKb || b.cpuPct - a.cpuPct || a.pid - b.pid);
+			source.sort((a, b) => b.memPct - a.memPct || b.cpuPct - a.cpuPct || a.pid - b.pid);
 		} else if (sortBy === 'pid') {
 			source.sort((a, b) => a.pid - b.pid);
 		} else {
-			source.sort((a, b) => b.cpuPct - a.cpuPct || b.memKb - a.memKb || a.pid - b.pid);
+			source.sort((a, b) => b.cpuPct - a.cpuPct || b.memPct - a.memPct || a.pid - b.pid);
 		}
 		return source;
 	}
@@ -908,9 +894,8 @@ done`;
 		if (!tbody) return;
 		try {
 			const raw = await this.fetchProcessesSnapshot();
-			const snapshot = this.parseProcessesSnapshot(raw);
-			const withUsage = this.calculateProcessUsage(snapshot);
-			const sorted = this.sortProcesses(withUsage).slice(0, 200);
+			const rows = this.parseProcessesSnapshot(raw);
+			const sorted = this.sortProcesses(rows).slice(0, 200);
 			if (sorted.length === 0) {
 				this.core.renderEmptyTable(tbody, 5, 'No process data');
 				this.updateProcessesPauseButton();
@@ -918,19 +903,18 @@ done`;
 			}
 			tbody.innerHTML = sorted
 				.map(proc => {
-					const memMb = proc.memKb > 0 ? `${(proc.memKb / 1024).toFixed(1)} MB` : '0 MB';
 					return `<tr>
 					<td data-label="PID">${this.core.escapeHtml(String(proc.pid))}</td>
-					<td data-label="USER">${this.core.escapeHtml(proc.uid)}</td>
+					<td data-label="USER">${this.core.escapeHtml(proc.user)}</td>
 					<td data-label="CPU %">${this.core.escapeHtml(proc.cpuPct.toFixed(1))}%</td>
-					<td data-label="MEMORY">${this.core.escapeHtml(memMb)}</td>
+					<td data-label="MEMORY">${this.core.escapeHtml(proc.memPct.toFixed(1))}%</td>
 					<td data-label="COMMAND" style="overflow-wrap:anywhere;word-break:break-word;">${this.core.escapeHtml(proc.command)}</td>
 				</tr>`;
 				})
 				.join('');
 			this.updateProcessesPauseButton();
 		} catch {
-			this.core.renderEmptyTable(tbody, 5, 'Failed to load processes');
+			this.core.renderEmptyTable(tbody, 5, 'Failed to load processes (check ACL for file.exec)');
 		}
 	}
 

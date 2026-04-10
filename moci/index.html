@@ -2929,14 +2929,14 @@ Endpoint = host:51820"
 									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">
 										CURRENT PROCESSES (5S)
 									</div>
-									<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
-										<label for="processes-sort" class="form-label" style="margin: 0">SORT</label>
-										<select id="processes-sort" class="form-input" style="min-width: 120px; padding: 8px 10px">
+									<div class="process-controls">
+										<span class="process-controls-label">SORT BY</span>
+										<select id="processes-sort" class="form-input process-sort-select">
 											<option value="cpu">CPU</option>
 											<option value="mem">MEMORY</option>
 											<option value="pid">PID</option>
 										</select>
-										<button class="action-btn-sm danger" id="processes-pause-btn" type="button">PAUSE</button>
+										<button class="action-btn danger" id="processes-pause-btn" type="button">PAUSE</button>
 									</div>
 								</div>
 								<div
