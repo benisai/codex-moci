@@ -117,7 +117,7 @@ Access at `http://192.168.1.1/moci/` and login with your root credentials.
 
 
 What does the shell script do?:
-- installs required packages (`netifyd`, `netcat`, `vnstat`, `nlbwmon`, `speedtestcpp`, etc.)
+- installs required packages (`netifyd`, `netcat`, `vnstat`, `nlbwmon`, speedtest: `speedtestcpp` preferred or `python3-speedtest-cli` fallback, etc.)
 - deploys web UI to `/www/moci`
 - installs/updates `rpcd` ACL (`/usr/share/rpcd/acl.d/moci.json`)
 - installs backend workers + init scripts:
