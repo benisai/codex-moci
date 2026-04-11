@@ -521,7 +521,30 @@
 						</div>
 
 						<div class="tab-content hidden" id="tab-wireless" data-feature="wireless">
-							<div class="stat-card" style="margin-bottom: 24px">
+							<div class="stat-card">
+								<table class="data-table" id="wireless-table">
+									<thead>
+										<tr>
+											<th>RADIO</th>
+											<th>SSID</th>
+											<th>PASSWORD</th>
+											<th>ENCRYPTION</th>
+											<th>CHANNEL</th>
+											<th>STATUS</th>
+											<th>ACTIONS</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td colspan="7" style="text-align: center; color: var(--steel-muted)">
+												Loading...
+											</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+
+							<div class="stat-card" style="margin-top: 24px">
 								<div class="section-title">WIRELESS WAN (WWAN CLIENT)</div>
 								<div class="form-group">
 									<label class="form-label">CURRENT UPLINK</label>
@@ -562,29 +585,6 @@
 										<tr>
 											<td colspan="6" style="text-align: center; color: var(--steel-muted)">
 												Click SCAN APS to find nearby networks.
-											</td>
-										</tr>
-									</tbody>
-								</table>
-							</div>
-
-							<div class="stat-card">
-								<table class="data-table" id="wireless-table">
-									<thead>
-										<tr>
-											<th>RADIO</th>
-											<th>SSID</th>
-											<th>PASSWORD</th>
-											<th>ENCRYPTION</th>
-											<th>CHANNEL</th>
-											<th>STATUS</th>
-											<th>ACTIONS</th>
-										</tr>
-									</thead>
-									<tbody>
-										<tr>
-											<td colspan="7" style="text-align: center; color: var(--steel-muted)">
-												Loading...
 											</td>
 										</tr>
 									</tbody>
