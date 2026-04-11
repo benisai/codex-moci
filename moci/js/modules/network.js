@@ -965,12 +965,17 @@ export default class NetworkModule {
 					: Number.isFinite(quality)
 						? String(quality)
 						: 'N/A';
-				const enc = String(item?.encryption?.description || item?.security || item?.encryption || 'open');
+				const rawEncryption = item?.encryption;
+				const enc = String(rawEncryption?.description || item?.security || item?.encryption || 'open');
+				const mode = String(item?.mode || '').trim();
 				return {
 					ssid: ssid || '<hidden>',
 					bssid: bssid || 'N/A',
 					channel,
+					channelNum: Number(item?.channel) || 0,
 					signal: signalLabel,
+					mode,
+					rawEncryption,
 					encryption: enc,
 					isOpen: /open|none|off/i.test(enc)
 				};
@@ -1139,10 +1144,12 @@ export default class NetworkModule {
 	}
 
 	async connectWirelessWwan() {
+		const selectedId = Number(document.getElementById('wireless-wwan-selected-id')?.value || '-1');
+		const selected = Number.isFinite(selectedId) ? this.wirelessWwanScanRows[selectedId] || null : null;
 		const radio = String(document.getElementById('wireless-wwan-connect-radio')?.value || '').trim();
 		const ssid = String(document.getElementById('wireless-wwan-connect-ssid')?.value || '').trim();
 		const bssid = String(document.getElementById('wireless-wwan-connect-bssid')?.value || '').trim().toLowerCase();
-		const encryption = String(document.getElementById('wireless-wwan-connect-encryption')?.value || 'none').trim();
+		const encryptionInput = String(document.getElementById('wireless-wwan-connect-encryption')?.value || 'none').trim();
 		const key = String(document.getElementById('wireless-wwan-connect-key')?.value || '');
 		const replaceExisting = Boolean(document.getElementById('wireless-wwan-replace-existing')?.checked);
 
@@ -1154,7 +1161,7 @@ export default class NetworkModule {
 			this.core.showToast('SSID is required', 'error');
 			return;
 		}
-		if (encryption !== 'none' && !key) {
+		if (encryptionInput !== 'none' && !key) {
 			this.core.showToast('Password is required for secured networks', 'error');
 			return;
 		}
@@ -1191,18 +1198,50 @@ export default class NetworkModule {
 				staSection = addResult.section;
 			}
 
-			const values = {
+			const encObj = selected && selected.rawEncryption && typeof selected.rawEncryption === 'object' ? selected.rawEncryption : null;
+			const auth = encObj ? this.normalizeToList(encObj.authentication).map(v => v.toLowerCase()) : [];
+			const wpa = encObj ? this.normalizeToList(encObj.wpa).map(v => Number(v) || 0) : [];
+			const isWep = Boolean(encObj && Array.isArray(encObj.wep));
+			const isSae = Boolean(encObj && auth.includes('sae'));
+			const isPsk = Boolean(encObj && auth.includes('psk'));
+
+			let finalEncryption = encryptionInput;
+			const staValues = {
 				device: radio,
 				network: 'wwan',
-				mode: 'sta',
+				mode: selected?.mode === 'Ad-Hoc' ? 'adhoc' : 'sta',
 				ssid,
-				encryption,
 				disabled: '0'
 			};
-			if (bssid && /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(bssid)) values.bssid = bssid;
-			if (encryption === 'none') values.key = '';
-			else values.key = key;
-			await this.core.uciSet('wireless', staSection, values);
+
+			if (isSae) {
+				finalEncryption = 'sae';
+				staValues.key = key;
+			} else if (isPsk) {
+				finalEncryption = wpa.includes(2) ? 'psk2' : 'psk';
+				staValues.key = key;
+			} else if (isWep) {
+				finalEncryption = 'wep-open';
+				staValues.key = '1';
+				staValues.key1 = key;
+			} else if (encryptionInput === 'none') {
+				finalEncryption = 'none';
+			}
+			staValues.encryption = finalEncryption;
+
+			const effectiveBssid =
+				bssid && /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(bssid)
+					? bssid
+					: String(selected?.bssid || '').match(/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/)
+						? String(selected.bssid)
+						: '';
+			if (effectiveBssid) staValues.bssid = effectiveBssid;
+
+			const channelValue = selected?.channelNum && selected.channelNum > 0 ? String(selected.channelNum) : '';
+			await this.core.uciSet('wireless', staSection, staValues);
+			if (channelValue) {
+				await this.core.uciSet('wireless', radio, { channel: channelValue });
+			}
 			await this.ensureWwanFirewallZone();
 
 			await this.core.uciCommit('network');
