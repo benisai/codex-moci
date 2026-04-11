@@ -13,6 +13,8 @@ export default class NetworkModule {
 		this.adblockClassicSection = 'global';
 		this.adblockClassicReportMaxTop = 10;
 		this.adblockClassicReportMaxResults = 50;
+		this.adblockClassicDebugLog = [];
+		this.adblockClassicDebugLimit = 160;
 		this.qosifyInstalled = null;
 		this.wirelessBySection = new Map();
 		this.wirelessWwanScanRows = [];
@@ -311,6 +313,8 @@ export default class NetworkModule {
 		document.getElementById('adblock-classic-start-btn')?.addEventListener('click', () => this.runAdblockClassicServiceAction('start'));
 		document.getElementById('adblock-classic-stop-btn')?.addEventListener('click', () => this.runAdblockClassicServiceAction('stop'));
 		document.getElementById('adblock-classic-restart-btn')?.addEventListener('click', () => this.runAdblockClassicServiceAction('restart'));
+		document.getElementById('refresh-adblock-classic-debug-btn')?.addEventListener('click', () => this.renderAdblockClassicDebugLog());
+		document.getElementById('clear-adblock-classic-debug-btn')?.addEventListener('click', () => this.clearAdblockClassicDebugLog());
 		document.getElementById('add-adblock-list-btn')?.addEventListener('click', () => {
 			this.core.resetModal('adblock-list-modal');
 			this.resetAdblockListForm();
@@ -2329,6 +2333,26 @@ export default class NetworkModule {
 		}
 	}
 
+	logAdblockClassicDebug(message) {
+		const ts = new Date().toLocaleTimeString([], { hour12: false });
+		this.adblockClassicDebugLog.push(`[${ts}] ${String(message || '')}`);
+		if (this.adblockClassicDebugLog.length > this.adblockClassicDebugLimit) {
+			this.adblockClassicDebugLog.splice(0, this.adblockClassicDebugLog.length - this.adblockClassicDebugLimit);
+		}
+		this.renderAdblockClassicDebugLog();
+	}
+
+	clearAdblockClassicDebugLog() {
+		this.adblockClassicDebugLog = [];
+		this.renderAdblockClassicDebugLog();
+	}
+
+	renderAdblockClassicDebugLog() {
+		const el = document.getElementById('adblock-classic-debug-log');
+		if (!el) return;
+		el.textContent = this.adblockClassicDebugLog.length > 0 ? this.adblockClassicDebugLog.join('\n') : 'No debug entries yet';
+	}
+
 	async loadAdblockClassic() {
 		const serviceStatusEl = document.getElementById('adblock-classic-service-status');
 		const configStatusEl = document.getElementById('adblock-classic-config-status');
@@ -2340,11 +2364,14 @@ export default class NetworkModule {
 		if (!this.core.isFeatureEnabled('adblock')) {
 			if (serviceStatusEl) serviceStatusEl.innerHTML = this.core.renderBadge('warning', 'DISABLED');
 			if (configStatusEl) configStatusEl.innerHTML = this.core.renderBadge('warning', 'DISABLED');
+			this.logAdblockClassicDebug('AdBlock feature is disabled in moci.features.adblock');
 			return;
 		}
 
 		this.core.showSkeleton('adblock-classic-config-card');
 		this.syncAdblockClassicSettingsPanel();
+		this.renderAdblockClassicDebugLog();
+		this.logAdblockClassicDebug('Loading AdBlock classic configuration and report');
 		try {
 			if (serviceStatusEl) serviceStatusEl.innerHTML = this.core.renderBadge('warning', 'CHECKING');
 			if (configStatusEl) configStatusEl.innerHTML = this.core.renderBadge('warning', 'CHECKING');
@@ -2399,6 +2426,7 @@ export default class NetworkModule {
 				if (feedsEl) feedsEl.value = feeds.join('\n');
 				if (configStatusEl) configStatusEl.innerHTML = this.core.renderBadge('success', 'CONFIG READY');
 				if (installHintEl) installHintEl.classList.add('hidden');
+				this.logAdblockClassicDebug(`Config section '${sectionName}' loaded`);
 			} else {
 				this.setAdblockClassicSettingValue('enabled', '0', { syncOnly: true });
 				this.setAdblockClassicSettingValue('safesearch', '0', { syncOnly: true });
@@ -2409,6 +2437,7 @@ export default class NetworkModule {
 					configStatusEl.innerHTML = this.core.renderBadge('error', 'CONFIG MISSING');
 				}
 				if (installHintEl) installHintEl.classList.remove('hidden');
+				this.logAdblockClassicDebug('Config section missing (uci adblock/global not found)');
 			}
 			this.syncAdblockClassicButtons();
 			await this.loadAdblockClassicReportSettings();
@@ -2443,13 +2472,16 @@ export default class NetworkModule {
 							configEnabled ? 'ENABLED' : 'DISABLED'
 						);
 					}
+					this.logAdblockClassicDebug(`Service status resolved: ${String(serviceStatusEl.textContent || '').trim() || 'unknown'}`);
 				} catch {
 					serviceStatusEl.innerHTML = this.core.renderBadge('error', 'UNKNOWN');
+					this.logAdblockClassicDebug('Failed to resolve adblock service status');
 				}
 			}
 			await this.loadAdblockClassicReport(false);
 		} catch (err) {
 			console.error('Failed to load classic AdBlock config:', err);
+			this.logAdblockClassicDebug(`Error loading classic config: ${err?.message || err}`);
 			if (serviceStatusEl) serviceStatusEl.innerHTML = this.core.renderBadge('error', 'ERROR');
 			if (configStatusEl) configStatusEl.innerHTML = this.core.renderBadge('error', 'ERROR');
 			this.renderAdblockClassicTopStats([]);
@@ -2766,6 +2798,7 @@ export default class NetworkModule {
 		if (statusEl) {
 			statusEl.innerHTML = this.core.renderBadge('warning', forceGenerate ? 'GENERATING REPORT' : 'LOADING');
 		}
+		this.logAdblockClassicDebug(forceGenerate ? 'Report refresh requested (generate + load)' : 'Report load requested');
 
 		const cmdParts = [];
 		if (forceGenerate) {
@@ -2781,6 +2814,7 @@ export default class NetworkModule {
 				'else true; fi'
 		);
 		const cmd = cmdParts.join('; ');
+		this.logAdblockClassicDebug(`Executing report command (max_top=${this.adblockClassicReportMaxTop}, max_results=${this.adblockClassicReportMaxResults})`);
 
 		try {
 			const [status, result] = await this.core.ubusCall(
@@ -2793,10 +2827,13 @@ export default class NetworkModule {
 				{ timeout: 30000 }
 			);
 			if (status !== 0) throw new Error('Failed to load adblock report');
+			this.logAdblockClassicDebug(`Report command completed (ubus status=${status}, exit=${Number(result?.code ?? 0)})`);
 
 			const reportRaw = String(result?.stdout || '');
+			this.logAdblockClassicDebug(`Report payload length=${reportRaw.length}`);
 			if (!reportRaw.trim()) {
 				if (statusEl) statusEl.innerHTML = this.core.renderBadge('error', 'REPORT MISSING');
+				this.logAdblockClassicDebug('Report file missing or empty (/tmp/adblock-report/adb_report.jsn)');
 				this.renderAdblockClassicTopStats([], [], []);
 				this.renderAdblockClassicLatestDns([]);
 				return;
@@ -2807,6 +2844,9 @@ export default class NetworkModule {
 				: this.parseAdblockClassicReport(reportRaw);
 			this.renderAdblockClassicTopStats(parsed.topClients, parsed.topDomains, parsed.topBlocked);
 			this.renderAdblockClassicLatestDns(parsed.dnsRows);
+			this.logAdblockClassicDebug(
+				`Parsed report rows: clients=${parsed.topClients?.length || 0}, domains=${parsed.topDomains?.length || 0}, blocked=${parsed.topBlocked?.length || 0}, dns=${parsed.dnsRows?.length || 0}`
+			);
 			if (statusEl) {
 				const totalTopRows =
 					(parsed.topClients?.length || 0) + (parsed.topDomains?.length || 0) + (parsed.topBlocked?.length || 0);
@@ -2815,7 +2855,8 @@ export default class NetworkModule {
 					`READY · ${totalTopRows} top rows · ${parsed.dnsRows.length} dns rows`
 				);
 			}
-		} catch {
+		} catch (err) {
+			this.logAdblockClassicDebug(`Failed to load report: ${err?.message || err}`);
 			if (statusEl) statusEl.innerHTML = this.core.renderBadge('error', 'FAILED TO LOAD REPORT');
 			this.renderAdblockClassicTopStats([], [], []);
 			this.renderAdblockClassicLatestDns([]);
