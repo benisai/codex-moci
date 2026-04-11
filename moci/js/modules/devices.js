@@ -110,7 +110,7 @@ export default class DevicesModule {
 
 		try {
 			const leases = await this.fetchLeases();
-			const [pingReachableIps, conntrackIps, usage, bandixUsage, staticByMac, netifyEnabled, parentalByMac, dnsHijackByMac, quarantineByMac] = await Promise.all([
+			const [pingReachableIps, conntrackIps, usage, bandixUsage, staticByMac, netifyEnabled, parentalByMac, dnsHijackByMac, quarantineByMac, arpByMac] = await Promise.all([
 				this.fetchPingReachableIps(leases),
 				this.fetchConntrackIps(),
 				this.fetchNlbwmonUsage(),
@@ -119,7 +119,8 @@ export default class DevicesModule {
 				this.fetchNetifyFeatureFlag(),
 				this.fetchParentalRulesByMac(),
 				this.fetchDnsHijackRulesByMac(),
-				this.fetchQuarantineRulesByMac()
+				this.fetchQuarantineRulesByMac(),
+				this.fetchLanArpEntries()
 			]);
 
 			this.staticByMac = staticByMac;
@@ -139,7 +140,8 @@ export default class DevicesModule {
 				staticByMac,
 				parentalByMac,
 				this.dnsHijackByMac,
-				quarantineByMac
+				quarantineByMac,
+				arpByMac
 			);
 			if (fromAuto && this.expandedMac) return;
 			this.deviceRows = rows;
@@ -344,6 +346,40 @@ export default class DevicesModule {
 		return macs;
 	}
 
+	async fetchLanArpEntries() {
+		const byMac = new Map();
+		const parseAndAdd = text => {
+			for (const line of String(text || '').split('\n').slice(1)) {
+				const parts = line.trim().split(/\s+/);
+				if (parts.length < 6) continue;
+				const ip = String(parts[0] || '').trim();
+				const mac = this.normalizeMac(parts[3] || '');
+				const dev = String(parts[5] || '').trim();
+				if (!this.isValidIpv4(ip)) continue;
+				if (!mac || mac === '00:00:00:00:00:00') continue;
+				if (dev !== 'br-lan') continue;
+				byMac.set(mac, { ip, dev });
+			}
+		};
+
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'read', { path: '/proc/net/arp' });
+			if (status === 0 && result?.data) parseAndAdd(result.data);
+		} catch {}
+
+		if (byMac.size > 0) return byMac;
+
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', 'arp -n 2>/dev/null || true']
+			});
+			if (status === 0 && result?.stdout) parseAndAdd(result.stdout);
+		} catch {}
+
+		return byMac;
+	}
+
 	async fetchPingReachableIps(leases) {
 		const reachable = new Set();
 		const ips = Array.from(
@@ -517,10 +553,12 @@ rm -f "$tmp"
 		staticByMac,
 		parentalByMac,
 		dnsHijackByMac,
-		quarantineByMac
+		quarantineByMac,
+		arpByMac
 	) {
 		const merged = [];
 		const seenMacs = new Set();
+		const rowByMac = new Map();
 
 		for (const lease of leases) {
 			const mac = String(lease.macaddr || '').toLowerCase();
@@ -555,7 +593,10 @@ rm -f "$tmp"
 				quarantined: Boolean(quarantine?.enabled),
 				quarantineBase: quarantine?.base || ''
 			});
-			if (mac) seenMacs.add(mac);
+			if (mac) {
+				seenMacs.add(mac);
+				rowByMac.set(mac, merged[merged.length - 1]);
+			}
 		}
 
 		for (const [mac, pin] of staticByMac.entries()) {
@@ -591,6 +632,56 @@ rm -f "$tmp"
 				quarantineBase: quarantine?.base || ''
 			});
 			seenMacs.add(mac);
+			rowByMac.set(mac, merged[merged.length - 1]);
+		}
+
+		for (const [mac, arp] of arpByMac.entries()) {
+			if (!mac) continue;
+			const existing = rowByMac.get(mac);
+			if (existing) {
+				if ((!existing.ip || existing.ip === 'N/A') && arp?.ip) existing.ip = arp.ip;
+				if ((!existing.leaseIp || existing.leaseIp === 'N/A') && arp?.ip) existing.leaseIp = arp.ip;
+				existing.online = Boolean(existing.online || arp?.ip);
+				continue;
+			}
+
+			const usage = totalsByClient.get(mac) || totalsByClient.get(arp?.ip || '') || null;
+			const bandix = bandixByMac.get(mac) || null;
+			const pin = staticByMac.get(mac) || null;
+			const parental = parentalByMac.get(mac) || null;
+			const dnsHijack = dnsHijackByMac.get(mac) || null;
+			const quarantine = quarantineByMac.get(mac) || null;
+
+			const row = {
+				hostname: pin?.name || 'Unknown',
+				ip: pin?.ip || arp?.ip || usage?.ip || 'N/A',
+				leaseIp: arp?.ip || usage?.ip || pin?.ip || 'N/A',
+				mac,
+				tx: usage ? usage.tx : null,
+				rx: usage ? usage.rx : null,
+				liveTxRateBps: bandix?.txRateBps ?? null,
+				liveRxRateBps: bandix?.rxRateBps ?? null,
+				liveTxBytes: bandix?.txBytes ?? null,
+				liveRxBytes: bandix?.rxBytes ?? null,
+				nlbwTopApps: this.extractTopNlbwApps(usage),
+				online:
+					Boolean(arp?.ip) ||
+					(usage?.ip ? pingReachableIps.has(usage.ip) || conntrackIps.has(usage.ip) : false) ||
+					(pin?.ip ? pingReachableIps.has(pin.ip) || conntrackIps.has(pin.ip) : false),
+				pinned: Boolean(pin?.ip),
+				staticSection: pin?.section || '',
+				parentalSection: parental?.section || '',
+				parentalBlocked: Boolean(parental?.enabled),
+				dnsHijackSection: dnsHijack?.section || '',
+				dnsHijackDest: dnsHijack?.destDns || '',
+				dnsHijackEnabled: Boolean(dnsHijack?.enabled),
+				quarantined: Boolean(quarantine?.enabled),
+				quarantineBase: quarantine?.base || ''
+			};
+
+			merged.push(row);
+			seenMacs.add(mac);
+			rowByMac.set(mac, row);
 		}
 
 		return merged;
