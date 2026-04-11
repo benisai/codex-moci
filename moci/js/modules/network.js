@@ -16,6 +16,7 @@ export default class NetworkModule {
 		this.qosifyInstalled = null;
 		this.wirelessBySection = new Map();
 		this.wirelessWwanScanRows = [];
+		this.wirelessWwanLastScanDevice = '';
 
 		this.core.registerRoute('/network', async (path, subPaths) => {
 			const pageElement = document.getElementById('network-page');
@@ -1031,7 +1032,7 @@ export default class NetworkModule {
 						? String(quality)
 						: 'N/A';
 				const rawEncryption = item?.encryption;
-				const enc = String(rawEncryption?.description || item?.security || item?.encryption || 'open');
+				const enc = this.formatWwanEncryption(rawEncryption, item?.security || item?.encryption || 'open');
 				const mode = String(item?.mode || '').trim();
 				return {
 					ssid: ssid || '<hidden>',
@@ -1046,6 +1047,21 @@ export default class NetworkModule {
 				};
 			})
 			.filter(row => row.ssid);
+	}
+
+	formatWwanEncryption(rawEncryption, fallback = 'open') {
+		if (rawEncryption && typeof rawEncryption === 'object') {
+			if (typeof rawEncryption.description === 'string' && rawEncryption.description.trim()) {
+				return rawEncryption.description.trim();
+			}
+			const auth = this.normalizeToList(rawEncryption.authentication).map(v => v.toLowerCase());
+			if (auth.includes('sae')) return 'WPA3-SAE';
+			if (auth.includes('psk')) return 'WPA-PSK';
+			if (Array.isArray(rawEncryption.wep)) return 'WEP';
+			return 'Encrypted';
+		}
+		const text = String(fallback || 'open').trim();
+		return text || 'open';
 	}
 
 	normalizeToList(value) {
@@ -1110,11 +1126,10 @@ export default class NetworkModule {
 	async loadWirelessWwanPanel() {
 		const currentEl = document.getElementById('wireless-wwan-current');
 		const deviceEl = document.getElementById('wireless-wwan-device');
-		const radioEl = document.getElementById('wireless-wwan-radio');
 		const connectRadioEl = document.getElementById('wireless-wwan-connect-radio');
 		const hintEl = document.getElementById('wireless-wwan-scan-hint');
 		const tbody = document.querySelector('#wireless-wwan-scan-table tbody');
-		if (!currentEl || !deviceEl || !radioEl || !connectRadioEl || !tbody) return;
+		if (!currentEl || !deviceEl || !tbody) return;
 
 		const [wirelessState, iwinfoDevices, iwinfoCli] = await Promise.all([
 			this.readWirelessWwanState(),
@@ -1131,10 +1146,6 @@ export default class NetworkModule {
 		]);
 
 		const radios = wirelessState.radios || [];
-		radioEl.innerHTML = radios.length
-			? radios.map(r => `<option value="${this.core.escapeHtml(r)}">${this.core.escapeHtml(r)}</option>`).join('')
-			: '<option value="">N/A</option>';
-		connectRadioEl.innerHTML = radioEl.innerHTML;
 
 		const cliRaw = iwinfoCli?.[0] === 0 ? String(iwinfoCli?.[1]?.stdout || '') : '';
 		const devices = Array.from(
@@ -1147,6 +1158,9 @@ export default class NetworkModule {
 		deviceEl.innerHTML = devices.length
 			? devices.map(d => `<option value="${this.core.escapeHtml(d)}">${this.core.escapeHtml(d)}</option>`).join('')
 			: '<option value="">N/A</option>';
+		if (connectRadioEl) {
+			connectRadioEl.innerHTML = deviceEl.innerHTML;
+		}
 
 		if (hintEl) hintEl.classList.toggle('hidden', devices.length > 0);
 
@@ -1201,6 +1215,7 @@ export default class NetworkModule {
 		}
 		this.core.showToast(`Scanning APs on ${device}...`, 'info');
 		const rows = await this.readWirelessScan(device);
+		this.wirelessWwanLastScanDevice = device;
 		this.wirelessWwanScanRows = rows;
 		this.renderWirelessWwanScanTable();
 		this.core.showToast(rows.length ? `Found ${rows.length} APs` : 'No APs found', rows.length ? 'success' : 'error');
@@ -1213,9 +1228,10 @@ export default class NetworkModule {
 			this.core.showToast('Selected AP not found', 'error');
 			return;
 		}
-		const radio = String(document.getElementById('wireless-wwan-radio')?.value || '').trim();
+		const radio = String(this.wirelessWwanLastScanDevice || document.getElementById('wireless-wwan-device')?.value || '').trim();
 		document.getElementById('wireless-wwan-selected-id').value = String(idx);
-		document.getElementById('wireless-wwan-connect-radio').value = radio;
+		const connectRadioEl = document.getElementById('wireless-wwan-connect-radio');
+		if (connectRadioEl) connectRadioEl.value = radio;
 		document.getElementById('wireless-wwan-connect-ssid').value = String(row.ssid || '').replace(/^<hidden>$/, '');
 		document.getElementById('wireless-wwan-connect-bssid').value = String(row.bssid || '').replace(/^N\/A$/, '');
 		document.getElementById('wireless-wwan-connect-encryption').value = row.isOpen ? 'none' : 'psk2';
@@ -1227,7 +1243,12 @@ export default class NetworkModule {
 	async connectWirelessWwan() {
 		const selectedId = Number(document.getElementById('wireless-wwan-selected-id')?.value || '-1');
 		const selected = Number.isFinite(selectedId) ? this.wirelessWwanScanRows[selectedId] || null : null;
-		const radio = String(document.getElementById('wireless-wwan-connect-radio')?.value || '').trim();
+		const radio = String(
+			document.getElementById('wireless-wwan-connect-radio')?.value ||
+			this.wirelessWwanLastScanDevice ||
+			document.getElementById('wireless-wwan-device')?.value ||
+			''
+		).trim();
 		const ssid = String(document.getElementById('wireless-wwan-connect-ssid')?.value || '').trim();
 		const bssid = String(document.getElementById('wireless-wwan-connect-bssid')?.value || '').trim().toLowerCase();
 		const encryptionInput = String(document.getElementById('wireless-wwan-connect-encryption')?.value || 'none').trim();
