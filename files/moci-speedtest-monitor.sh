@@ -93,7 +93,6 @@ extract_server() {
 	value="$(echo "$input" | sed -n 's/.*"server_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
 	[ -n "$value" ] || value="$(echo "$input" | sed -n 's/.*"server"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
 	[ -n "$value" ] || value="$(echo "$input" | sed -n 's/.*[Ss]erver[^:]*:[[:space:]]*\([^,]*\).*/\1/p' | head -n 1)"
-	[ -n "$value" ] || value="$(echo "$input" | sed -n 's/^[[:space:]]*Hosted by[[:space:]]*\(.*\)$/\1/p' | head -n 1)"
 	echo "$value"
 }
 
