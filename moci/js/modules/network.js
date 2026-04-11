@@ -2760,7 +2760,7 @@ export default class NetworkModule {
 		const limit = this.adblockClassicReportMaxResults || 50;
 		const data = (Array.isArray(rows) ? rows : []).slice(0, limit);
 		if (data.length === 0) {
-			this.core.renderEmptyTable(tbody, 8, 'No DNS request rows available');
+			this.core.renderEmptyTable(tbody, 6, 'No DNS request rows available');
 			return;
 		}
 		tbody.innerHTML = data
@@ -2783,8 +2783,6 @@ export default class NetworkModule {
 				<td data-label="Date">${this.core.escapeHtml(row.date || '')}</td>
 				<td data-label="Time">${this.core.escapeHtml(row.time || '')}</td>
 				<td data-label="Client">${this.core.escapeHtml(row.client || '')}</td>
-				<td data-label="Interface">${this.core.escapeHtml(row.iface || '')}</td>
-				<td data-label="Type">${this.core.escapeHtml(row.type || '')}</td>
 				<td data-label="Domain">${this.core.escapeHtml(row.domain || '')}</td>
 				<td data-label="Answer">${answerBadge}</td>
 				<td data-label="Action">${actionButton}</td>
