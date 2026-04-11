@@ -145,8 +145,7 @@ for pkg in \
 	adblock-fast \
 	luci-app-adblock-fast \
 	tcpdump-mini \
-	sqlite3-cli \
-	speedtestcpp
+	sqlite3-cli
 do
 	install_pkg_if_available "$pkg"
 done
@@ -154,6 +153,7 @@ done
 # Dependency package names can vary between opkg and apk feeds.
 install_first_available_pkg "netcat" netcat netcat-openbsd
 install_first_available_pkg "sqlite-cli" sqlite3-cli sqlite3
+install_first_available_pkg "speedtest" speedtestcpp python3-speedtest-cli
 
 log "Deploying MoCI web app"
 mkdir -p /www/moci
