@@ -2416,6 +2416,40 @@ export default class NetworkModule {
 		return map;
 	}
 
+	async readTextFileFlexible(path) {
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'read', { path });
+			if (status === 0 && result?.data) {
+				const text = String(result.data || '');
+				if (text.trim()) return text;
+			}
+		} catch {}
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', `cat ${this.shellQuote(path)} 2>/dev/null || true`]
+			});
+			if (status === 0 && result?.stdout) {
+				const text = String(result.stdout || '');
+				if (text.trim()) return text;
+			}
+		} catch {}
+		return '';
+	}
+
+	getDefaultAdblockClassicSources() {
+		return [
+			'adaway',
+			'adguard',
+			'adguard_tracking',
+			'disconnect',
+			'oisd',
+			'stevenblack',
+			'urlhaus',
+			'yoyo'
+		];
+	}
+
 	async loadAdblockClassicSourceOptions(selectedFeeds = []) {
 		const select = document.getElementById('adblock-classic-feed-select');
 		if (!select) return;
@@ -2427,17 +2461,17 @@ export default class NetworkModule {
 		const sourceFiles = [
 			'/etc/adblock/adblock.sources',
 			'/usr/share/adblock/adblock.sources',
-			'/usr/lib/adblock/adblock.sources'
+			'/usr/lib/adblock/adblock.sources',
+			'/usr/share/adblock/sources',
+			'/etc/adblock/sources'
 		];
 		for (const path of sourceFiles) {
-			try {
-				const [status, result] = await this.core.ubusCall('file', 'read', { path });
-				if (status !== 0 || !result?.data) continue;
-				const parsed = this.parseAdblockClassicSourcesFromText(String(result.data || ''));
-				for (const [id, label] of parsed.entries()) {
-					if (!sourceMap.has(id)) sourceMap.set(id, label || id);
-				}
-			} catch {}
+			const text = await this.readTextFileFlexible(path);
+			if (!text) continue;
+			const parsed = this.parseAdblockClassicSourcesFromText(text);
+			for (const [id, label] of parsed.entries()) {
+				if (!sourceMap.has(id)) sourceMap.set(id, label || id);
+			}
 		}
 
 		try {
@@ -2453,6 +2487,12 @@ export default class NetworkModule {
 				}
 			}
 		} catch {}
+
+		if (sourceMap.size === 0) {
+			for (const id of this.getDefaultAdblockClassicSources()) {
+				if (!sourceMap.has(id)) sourceMap.set(id, id);
+			}
+		}
 
 		const options = Array.from(sourceMap.entries()).sort((a, b) => String(a[0] || '').localeCompare(String(b[0] || '')));
 		select.innerHTML = options.length
