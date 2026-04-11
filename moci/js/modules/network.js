@@ -2799,48 +2799,34 @@ export default class NetworkModule {
 			statusEl.innerHTML = this.core.renderBadge('warning', forceGenerate ? 'GENERATING REPORT' : 'LOADING');
 		}
 		this.logAdblockClassicDebug(forceGenerate ? 'Report refresh requested (generate + load)' : 'Report load requested');
-
-		const cmdParts = [];
 		if (forceGenerate) {
 			const maxTop = Math.min(Math.max(Number(this.adblockClassicReportMaxTop) || 10, 1), 500);
 			const maxResults = Math.min(Math.max(Number(this.adblockClassicReportMaxResults) || 50, 1), 5000);
-			cmdParts.push(
-				`/etc/init.d/adblock report gen ${maxTop} ${maxResults} >/dev/null 2>&1 || /etc/init.d/adblock report gen >/dev/null 2>&1 || true`
-			);
+			this.logAdblockClassicDebug(`Executing report generation (max_top=${maxTop}, max_results=${maxResults})`);
+			try {
+				await this.core.ubusCall(
+					'file',
+					'exec',
+					{
+						command: '/bin/sh',
+						params: [
+							'-c',
+							`/etc/init.d/adblock report gen ${maxTop} ${maxResults} >/dev/null 2>&1 || /etc/init.d/adblock report gen >/dev/null 2>&1 || true`
+						]
+					},
+					{ timeout: 30000 }
+				);
+			} catch {}
 		}
-		cmdParts.push(
-			'for f in ' +
-				'/tmp/adblock-report/adb_report.jsn ' +
-				'/tmp/adblock-report/adb_report.json ' +
-				'/tmp/adblock-Report/adb_report.jsn ' +
-				'/tmp/adblock-Report/adb_report.json ' +
-				'/tmp/adblock-report ' +
-				'/tmp/adblock-Report; ' +
-			'do if [ -s "$f" ] && [ ! -d "$f" ]; then cat "$f"; break; fi; done'
-		);
-		const cmd = cmdParts.join('; ');
-		this.logAdblockClassicDebug(`Executing report command (max_top=${this.adblockClassicReportMaxTop}, max_results=${this.adblockClassicReportMaxResults})`);
 
 		try {
-			const [status, result] = await this.core.ubusCall(
-				'file',
-				'exec',
-				{
-					command: '/bin/sh',
-					params: ['-c', cmd]
-				},
-				{ timeout: 30000 }
-			);
-			if (status !== 0) throw new Error('Failed to load adblock report');
-			this.logAdblockClassicDebug(`Report command completed (ubus status=${status}, exit=${Number(result?.code ?? 0)})`);
-
-			const reportRaw = String(result?.stdout || '');
+			const report = await this.readAdblockClassicReportFile();
+			const reportRaw = String(report?.raw || '');
+			this.logAdblockClassicDebug(`Report source: ${report?.path || 'none'}`);
 			this.logAdblockClassicDebug(`Report payload length=${reportRaw.length}`);
 			if (!reportRaw.trim()) {
 				if (statusEl) statusEl.innerHTML = this.core.renderBadge('error', 'REPORT MISSING');
-				this.logAdblockClassicDebug(
-					'Report file missing or empty (checked /tmp/adblock-report and /tmp/adblock-Report with .jsn/.json)'
-				);
+				this.logAdblockClassicDebug('Report file missing or empty (checked /tmp/adblock-Report and /tmp/adblock-report)');
 				this.renderAdblockClassicTopStats([], [], []);
 				this.renderAdblockClassicLatestDns([]);
 				return;
@@ -2849,15 +2835,7 @@ export default class NetworkModule {
 			const parsed = reportRaw.trim().startsWith('{')
 				? this.parseAdblockClassicJsonReport(reportRaw)
 				: this.parseAdblockClassicReport(reportRaw);
-			let dnsRows = Array.isArray(parsed.dnsRows) ? parsed.dnsRows : [];
-			if (dnsRows.length === 0) {
-				this.logAdblockClassicDebug('No DNS rows in primary report; trying mail report fallback');
-				const fallbackDnsRows = await this.loadAdblockClassicDnsRowsFromMailReport();
-				if (fallbackDnsRows.length > 0) {
-					dnsRows = fallbackDnsRows;
-					this.logAdblockClassicDebug(`Mail report fallback yielded ${dnsRows.length} DNS rows`);
-				}
-			}
+			const dnsRows = Array.isArray(parsed.dnsRows) ? parsed.dnsRows : [];
 			this.renderAdblockClassicTopStats(parsed.topClients, parsed.topDomains, parsed.topBlocked);
 			this.renderAdblockClassicLatestDns(dnsRows);
 			this.logAdblockClassicDebug(
@@ -2879,12 +2857,35 @@ export default class NetworkModule {
 		}
 	}
 
-	async loadAdblockClassicDnsRowsFromMailReport() {
+	async readAdblockClassicReportFile() {
+		const paths = [
+			'/tmp/adblock-Report/adb_report.json',
+			'/tmp/adblock-Report/adb_report.jsn',
+			'/tmp/adblock-report/adb_report.json',
+			'/tmp/adblock-report/adb_report.jsn',
+			'/tmp/adblock-Report',
+			'/tmp/adblock-report'
+		];
+
+		for (const path of paths) {
+			try {
+				const [status, result] = await this.core.ubusCall('file', 'read', { path });
+				if (status !== 0 || !result?.data) continue;
+				const raw = String(result.data || '');
+				if (!raw.trim()) continue;
+				return { path, raw };
+			} catch {}
+		}
+
 		const cmd =
 			'for f in ' +
-			'/tmp/adblock-report/adb_mailreport.txt ' +
-			'/tmp/adblock-Report/adb_mailreport.txt; ' +
-			'do if [ -s "$f" ] && [ ! -d "$f" ]; then cat "$f"; break; fi; done';
+			'/tmp/adblock-Report/adb_report.json ' +
+			'/tmp/adblock-Report/adb_report.jsn ' +
+			'/tmp/adblock-report/adb_report.json ' +
+			'/tmp/adblock-report/adb_report.jsn ' +
+			'/tmp/adblock-Report ' +
+			'/tmp/adblock-report; ' +
+			'do if [ -s "$f" ] && [ ! -d "$f" ]; then echo "__PATH__:$f"; cat "$f"; break; fi; done';
 		try {
 			const [status, result] = await this.core.ubusCall(
 				'file',
@@ -2895,13 +2896,18 @@ export default class NetworkModule {
 				},
 				{ timeout: 20000 }
 			);
-			if (status !== 0) return [];
+			if (status !== 0) return { path: '', raw: '' };
 			const raw = String(result?.stdout || '');
-			if (!raw.trim()) return [];
-			const parsed = this.parseAdblockClassicReport(raw);
-			return Array.isArray(parsed?.dnsRows) ? parsed.dnsRows : [];
+			if (!raw.trim()) return { path: '', raw: '' };
+			const lines = raw.split('\n');
+			let path = '';
+			if (lines[0] && lines[0].startsWith('__PATH__:')) {
+				path = lines[0].replace('__PATH__:', '').trim();
+				lines.shift();
+			}
+			return { path, raw: lines.join('\n') };
 		} catch {
-			return [];
+			return { path: '', raw: '' };
 		}
 	}
 
