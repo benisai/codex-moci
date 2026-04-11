@@ -27,6 +27,7 @@ export default class DashboardModule {
 		this.bandwidthSampleSeconds = 3;
 		this.bandwidthWindowSeconds = 900;
 		this.bandwidthHistoryMaxPoints = Math.max(20, Math.ceil(this.bandwidthWindowSeconds / this.bandwidthSampleSeconds));
+		this.bandwidthHistoryStorageKey = 'moci_dashboard_bandwidth_history_v1';
 		this.trafficProviderPreference = 'auto';
 		this.activeTrafficProvider = 'interface';
 		this.lastBandixTotals = null;
@@ -209,6 +210,9 @@ export default class DashboardModule {
 		this.applyDashboardColorTheme();
 		this.initSystemLogSearch();
 		await this.loadTrafficSettings();
+		this.restoreBandwidthHistory();
+		this.initBandwidthGraph();
+		this.updateBandwidthGraph();
 		try {
 			const systemInfo = await this.fetchSystemInfo();
 			const boardInfo = await this.fetchBoardInfo();
@@ -220,7 +224,6 @@ export default class DashboardModule {
 			await this.updateSystemLog();
 			await this.updateConnections();
 			await this.updateConntrackUsage();
-			this.initBandwidthGraph();
 			this.initTrafficControls();
 			this.initMonthlyGraph();
 			await this.updateTrafficChart(true);
@@ -351,6 +354,41 @@ export default class DashboardModule {
 		this.bandwidthHistory.down.push(rxRate);
 		this.bandwidthHistory.up.push(txRate);
 		this.trimBandwidthHistory();
+	}
+
+	persistBandwidthHistory() {
+		try {
+			const payload = {
+				sampleSeconds: this.bandwidthSampleSeconds,
+				windowSeconds: this.bandwidthWindowSeconds,
+				down: Array.isArray(this.bandwidthHistory.down)
+					? this.bandwidthHistory.down.slice(-this.bandwidthHistoryMaxPoints)
+					: [],
+				up: Array.isArray(this.bandwidthHistory.up)
+					? this.bandwidthHistory.up.slice(-this.bandwidthHistoryMaxPoints)
+					: [],
+				savedAt: Date.now()
+			};
+			localStorage.setItem(this.bandwidthHistoryStorageKey, JSON.stringify(payload));
+		} catch {}
+	}
+
+	restoreBandwidthHistory() {
+		try {
+			const raw = localStorage.getItem(this.bandwidthHistoryStorageKey);
+			if (!raw) return;
+			const payload = JSON.parse(raw);
+			if (Number(payload?.sampleSeconds || 0) !== this.bandwidthSampleSeconds) return;
+			if (Number(payload?.windowSeconds || 0) !== this.bandwidthWindowSeconds) return;
+
+			const down = Array.isArray(payload?.down) ? payload.down.map(v => Number(v)).filter(Number.isFinite) : [];
+			const up = Array.isArray(payload?.up) ? payload.up.map(v => Number(v)).filter(Number.isFinite) : [];
+			const count = Math.min(down.length, up.length, this.bandwidthHistoryMaxPoints);
+			if (count < 2) return;
+
+			this.bandwidthHistory.down = down.slice(-count);
+			this.bandwidthHistory.up = up.slice(-count);
+		} catch {}
 	}
 
 	trimBandwidthHistory() {
@@ -573,6 +611,9 @@ export default class DashboardModule {
 			const activityRates = activitySnapshot?.rates || null;
 			if (this.isValidBandwidthRates(activityRates)) {
 				this.updateBandwidthHistory(Number(activityRates.rxRate), Number(activityRates.txRate));
+				if (this.activeTrafficProvider !== 'bandix') {
+					this.persistBandwidthHistory();
+				}
 			}
 			this.updateBandwidthGraph();
 		} catch (err) {
