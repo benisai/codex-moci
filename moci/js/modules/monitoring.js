@@ -512,25 +512,77 @@ export default class MonitoringModule {
 
 	async toggleService() {
 		const action = this.serviceRunning ? 'stop' : 'start';
+		const toggleBtn = document.getElementById('monitoring-toggle-btn');
+		if (toggleBtn) {
+			toggleBtn.disabled = true;
+			toggleBtn.style.opacity = '0.6';
+		}
 		try {
 			await this.exec('/etc/init.d/ping-monitor', [action]);
+			// Update button state immediately for clearer UX, then reconcile from actual process state.
+			this.serviceRunning = action === 'start';
+			this.renderStatusCard(this.aggregateFiveMinuteSamples(this.samples));
+			await new Promise(resolve => setTimeout(resolve, 250));
 			await this.refresh();
 			this.core.showToast(`Ping service ${action}ed`, 'success');
 		} catch (err) {
 			console.error(`Failed to ${action} ping service:`, err);
 			this.core.showToast(`Failed to ${action} service`, 'error');
+		} finally {
+			if (toggleBtn) {
+				toggleBtn.disabled = false;
+				toggleBtn.style.opacity = '';
+			}
 		}
 	}
 
 	async runOnce() {
+		this.setPingRunNowBusy(true);
 		try {
-			await this.exec('/usr/bin/moci-ping-monitor', ['--once'], { timeout: 12000 });
+			await this.readPingFile();
+			const beforeTs = this.getLatestPingSampleTs();
+
+			// Run in background to avoid ubus/rpcd timeout during command execution.
+			await this.exec('/bin/sh', ['-c', '/usr/bin/moci-ping-monitor --once >/tmp/moci-ping-monitor.last.log 2>&1 &']);
+			const completed = await this.waitForNewPingSample(beforeTs, 10, 1200);
 			await this.refresh();
-			this.core.showToast('One ping sample captured', 'success');
+			if (completed) {
+				this.core.showToast('One ping sample captured', 'success');
+			} else {
+				this.core.showToast('Ping started; sample will appear shortly', 'warning');
+			}
 		} catch (err) {
 			console.error('Failed to run ping once:', err);
 			this.core.showToast('Failed to run ping once', 'error');
+		} finally {
+			this.setPingRunNowBusy(false);
 		}
+	}
+
+	getLatestPingSampleTs() {
+		const samples = Array.isArray(this.samples) ? this.samples : [];
+		if (samples.length === 0) return 0;
+		return Math.max(...samples.map(s => Number(s?.ts) || 0));
+	}
+
+	async waitForNewPingSample(previousTs, attempts = 10, delayMs = 1200) {
+		for (let i = 0; i < attempts; i += 1) {
+			await new Promise(resolve => setTimeout(resolve, delayMs));
+			await this.readPingFile();
+			if (this.getLatestPingSampleTs() > Number(previousTs || 0)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	setPingRunNowBusy(busy) {
+		const btn = document.getElementById('monitoring-run-now-btn');
+		if (!btn) return;
+		btn.disabled = Boolean(busy);
+		btn.style.opacity = busy ? '0.55' : '1';
+		btn.style.cursor = busy ? 'not-allowed' : '';
+		btn.textContent = busy ? 'RUNNING...' : 'RUN ONCE';
 	}
 
 	async clearHistory() {
