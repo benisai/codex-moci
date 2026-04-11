@@ -315,7 +315,12 @@ export default class NetworkModule {
 		document.getElementById('adblock-classic-restart-btn')?.addEventListener('click', () => this.runAdblockClassicServiceAction('restart'));
 		document.getElementById('refresh-adblock-classic-debug-btn')?.addEventListener('click', () => this.renderAdblockClassicDebugLog());
 		document.getElementById('clear-adblock-classic-debug-btn')?.addEventListener('click', () => this.clearAdblockClassicDebugLog());
-		document.getElementById('adblock-classic-feed-select')?.addEventListener('change', () => this.syncAdblockClassicFeedSummary());
+		document.getElementById('adblock-classic-feed-list')?.addEventListener('change', event => {
+			const target = event?.target;
+			if (target && target.classList?.contains('adblock-classic-feed-checkbox')) {
+				this.syncAdblockClassicFeedSummary();
+			}
+		});
 		document.getElementById('add-adblock-list-btn')?.addEventListener('click', () => {
 			this.core.resetModal('adblock-list-modal');
 			this.resetAdblockListForm();
@@ -2355,10 +2360,10 @@ export default class NetworkModule {
 	}
 
 	getAdblockClassicSelectedFeeds() {
-		const select = document.getElementById('adblock-classic-feed-select');
-		if (!select) return [];
-		return Array.from(select.selectedOptions || [])
-			.map(opt => String(opt.value || '').trim())
+		const list = document.getElementById('adblock-classic-feed-list');
+		if (!list) return [];
+		return Array.from(list.querySelectorAll('input.adblock-classic-feed-checkbox:checked'))
+			.map(input => String(input.value || '').trim())
 			.filter(Boolean);
 	}
 
@@ -2451,8 +2456,8 @@ export default class NetworkModule {
 	}
 
 	async loadAdblockClassicSourceOptions(selectedFeeds = []) {
-		const select = document.getElementById('adblock-classic-feed-select');
-		if (!select) return;
+		const list = document.getElementById('adblock-classic-feed-list');
+		if (!list) return;
 
 		const selectedSet = new Set((Array.isArray(selectedFeeds) ? selectedFeeds : []).map(v => String(v || '').trim()).filter(Boolean));
 		const sourceMap = new Map();
@@ -2495,14 +2500,19 @@ export default class NetworkModule {
 		}
 
 		const options = Array.from(sourceMap.entries()).sort((a, b) => String(a[0] || '').localeCompare(String(b[0] || '')));
-		select.innerHTML = options.length
+		list.innerHTML = options.length
 			? options
 					.map(([id, label]) => {
-						const selected = selectedSet.has(id) ? ' selected' : '';
-						return `<option value="${this.core.escapeHtml(id)}"${selected}>${this.core.escapeHtml(label || id)}</option>`;
+						const checked = selectedSet.has(id) ? ' checked' : '';
+						const escapedId = this.core.escapeHtml(id);
+						const escapedLabel = this.core.escapeHtml(label || id);
+						return `<label class="checkbox-label" style="display:flex; align-items:center; gap:8px; margin:0; padding:4px 2px;">
+							<input type="checkbox" class="adblock-classic-feed-checkbox" value="${escapedId}"${checked} />
+							<span style="font-size: 12px; color: var(--text-primary); line-height: 1.4;">${escapedLabel}</span>
+						</label>`;
 					})
 					.join('')
-			: '<option value="" disabled>No source catalog found</option>';
+			: '<div style="color: var(--steel-muted); padding: 6px 4px;">No source catalog found</div>';
 		this.syncAdblockClassicFeedSummary();
 	}
 
