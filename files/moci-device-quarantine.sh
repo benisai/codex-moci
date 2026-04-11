@@ -84,6 +84,31 @@ collect_leases() {
 	awk '{ if ($2 ~ /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/) print tolower($2) "|" $3 "|" $4 }' "$LEASES_FILE"
 }
 
+collect_arp() {
+	# Collect only ARP entries on LAN device (for example br-lan).
+	if [ -r /proc/net/arp ]; then
+		awk -v dev="$LAN_DEVICE" 'NR>1 {
+			ip=$1
+			mac=tolower($4)
+			ifname=$6
+			if (ifname == dev && mac ~ /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/ && mac != "00:00:00:00:00:00") {
+				print mac "|" ip "|"
+			}
+		}' /proc/net/arp
+		return 0
+	fi
+
+	# Fallback for systems where /proc/net/arp is unavailable/restricted.
+	arp -n 2>/dev/null | awk -v dev="$LAN_DEVICE" 'NR>1 {
+		ip=$1
+		mac=tolower($3)
+		ifname=$NF
+		if (ifname == dev && mac ~ /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/ && mac != "00:00:00:00:00:00") {
+			print mac "|" ip "|"
+		}
+	}'
+}
+
 collect_ip_neigh() {
 	# Collect only neighbors on the LAN device (for example br-lan), never apcli/wan side.
 	ip neigh show dev "$LAN_DEVICE" 2>/dev/null | awk '{
@@ -122,6 +147,7 @@ collect_wireless_clients() {
 collect_candidates() {
 	{
 		collect_leases
+		collect_arp
 		collect_ip_neigh
 		collect_wireless_clients
 	} | awk -F'|' '
