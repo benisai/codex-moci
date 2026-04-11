@@ -54,11 +54,9 @@ export default class MonitoringModule {
 
 	setupHandlers() {
 		const targetInput = document.getElementById('monitoring-target');
-		const intervalInput = document.getElementById('monitoring-interval');
 		const thresholdInput = document.getElementById('monitoring-threshold');
 		const speedtestTimeInput = document.getElementById('monitoring-speedtest-time');
 		if (targetInput) targetInput.value = this.target;
-		if (intervalInput) intervalInput.value = String(this.intervalSec);
 		if (thresholdInput) thresholdInput.value = String(this.thresholdMs);
 		if (speedtestTimeInput) speedtestTimeInput.value = this.formatTimeValue(this.speedtestHour, this.speedtestMinute);
 
@@ -170,7 +168,7 @@ export default class MonitoringModule {
 				const c = result.values;
 				this.pingSection = section;
 				this.target = c.target || this.target;
-				this.intervalSec = Number(c.interval) || this.intervalSec;
+				this.intervalSec = 60;
 				this.thresholdMs = Number(c.threshold) || this.thresholdMs;
 				this.outputFile = c.output_file || this.outputFile;
 			}
@@ -191,11 +189,9 @@ export default class MonitoringModule {
 		} catch {}
 
 		const targetInput = document.getElementById('monitoring-target');
-		const intervalInput = document.getElementById('monitoring-interval');
 		const thresholdInput = document.getElementById('monitoring-threshold');
 		const speedtestTimeInput = document.getElementById('monitoring-speedtest-time');
 		if (targetInput) targetInput.value = this.target;
-		if (intervalInput) intervalInput.value = String(this.intervalSec);
 		if (thresholdInput) thresholdInput.value = String(this.thresholdMs);
 		if (speedtestTimeInput) speedtestTimeInput.value = this.formatTimeValue(this.speedtestHour, this.speedtestMinute);
 		this.updateSpeedtestToggleButtons();
@@ -203,19 +199,14 @@ export default class MonitoringModule {
 
 	async applySettings() {
 		const targetInput = document.getElementById('monitoring-target');
-		const intervalInput = document.getElementById('monitoring-interval');
 		const thresholdInput = document.getElementById('monitoring-threshold');
 
 		const target = (targetInput?.value || '').trim() || '1.1.1.1';
-		const interval = Number(intervalInput?.value || 60);
+		const interval = 60;
 		const threshold = Number(thresholdInput?.value || this.thresholdMs || 100);
 
 		if (!/^[a-zA-Z0-9.\-:]+$/.test(target)) {
 			this.core.showToast('Invalid target host/IP', 'error');
-			return;
-		}
-		if (!Number.isFinite(interval) || interval < 5 || interval > 3600) {
-			this.core.showToast('Interval must be between 5 and 3600 seconds', 'error');
 			return;
 		}
 		if (!Number.isFinite(threshold) || threshold < 1 || threshold > 10000) {
@@ -233,7 +224,7 @@ export default class MonitoringModule {
 			await this.core.uciCommit('moci');
 			this.pingSection = section;
 			this.target = target;
-			this.intervalSec = interval;
+			this.intervalSec = 60;
 			this.thresholdMs = Math.round(threshold);
 			let restartFailed = false;
 			try {

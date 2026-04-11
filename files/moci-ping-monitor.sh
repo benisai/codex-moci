@@ -27,9 +27,6 @@ load_config() {
 		value="$(uci -q get moci.ping_monitor.target 2>/dev/null || true)"
 		[ -n "$value" ] && PING_TARGET="$value"
 
-		value="$(uci -q get moci.ping_monitor.interval 2>/dev/null || true)"
-		[ -n "$value" ] && PING_INTERVAL="$value"
-
 		value="$(uci -q get moci.ping_monitor.timeout 2>/dev/null || true)"
 		[ -n "$value" ] && PING_TIMEOUT="$value"
 
@@ -43,7 +40,7 @@ load_config() {
 
 refresh_runtime_config() {
 	load_config
-	PING_INTERVAL="$(sanitize_int "$PING_INTERVAL" "$DEFAULT_INTERVAL")"
+	PING_INTERVAL="$DEFAULT_INTERVAL"
 	PING_TIMEOUT="$(sanitize_int "$PING_TIMEOUT" "$DEFAULT_TIMEOUT")"
 	PING_MAX_LINES="$(sanitize_int "$PING_MAX_LINES" "$DEFAULT_MAX_LINES")"
 	ensure_output_file
