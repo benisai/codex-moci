@@ -145,6 +145,7 @@ for pkg in \
 	adblock-fast \
 	luci-app-adblock-fast \
 	tcpdump-mini \
+	qrencode \
 	sqlite3-cli
 do
 	install_pkg_if_available "$pkg"
