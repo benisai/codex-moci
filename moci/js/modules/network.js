@@ -919,6 +919,21 @@ export default class NetworkModule {
 		return Array.from(new Set(devices)).sort();
 	}
 
+	parseWwanIwinfoDevicesFromCli(output) {
+		const devices = [];
+		const text = String(output || '');
+		for (const line of text.split('\n')) {
+			const trimmed = line.trim();
+			if (!trimmed) continue;
+			const m = trimmed.match(/^([a-zA-Z0-9_.:-]+)\s+/);
+			if (!m) continue;
+			const name = String(m[1] || '').trim();
+			if (!name || name === 'No') continue;
+			devices.push(name);
+		}
+		return Array.from(new Set(devices)).sort();
+	}
+
 	async ubusCallWithFallback(object, method, params = {}, timeout = 15000) {
 		try {
 			const [status, result] = await this.core.ubusCall(object, method, params, { timeout });
@@ -943,9 +958,59 @@ export default class NetworkModule {
 		}
 	}
 
+	async readWirelessScanFromCli(device) {
+		if (!device) return [];
+		try {
+			const [status, result] = await this.core.ubusCall(
+				'file',
+				'exec',
+				{
+					command: '/bin/sh',
+					params: ['-c', `iwinfo ${this.shellQuote(device)} scan 2>/dev/null || true`]
+				},
+				{ timeout: 30000 }
+			);
+			if (status !== 0) return [];
+			const raw = String(result?.stdout || '');
+			if (!raw.trim()) return [];
+
+			const blocks = raw
+				.split(/\n(?=Cell\s+\d+\s+-\s+Address:)/g)
+				.map(b => b.trim())
+				.filter(Boolean);
+
+			return blocks
+				.map(block => {
+					const bssid = (block.match(/Address:\s*([0-9A-Fa-f:]{17})/) || [])[1] || '';
+					const ssid = (block.match(/ESSID:\s*"([^"]*)"/) || [])[1] || '<hidden>';
+					const channel = (block.match(/Channel:\s*([0-9]+)/) || [])[1] || 'N/A';
+					const signal = (block.match(/Signal:\s*(-?\d+)\s*dBm/i) || [])[1] || '';
+					const mode = (block.match(/Mode:\s*([A-Za-z-]+)/) || [])[1] || '';
+					const encryption = (block.match(/Encryption:\s*(.+)/) || [])[1] || 'open';
+					const signalLabel = signal ? `${signal} dBm` : 'N/A';
+					return {
+						ssid: String(ssid || '<hidden>').trim() || '<hidden>',
+						bssid: String(bssid || 'N/A').trim().toLowerCase() || 'N/A',
+						channel: String(channel || 'N/A').trim() || 'N/A',
+						channelNum: Number(channel) || 0,
+						signal: signalLabel,
+						mode: String(mode || '').trim(),
+						rawEncryption: null,
+						encryption: String(encryption || 'open').trim(),
+						isOpen: /open|none|off/i.test(String(encryption || 'open'))
+					};
+				})
+				.filter(row => row.ssid);
+		} catch {
+			return [];
+		}
+	}
+
 	async readWirelessScan(device) {
 		const result = await this.ubusCallWithFallback('iwinfo', 'scan', { device }, 25000);
-		if (!result) return [];
+		if (!result) {
+			return this.readWirelessScanFromCli(device);
+		}
 		const rows = Array.isArray(result?.results)
 			? result.results
 			: Array.isArray(result?.scan)
@@ -1051,9 +1116,18 @@ export default class NetworkModule {
 		const tbody = document.querySelector('#wireless-wwan-scan-table tbody');
 		if (!currentEl || !deviceEl || !radioEl || !connectRadioEl || !tbody) return;
 
-		const [wirelessState, iwinfoDevices] = await Promise.all([
+		const [wirelessState, iwinfoDevices, iwinfoCli] = await Promise.all([
 			this.readWirelessWwanState(),
-			this.ubusCallWithFallback('iwinfo', 'devices', {}, 12000)
+			this.ubusCallWithFallback('iwinfo', 'devices', {}, 12000),
+			this.core.ubusCall(
+				'file',
+				'exec',
+				{
+					command: '/bin/sh',
+					params: ['-c', 'iwinfo 2>/dev/null || true']
+				},
+				{ timeout: 12000 }
+			)
 		]);
 
 		const radios = wirelessState.radios || [];
@@ -1062,7 +1136,14 @@ export default class NetworkModule {
 			: '<option value="">N/A</option>';
 		connectRadioEl.innerHTML = radioEl.innerHTML;
 
-		const devices = this.parseWwanIwinfoDevices(iwinfoDevices);
+		const cliRaw = iwinfoCli?.[0] === 0 ? String(iwinfoCli?.[1]?.stdout || '') : '';
+		const devices = Array.from(
+			new Set([
+				...this.parseWwanIwinfoDevices(iwinfoDevices),
+				...this.parseWwanIwinfoDevicesFromCli(cliRaw),
+				...radios
+			])
+		).sort();
 		deviceEl.innerHTML = devices.length
 			? devices.map(d => `<option value="${this.core.escapeHtml(d)}">${this.core.escapeHtml(d)}</option>`).join('')
 			: '<option value="">N/A</option>';
