@@ -875,12 +875,19 @@ export default class NetworkModule {
 					<td data-label="Password">${this.core.escapeHtml(password)}</td>
 					<td data-label="Security">${this.core.escapeHtml(security)}</td>
 					<td data-label="Channel">${this.core.escapeHtml(radio.channel || 'auto')}</td>
-					<td data-label="Status">${disabled ? this.core.renderBadge('error', 'DISABLED') : this.core.renderBadge('success', 'ENABLED')}</td>
+					<td data-label="Status">${this.renderWirelessStatusBadge(!disabled)}</td>
 					<td data-label="Actions">${this.renderWirelessActionButtons(iface.section)}</td>
 				</tr>`;
 				})
 				.join('');
 		});
+	}
+
+	renderWirelessStatusBadge(enabled) {
+		if (!this.core.isFeatureEnabled('colorful_graphs')) {
+			return this.core.renderBadge(enabled ? 'success' : 'error', enabled ? 'ENABLED' : 'DISABLED');
+		}
+		return `<span class="badge ${enabled ? 'badge-interface-up' : 'badge-interface-down'}">${enabled ? 'ENABLED' : 'DISABLED'}</span>`;
 	}
 
 	renderWirelessActionButtons(section) {
