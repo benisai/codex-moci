@@ -2809,9 +2809,14 @@ export default class NetworkModule {
 			);
 		}
 		cmdParts.push(
-			'if [ -s /tmp/adblock-report/adb_report.jsn ]; then cat /tmp/adblock-report/adb_report.jsn; ' +
-				'elif [ -s /tmp/adblock-report ]; then cat /tmp/adblock-report; ' +
-				'else true; fi'
+			'for f in ' +
+				'/tmp/adblock-report/adb_report.jsn ' +
+				'/tmp/adblock-report/adb_report.json ' +
+				'/tmp/adblock-Report/adb_report.jsn ' +
+				'/tmp/adblock-Report/adb_report.json ' +
+				'/tmp/adblock-report ' +
+				'/tmp/adblock-Report; ' +
+			'do if [ -s "$f" ] && [ ! -d "$f" ]; then cat "$f"; break; fi; done'
 		);
 		const cmd = cmdParts.join('; ');
 		this.logAdblockClassicDebug(`Executing report command (max_top=${this.adblockClassicReportMaxTop}, max_results=${this.adblockClassicReportMaxResults})`);
@@ -2833,7 +2838,9 @@ export default class NetworkModule {
 			this.logAdblockClassicDebug(`Report payload length=${reportRaw.length}`);
 			if (!reportRaw.trim()) {
 				if (statusEl) statusEl.innerHTML = this.core.renderBadge('error', 'REPORT MISSING');
-				this.logAdblockClassicDebug('Report file missing or empty (/tmp/adblock-report/adb_report.jsn)');
+				this.logAdblockClassicDebug(
+					'Report file missing or empty (checked /tmp/adblock-report and /tmp/adblock-Report with .jsn/.json)'
+				);
 				this.renderAdblockClassicTopStats([], [], []);
 				this.renderAdblockClassicLatestDns([]);
 				return;
