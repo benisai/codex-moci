@@ -2448,6 +2448,8 @@ export default class NetworkModule {
 			'adguard',
 			'adguard_tracking',
 			'disconnect',
+			'oisd_basic',
+			'oisd_nsfw',
 			'oisd',
 			'stevenblack',
 			'urlhaus',
@@ -2461,7 +2463,6 @@ export default class NetworkModule {
 
 		const selectedSet = new Set((Array.isArray(selectedFeeds) ? selectedFeeds : []).map(v => String(v || '').trim()).filter(Boolean));
 		const sourceMap = new Map();
-		for (const id of selectedSet) sourceMap.set(id, id);
 
 		const sourceFiles = [
 			'/etc/adblock/adblock.sources',
@@ -2497,6 +2498,10 @@ export default class NetworkModule {
 			for (const id of this.getDefaultAdblockClassicSources()) {
 				if (!sourceMap.has(id)) sourceMap.set(id, id);
 			}
+		}
+		// Ensure currently selected feeds are always represented, even if catalog parsing misses them.
+		for (const id of selectedSet) {
+			if (!sourceMap.has(id)) sourceMap.set(id, id);
 		}
 
 		const options = Array.from(sourceMap.entries()).sort((a, b) => String(a[0] || '').localeCompare(String(b[0] || '')));
