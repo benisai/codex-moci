@@ -9,6 +9,8 @@ DEFAULT_INTERVAL=15
 DEFAULT_LEASES_FILE="/tmp/dhcp.leases"
 DEFAULT_STATE_FILE="/tmp/moci-quarantine-known.txt"
 DEFAULT_RULE_PREFIX="moci_quarantine_"
+DEFAULT_LAN_NETWORK="lan"
+DEFAULT_LAN_DEVICE="br-lan"
 LOG_FILE="/tmp/moci-device-quarantine.log"
 
 log() {
@@ -59,6 +61,16 @@ load_config() {
 	v="$(uci_get moci.quarantine.rule_prefix)"
 	if [ -z "$v" ]; then v="$DEFAULT_RULE_PREFIX"; fi
 	RULE_PREFIX="$v"
+
+	v="$(uci_get moci.quarantine.lan_network)"
+	if [ -z "$v" ]; then v="$DEFAULT_LAN_NETWORK"; fi
+	LAN_NETWORK="$v"
+
+	v="$(uci_get moci.quarantine.lan_device)"
+	if [ -z "$v" ]; then v="$(uci_get network.lan.device)"; fi
+	if [ -z "$v" ]; then v="$(uci_get network.lan.ifname)"; fi
+	if [ -z "$v" ]; then v="$DEFAULT_LAN_DEVICE"; fi
+	LAN_DEVICE="$v"
 }
 
 service_enabled() {
@@ -70,6 +82,61 @@ collect_leases() {
 		return 0
 	fi
 	awk '{ if ($2 ~ /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/) print tolower($2) "|" $3 "|" $4 }' "$LEASES_FILE"
+}
+
+collect_ip_neigh() {
+	# Collect only neighbors on the LAN device (for example br-lan), never apcli/wan side.
+	ip neigh show dev "$LAN_DEVICE" 2>/dev/null | awk '{
+		ip=$1
+		mac=""
+		for (i=1; i<=NF; i++) {
+			if ($i == "lladdr" && (i+1) <= NF) { mac=$(i+1); break }
+		}
+		if (mac ~ /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/) {
+			print tolower(mac) "|" ip "|"
+		}
+	}'
+}
+
+collect_wireless_clients() {
+	# Prefer jsonfilter if available. Filter to interfaces attached to LAN network only.
+	# Output format: mac|ip|host (ip/host may be empty here).
+	command -v jsonfilter >/dev/null 2>&1 || return 0
+	command -v ubus >/dev/null 2>&1 || return 0
+
+	local json out
+	json="$(ubus call network.wireless status 2>/dev/null || true)"
+	[ -n "$json" ] || return 0
+
+	out="$(
+		{
+			jsonfilter -s "$json" -e "@.*.interfaces[@.config.network='$LAN_NETWORK'].stations[*].mac" 2>/dev/null || true
+			jsonfilter -s "$json" -e "@.*.interfaces[@.config.network[0]='$LAN_NETWORK'].stations[*].mac" 2>/dev/null || true
+		} | tr ' ' '\n' | sed '/^$/d' | tr '[:upper:]' '[:lower:]' | sort -u
+	)"
+
+	[ -n "$out" ] || return 0
+	echo "$out" | awk '{ print $1 "||" }'
+}
+
+collect_candidates() {
+	{
+		collect_leases
+		collect_ip_neigh
+		collect_wireless_clients
+	} | awk -F'|' '
+		{
+			mac=tolower($1)
+			ip=$2
+			host=$3
+			if (mac ~ /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/) {
+				if (!(mac in seen)) {
+					seen[mac]=1
+					print mac "|" ip "|" host
+				}
+			}
+		}
+	'
 }
 
 rule_name_for() {
@@ -144,14 +211,14 @@ discover_once() {
 
 	# First run: seed known list, do not quarantine current devices.
 	if [ ! -s "$STATE_FILE" ]; then
-		collect_leases | cut -d'|' -f1 | sort -u >"$STATE_FILE"
+		collect_candidates | cut -d'|' -f1 | sort -u >"$STATE_FILE"
 		log "initialized known devices state at $STATE_FILE"
 		return 0
 	fi
 
 	changed=0
 	tmp="/tmp/moci-quarantine-seen.$$"
-	collect_leases >"$tmp"
+	collect_candidates >"$tmp"
 	while IFS='|' read -r mac ip host; do
 		[ -n "$mac" ] || continue
 		if grep -qx "$mac" "$STATE_FILE" 2>/dev/null; then
