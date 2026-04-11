@@ -1688,8 +1688,11 @@ Endpoint = host:51820"
 								<input type="hidden" id="adblock-classic-enabled" value="0" />
 								<input type="hidden" id="adblock-classic-safesearch" value="0" />
 								<div class="form-group">
-									<label class="form-label">FEEDS (one per line)</label>
-									<textarea id="adblock-classic-feeds" class="form-input" rows="6" placeholder="adguard&#10;adguard_tracking&#10;certpl"></textarea>
+									<label class="form-label">BLOCKLIST SOURCES</label>
+									<select id="adblock-classic-feed-select" class="form-input" multiple size="10"></select>
+									<div id="adblock-classic-feed-selected" style="margin-top: 6px; color: var(--steel-muted); font-size: 11px; font-family: var(--font-mono)">
+										No sources selected
+									</div>
 								</div>
 								<div class="quick-actions">
 									<button class="action-btn" id="save-adblock-classic-btn">SAVE LIST</button>

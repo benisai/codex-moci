@@ -315,6 +315,7 @@ export default class NetworkModule {
 		document.getElementById('adblock-classic-restart-btn')?.addEventListener('click', () => this.runAdblockClassicServiceAction('restart'));
 		document.getElementById('refresh-adblock-classic-debug-btn')?.addEventListener('click', () => this.renderAdblockClassicDebugLog());
 		document.getElementById('clear-adblock-classic-debug-btn')?.addEventListener('click', () => this.clearAdblockClassicDebugLog());
+		document.getElementById('adblock-classic-feed-select')?.addEventListener('change', () => this.syncAdblockClassicFeedSummary());
 		document.getElementById('add-adblock-list-btn')?.addEventListener('click', () => {
 			this.core.resetModal('adblock-list-modal');
 			this.resetAdblockListForm();
@@ -2353,13 +2354,124 @@ export default class NetworkModule {
 		el.textContent = this.adblockClassicDebugLog.length > 0 ? this.adblockClassicDebugLog.join('\n') : 'No debug entries yet';
 	}
 
+	getAdblockClassicSelectedFeeds() {
+		const select = document.getElementById('adblock-classic-feed-select');
+		if (!select) return [];
+		return Array.from(select.selectedOptions || [])
+			.map(opt => String(opt.value || '').trim())
+			.filter(Boolean);
+	}
+
+	syncAdblockClassicFeedSummary() {
+		const summaryEl = document.getElementById('adblock-classic-feed-selected');
+		if (!summaryEl) return;
+		const selected = this.getAdblockClassicSelectedFeeds();
+		if (selected.length === 0) {
+			summaryEl.textContent = 'No sources selected';
+			return;
+		}
+		const shown = selected.slice(0, 6).join(', ');
+		const suffix = selected.length > 6 ? ` ... (+${selected.length - 6} more)` : '';
+		summaryEl.textContent = `${selected.length} selected: ${shown}${suffix}`;
+	}
+
+	parseAdblockClassicSourcesFromText(text) {
+		const map = new Map();
+		for (const rawLine of String(text || '').split('\n')) {
+			const line = String(rawLine || '').trim();
+			if (!line || line.startsWith('#')) continue;
+
+			let id = '';
+			let label = '';
+
+			let m = line.match(/^config\s+source\s+'?([A-Za-z0-9_.-]+)'?/i);
+			if (m) {
+				id = String(m[1] || '').trim();
+				label = id;
+			}
+			if (!id) {
+				m = line.match(/adb_src_([A-Za-z0-9_.-]+)\s*=/i);
+				if (m) {
+					id = String(m[1] || '').trim();
+					label = id;
+				}
+			}
+			if (!id) {
+				m = line.match(/^([A-Za-z0-9_.-]+)\s*[:=]\s*(.+)$/);
+				if (m) {
+					id = String(m[1] || '').trim();
+					label = `${id} (${String(m[2] || '').trim()})`;
+				}
+			}
+			if (!id) {
+				m = line.match(/^([A-Za-z0-9_.-]+)\b/);
+				if (m) {
+					id = String(m[1] || '').trim();
+					label = id;
+				}
+			}
+			if (!id) continue;
+			if (!map.has(id)) map.set(id, label || id);
+		}
+		return map;
+	}
+
+	async loadAdblockClassicSourceOptions(selectedFeeds = []) {
+		const select = document.getElementById('adblock-classic-feed-select');
+		if (!select) return;
+
+		const selectedSet = new Set((Array.isArray(selectedFeeds) ? selectedFeeds : []).map(v => String(v || '').trim()).filter(Boolean));
+		const sourceMap = new Map();
+		for (const id of selectedSet) sourceMap.set(id, id);
+
+		const sourceFiles = [
+			'/etc/adblock/adblock.sources',
+			'/usr/share/adblock/adblock.sources',
+			'/usr/lib/adblock/adblock.sources'
+		];
+		for (const path of sourceFiles) {
+			try {
+				const [status, result] = await this.core.ubusCall('file', 'read', { path });
+				if (status !== 0 || !result?.data) continue;
+				const parsed = this.parseAdblockClassicSourcesFromText(String(result.data || ''));
+				for (const [id, label] of parsed.entries()) {
+					if (!sourceMap.has(id)) sourceMap.set(id, label || id);
+				}
+			} catch {}
+		}
+
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', 'uci -q show adblock 2>/dev/null | sed -n "s/^adblock\\..*\\.adb_src_\\([^.=]*\\)=.*/\\1/p"']
+			});
+			if (status === 0 && result?.stdout) {
+				for (const raw of String(result.stdout || '').split('\n')) {
+					const id = String(raw || '').trim();
+					if (!id) continue;
+					if (!sourceMap.has(id)) sourceMap.set(id, id);
+				}
+			}
+		} catch {}
+
+		const options = Array.from(sourceMap.entries()).sort((a, b) => String(a[0] || '').localeCompare(String(b[0] || '')));
+		select.innerHTML = options.length
+			? options
+					.map(([id, label]) => {
+						const selected = selectedSet.has(id) ? ' selected' : '';
+						return `<option value="${this.core.escapeHtml(id)}"${selected}>${this.core.escapeHtml(label || id)}</option>`;
+					})
+					.join('')
+			: '<option value="" disabled>No source catalog found</option>';
+		this.syncAdblockClassicFeedSummary();
+	}
+
 	async loadAdblockClassic() {
 		const serviceStatusEl = document.getElementById('adblock-classic-service-status');
 		const configStatusEl = document.getElementById('adblock-classic-config-status');
 		const installHintEl = document.getElementById('adblock-classic-install-hint');
 		const dnsEl = document.getElementById('adblock-classic-dns');
 		const triggerEl = document.getElementById('adblock-classic-trigger');
-		const feedsEl = document.getElementById('adblock-classic-feeds');
 
 		if (!this.core.isFeatureEnabled('adblock')) {
 			if (serviceStatusEl) serviceStatusEl.innerHTML = this.core.renderBadge('warning', 'DISABLED');
@@ -2423,7 +2535,7 @@ export default class NetworkModule {
 					: String(sectionCfg.adb_feed || '')
 							.split(/\s+/)
 							.filter(Boolean);
-				if (feedsEl) feedsEl.value = feeds.join('\n');
+				await this.loadAdblockClassicSourceOptions(feeds);
 				if (configStatusEl) configStatusEl.innerHTML = this.core.renderBadge('success', 'CONFIG READY');
 				if (installHintEl) installHintEl.classList.add('hidden');
 				this.logAdblockClassicDebug(`Config section '${sectionName}' loaded`);
@@ -2432,7 +2544,7 @@ export default class NetworkModule {
 				this.setAdblockClassicSettingValue('safesearch', '0', { syncOnly: true });
 				if (dnsEl) dnsEl.value = '';
 				if (triggerEl) triggerEl.value = '';
-				if (feedsEl) feedsEl.value = '';
+				await this.loadAdblockClassicSourceOptions([]);
 				if (configStatusEl) {
 					configStatusEl.innerHTML = this.core.renderBadge('error', 'CONFIG MISSING');
 				}
@@ -2914,15 +3026,7 @@ export default class NetworkModule {
 		const safesearch = String(document.getElementById('adblock-classic-safesearch')?.value || '0') === '1' ? '1' : '0';
 		const dns = String(document.getElementById('adblock-classic-dns')?.value || '').trim();
 		const trigger = String(document.getElementById('adblock-classic-trigger')?.value || '').trim();
-		const feedsRaw = String(document.getElementById('adblock-classic-feeds')?.value || '');
-		const feeds = Array.from(
-			new Set(
-				feedsRaw
-					.split(/\r?\n|,/)
-					.map(v => String(v || '').trim())
-					.filter(Boolean)
-			)
-		);
+		const feeds = Array.from(new Set(this.getAdblockClassicSelectedFeeds()));
 
 		try {
 			let section = this.adblockClassicSection || 'global';
