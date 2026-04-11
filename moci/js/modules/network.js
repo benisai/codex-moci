@@ -2849,17 +2849,26 @@ export default class NetworkModule {
 			const parsed = reportRaw.trim().startsWith('{')
 				? this.parseAdblockClassicJsonReport(reportRaw)
 				: this.parseAdblockClassicReport(reportRaw);
+			let dnsRows = Array.isArray(parsed.dnsRows) ? parsed.dnsRows : [];
+			if (dnsRows.length === 0) {
+				this.logAdblockClassicDebug('No DNS rows in primary report; trying mail report fallback');
+				const fallbackDnsRows = await this.loadAdblockClassicDnsRowsFromMailReport();
+				if (fallbackDnsRows.length > 0) {
+					dnsRows = fallbackDnsRows;
+					this.logAdblockClassicDebug(`Mail report fallback yielded ${dnsRows.length} DNS rows`);
+				}
+			}
 			this.renderAdblockClassicTopStats(parsed.topClients, parsed.topDomains, parsed.topBlocked);
-			this.renderAdblockClassicLatestDns(parsed.dnsRows);
+			this.renderAdblockClassicLatestDns(dnsRows);
 			this.logAdblockClassicDebug(
-				`Parsed report rows: clients=${parsed.topClients?.length || 0}, domains=${parsed.topDomains?.length || 0}, blocked=${parsed.topBlocked?.length || 0}, dns=${parsed.dnsRows?.length || 0}`
+				`Parsed report rows: clients=${parsed.topClients?.length || 0}, domains=${parsed.topDomains?.length || 0}, blocked=${parsed.topBlocked?.length || 0}, dns=${dnsRows?.length || 0}`
 			);
 			if (statusEl) {
 				const totalTopRows =
 					(parsed.topClients?.length || 0) + (parsed.topDomains?.length || 0) + (parsed.topBlocked?.length || 0);
 				statusEl.innerHTML = this.core.renderBadge(
 					'success',
-					`READY · ${totalTopRows} top rows · ${parsed.dnsRows.length} dns rows`
+					`READY · ${totalTopRows} top rows · ${dnsRows.length} dns rows`
 				);
 			}
 		} catch (err) {
@@ -2867,6 +2876,32 @@ export default class NetworkModule {
 			if (statusEl) statusEl.innerHTML = this.core.renderBadge('error', 'FAILED TO LOAD REPORT');
 			this.renderAdblockClassicTopStats([], [], []);
 			this.renderAdblockClassicLatestDns([]);
+		}
+	}
+
+	async loadAdblockClassicDnsRowsFromMailReport() {
+		const cmd =
+			'for f in ' +
+			'/tmp/adblock-report/adb_mailreport.txt ' +
+			'/tmp/adblock-Report/adb_mailreport.txt; ' +
+			'do if [ -s "$f" ] && [ ! -d "$f" ]; then cat "$f"; break; fi; done';
+		try {
+			const [status, result] = await this.core.ubusCall(
+				'file',
+				'exec',
+				{
+					command: '/bin/sh',
+					params: ['-c', cmd]
+				},
+				{ timeout: 20000 }
+			);
+			if (status !== 0) return [];
+			const raw = String(result?.stdout || '');
+			if (!raw.trim()) return [];
+			const parsed = this.parseAdblockClassicReport(raw);
+			return Array.isArray(parsed?.dnsRows) ? parsed.dnsRows : [];
+		} catch {
+			return [];
 		}
 	}
 
