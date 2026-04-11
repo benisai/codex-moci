@@ -15,6 +15,7 @@ export default class NetworkModule {
 		this.adblockClassicReportMaxResults = 50;
 		this.qosifyInstalled = null;
 		this.wirelessBySection = new Map();
+		this.wirelessWwanScanRows = [];
 
 		this.core.registerRoute('/network', async (path, subPaths) => {
 			const pageElement = document.getElementById('network-page');
@@ -77,6 +78,14 @@ export default class NetworkModule {
 			modalId: 'wireless-qr-modal',
 			closeBtnId: 'close-wireless-qr-modal',
 			cancelBtnId: 'cancel-wireless-qr-btn'
+		});
+
+		this.core.setupModal({
+			modalId: 'wireless-wwan-connect-modal',
+			closeBtnId: 'close-wireless-wwan-connect-modal',
+			cancelBtnId: 'cancel-wireless-wwan-connect-btn',
+			saveBtnId: 'save-wireless-wwan-connect-btn',
+			saveHandler: () => this.connectWirelessWwan()
 		});
 
 		this.core.setupModal({
@@ -237,6 +246,9 @@ export default class NetworkModule {
 				delete: id => this.deleteWireless(id),
 				qr: id => this.openWirelessQr(id)
 			},
+			'wireless-wwan-scan-table': {
+				connect: id => this.openWirelessWwanConnectModal(id)
+			},
 			'firewall-table': { edit: id => this.editForward(id), delete: id => this.deleteForward(id) },
 			'fw-rules-table': { edit: id => this.editFirewallRule(id), delete: id => this.deleteFirewallRule(id) },
 			'dhcp-static-table': { edit: id => this.editStaticLease(id), delete: id => this.deleteStaticLease(id) },
@@ -257,6 +269,7 @@ export default class NetworkModule {
 		}
 
 		document.getElementById('save-qos-config-btn')?.addEventListener('click', () => this.saveQoSConfig());
+		document.getElementById('wireless-wwan-scan-btn')?.addEventListener('click', () => this.scanWirelessWwan());
 		document.getElementById('save-qosify-config-btn')?.addEventListener('click', () => this.saveQoSifyConfig());
 		document.getElementById('qosify-start-btn')?.addEventListener('click', () => this.runQoSifyServiceAction('start'));
 		document.getElementById('qosify-stop-btn')?.addEventListener('click', () => this.runQoSifyServiceAction('stop'));
@@ -835,6 +848,7 @@ export default class NetworkModule {
 	}
 
 	async loadWireless() {
+		await this.loadWirelessWwanPanel();
 		await this.core.loadResource('wireless-table', 7, 'wireless', async () => {
 			const [status, result] = await this.core.uciGet('wireless');
 			if (status !== 0 || !result?.values) throw new Error('No data');
@@ -881,6 +895,332 @@ export default class NetworkModule {
 				})
 				.join('');
 		});
+	}
+
+	parseWwanIwinfoDevices(payload) {
+		const devices = [];
+		if (!payload) return devices;
+		if (Array.isArray(payload?.devices)) {
+			for (const item of payload.devices) {
+				const name = typeof item === 'string' ? item : String(item?.device || item?.ifname || '').trim();
+				if (name) devices.push(name);
+			}
+		} else if (Array.isArray(payload)) {
+			for (const item of payload) {
+				const name = typeof item === 'string' ? item : String(item?.device || item?.ifname || '').trim();
+				if (name) devices.push(name);
+			}
+		} else if (payload && typeof payload === 'object') {
+			for (const [key, value] of Object.entries(payload)) {
+				const candidate = String(value?.device || value?.ifname || key || '').trim();
+				if (candidate) devices.push(candidate);
+			}
+		}
+		return Array.from(new Set(devices)).sort();
+	}
+
+	async ubusCallWithFallback(object, method, params = {}, timeout = 15000) {
+		try {
+			const [status, result] = await this.core.ubusCall(object, method, params, { timeout });
+			if (status === 0) return result;
+		} catch {}
+		try {
+			const [status, result] = await this.core.ubusCall(
+				'file',
+				'exec',
+				{
+					command: 'ubus',
+					params: ['call', object, method, JSON.stringify(params || {})]
+				},
+				{ timeout }
+			);
+			if (status !== 0 || !result?.stdout) return null;
+			const raw = String(result.stdout || '').trim();
+			if (!raw) return null;
+			return JSON.parse(raw);
+		} catch {
+			return null;
+		}
+	}
+
+	async readWirelessScan(device) {
+		const result = await this.ubusCallWithFallback('iwinfo', 'scan', { device }, 25000);
+		if (!result) return [];
+		const rows = Array.isArray(result?.results)
+			? result.results
+			: Array.isArray(result?.scan)
+				? result.scan
+				: Array.isArray(result)
+					? result
+					: [];
+		return rows
+			.map(item => {
+				const ssid = String(item?.ssid || '').trim();
+				const bssid = String(item?.bssid || '').trim().toLowerCase();
+				const channel = String(item?.channel || item?.channel_number || '').trim() || 'N/A';
+				const signal = Number(item?.signal);
+				const quality = Number(item?.quality);
+				const signalLabel = Number.isFinite(signal)
+					? `${signal} dBm`
+					: Number.isFinite(quality)
+						? String(quality)
+						: 'N/A';
+				const enc = String(item?.encryption?.description || item?.security || item?.encryption || 'open');
+				return {
+					ssid: ssid || '<hidden>',
+					bssid: bssid || 'N/A',
+					channel,
+					signal: signalLabel,
+					encryption: enc,
+					isOpen: /open|none|off/i.test(enc)
+				};
+			})
+			.filter(row => row.ssid);
+	}
+
+	normalizeToList(value) {
+		if (Array.isArray(value)) return value.map(v => String(v || '').trim()).filter(Boolean);
+		const raw = String(value || '').trim();
+		if (!raw) return [];
+		return raw.split(/\s+/).map(v => String(v || '').trim()).filter(Boolean);
+	}
+
+	async ensureWwanFirewallZone() {
+		const [status, result] = await this.core.uciGet('firewall');
+		if (status !== 0 || !result?.values) return;
+		const cfg = result.values;
+		let wanZoneSection = null;
+		for (const [section, values] of Object.entries(cfg)) {
+			if (String(values?.['.type'] || '') !== 'zone') continue;
+			if (String(values?.name || '') === 'wan') {
+				wanZoneSection = section;
+				break;
+			}
+		}
+		if (wanZoneSection) {
+			const current = this.normalizeToList(cfg[wanZoneSection]?.network);
+			if (!current.includes('wwan')) {
+				await this.core.uciSet('firewall', wanZoneSection, { network: [...current, 'wwan'] });
+			}
+			return;
+		}
+		const [addStatus, addResult] = await this.core.uciAdd('firewall', 'zone', 'wwan');
+		if (addStatus !== 0 || !addResult?.section) return;
+		await this.core.uciSet('firewall', addResult.section, {
+			name: 'wwan',
+			network: ['wwan'],
+			input: 'REJECT',
+			output: 'ACCEPT',
+			forward: 'REJECT',
+			masq: '1',
+			mtu_fix: '1'
+		});
+	}
+
+	async readWirelessWwanState() {
+		const [status, result] = await this.core.uciGet('wireless');
+		if (status !== 0 || !result?.values) return { sta: null, radios: [] };
+		const cfg = result.values;
+		const radios = [];
+		let sta = null;
+		for (const [section, values] of Object.entries(cfg)) {
+			if (String(values?.['.type'] || '') === 'wifi-device') {
+				radios.push(section);
+			}
+			if (String(values?.['.type'] || '') === 'wifi-iface') {
+				if (String(values?.mode || '') !== 'sta') continue;
+				const nets = this.normalizeToList(values?.network);
+				if (!nets.includes('wwan')) continue;
+				sta = { section, ...values };
+			}
+		}
+		return { sta, radios };
+	}
+
+	async loadWirelessWwanPanel() {
+		const currentEl = document.getElementById('wireless-wwan-current');
+		const deviceEl = document.getElementById('wireless-wwan-device');
+		const radioEl = document.getElementById('wireless-wwan-radio');
+		const connectRadioEl = document.getElementById('wireless-wwan-connect-radio');
+		const hintEl = document.getElementById('wireless-wwan-scan-hint');
+		const tbody = document.querySelector('#wireless-wwan-scan-table tbody');
+		if (!currentEl || !deviceEl || !radioEl || !connectRadioEl || !tbody) return;
+
+		const [wirelessState, iwinfoDevices] = await Promise.all([
+			this.readWirelessWwanState(),
+			this.ubusCallWithFallback('iwinfo', 'devices', {}, 12000)
+		]);
+
+		const radios = wirelessState.radios || [];
+		radioEl.innerHTML = radios.length
+			? radios.map(r => `<option value="${this.core.escapeHtml(r)}">${this.core.escapeHtml(r)}</option>`).join('')
+			: '<option value="">N/A</option>';
+		connectRadioEl.innerHTML = radioEl.innerHTML;
+
+		const devices = this.parseWwanIwinfoDevices(iwinfoDevices);
+		deviceEl.innerHTML = devices.length
+			? devices.map(d => `<option value="${this.core.escapeHtml(d)}">${this.core.escapeHtml(d)}</option>`).join('')
+			: '<option value="">N/A</option>';
+
+		if (hintEl) hintEl.classList.toggle('hidden', devices.length > 0);
+
+		if (wirelessState.sta) {
+			const sta = wirelessState.sta;
+			currentEl.innerHTML = this.core.renderBadge(
+				'success',
+				`CONNECTED: ${String(sta.ssid || '<hidden>')} via ${String(sta.device || 'unknown')}`
+			);
+		} else {
+			currentEl.innerHTML = this.core.renderBadge('error', 'NOT CONNECTED');
+		}
+
+		if (!this.wirelessWwanScanRows.length) {
+			tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--steel-muted)">Click SCAN APS to find nearby networks.</td></tr>`;
+		}
+	}
+
+	renderWirelessWwanScanTable() {
+		const tbody = document.querySelector('#wireless-wwan-scan-table tbody');
+		if (!tbody) return;
+		const rows = this.wirelessWwanScanRows || [];
+		if (!rows.length) {
+			tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--steel-muted)">No APs found.</td></tr>`;
+			return;
+		}
+		tbody.innerHTML = rows
+			.map((row, index) => {
+				const ssid = this.core.escapeHtml(String(row.ssid || '<hidden>'));
+				const bssid = this.core.escapeHtml(String(row.bssid || 'N/A'));
+				const channel = this.core.escapeHtml(String(row.channel || 'N/A'));
+				const signal = this.core.escapeHtml(String(row.signal || 'N/A'));
+				const encryption = this.core.escapeHtml(String(row.encryption || 'open'));
+				return `<tr>
+					<td data-label="SSID">${ssid}</td>
+					<td data-label="BSSID">${bssid}</td>
+					<td data-label="Channel">${channel}</td>
+					<td data-label="Signal">${signal}</td>
+					<td data-label="Encryption">${encryption}</td>
+					<td data-label="Action"><button class="action-btn-sm" data-action="connect" data-id="${index}">CONNECT</button></td>
+				</tr>`;
+			})
+			.join('');
+	}
+
+	async scanWirelessWwan() {
+		const deviceEl = document.getElementById('wireless-wwan-device');
+		const device = String(deviceEl?.value || '').trim();
+		if (!device) {
+			this.core.showToast('No scan device available', 'error');
+			return;
+		}
+		this.core.showToast(`Scanning APs on ${device}...`, 'info');
+		const rows = await this.readWirelessScan(device);
+		this.wirelessWwanScanRows = rows;
+		this.renderWirelessWwanScanTable();
+		this.core.showToast(rows.length ? `Found ${rows.length} APs` : 'No APs found', rows.length ? 'success' : 'error');
+	}
+
+	openWirelessWwanConnectModal(id) {
+		const idx = Number(id);
+		const row = Number.isFinite(idx) ? this.wirelessWwanScanRows[idx] : null;
+		if (!row) {
+			this.core.showToast('Selected AP not found', 'error');
+			return;
+		}
+		const radio = String(document.getElementById('wireless-wwan-radio')?.value || '').trim();
+		document.getElementById('wireless-wwan-selected-id').value = String(idx);
+		document.getElementById('wireless-wwan-connect-radio').value = radio;
+		document.getElementById('wireless-wwan-connect-ssid').value = String(row.ssid || '').replace(/^<hidden>$/, '');
+		document.getElementById('wireless-wwan-connect-bssid').value = String(row.bssid || '').replace(/^N\/A$/, '');
+		document.getElementById('wireless-wwan-connect-encryption').value = row.isOpen ? 'none' : 'psk2';
+		document.getElementById('wireless-wwan-connect-key').value = '';
+		document.getElementById('wireless-wwan-replace-existing').checked = true;
+		this.core.openModal('wireless-wwan-connect-modal');
+	}
+
+	async connectWirelessWwan() {
+		const radio = String(document.getElementById('wireless-wwan-connect-radio')?.value || '').trim();
+		const ssid = String(document.getElementById('wireless-wwan-connect-ssid')?.value || '').trim();
+		const bssid = String(document.getElementById('wireless-wwan-connect-bssid')?.value || '').trim().toLowerCase();
+		const encryption = String(document.getElementById('wireless-wwan-connect-encryption')?.value || 'none').trim();
+		const key = String(document.getElementById('wireless-wwan-connect-key')?.value || '');
+		const replaceExisting = Boolean(document.getElementById('wireless-wwan-replace-existing')?.checked);
+
+		if (!radio) {
+			this.core.showToast('Select a radio for WWAN uplink', 'error');
+			return;
+		}
+		if (!ssid) {
+			this.core.showToast('SSID is required', 'error');
+			return;
+		}
+		if (encryption !== 'none' && !key) {
+			this.core.showToast('Password is required for secured networks', 'error');
+			return;
+		}
+
+		try {
+			await this.core.uciSet('network', 'wwan', { proto: 'dhcp' });
+
+			const [wStatus, wResult] = await this.core.uciGet('wireless');
+			const wirelessCfg = wStatus === 0 && wResult?.values ? wResult.values : {};
+			if (replaceExisting) {
+				for (const [section, values] of Object.entries(wirelessCfg)) {
+					if (String(values?.['.type'] || '') !== 'wifi-iface') continue;
+					if (String(values?.mode || '') !== 'sta') continue;
+					const nets = this.normalizeToList(values?.network);
+					if (!nets.includes('wwan')) continue;
+					await this.core.uciDelete('wireless', section);
+				}
+			}
+
+			let staSection = null;
+			for (const [section, values] of Object.entries(wirelessCfg)) {
+				if (String(values?.['.type'] || '') !== 'wifi-iface') continue;
+				if (String(values?.mode || '') !== 'sta') continue;
+				const nets = this.normalizeToList(values?.network);
+				if (nets.includes('wwan')) {
+					staSection = section;
+					break;
+				}
+			}
+
+			if (!staSection) {
+				const [addStatus, addResult] = await this.core.uciAdd('wireless', 'wifi-iface', 'moci_wwan');
+				if (addStatus !== 0 || !addResult?.section) throw new Error('Failed to create STA section');
+				staSection = addResult.section;
+			}
+
+			const values = {
+				device: radio,
+				network: 'wwan',
+				mode: 'sta',
+				ssid,
+				encryption,
+				disabled: '0'
+			};
+			if (bssid && /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(bssid)) values.bssid = bssid;
+			if (encryption === 'none') values.key = '';
+			else values.key = key;
+			await this.core.uciSet('wireless', staSection, values);
+			await this.ensureWwanFirewallZone();
+
+			await this.core.uciCommit('network');
+			await this.core.uciCommit('wireless');
+			await this.core.uciCommit('firewall');
+
+			await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', 'wifi reload; /etc/init.d/network restart >/dev/null 2>&1 || true; /etc/init.d/firewall restart >/dev/null 2>&1 || true']
+			});
+
+			this.core.closeModal('wireless-wwan-connect-modal');
+			this.core.showToast(`WWAN uplink connected to ${ssid}`, 'success');
+			await this.loadWirelessWwanPanel();
+		} catch (err) {
+			console.error('Failed to connect WWAN uplink:', err);
+			this.core.showToast('Failed to connect WWAN uplink', 'error');
+		}
 	}
 
 	renderWirelessStatusBadge(enabled) {

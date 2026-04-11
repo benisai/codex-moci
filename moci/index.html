@@ -521,6 +521,53 @@
 						</div>
 
 						<div class="tab-content hidden" id="tab-wireless" data-feature="wireless">
+							<div class="stat-card" style="margin-bottom: 24px">
+								<div class="section-title">WIRELESS WAN (WWAN CLIENT)</div>
+								<div class="form-group">
+									<label class="form-label">CURRENT UPLINK</label>
+									<div id="wireless-wwan-current">Loading...</div>
+								</div>
+								<div
+									id="wireless-wwan-scan-hint"
+									class="hidden"
+									style="margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--glass-border); border-radius: 6px; color: var(--steel-muted); font-size: 12px"
+								>
+									Wi-Fi scan is unavailable. Install <code>rpcd-mod-iwinfo</code> and ensure a compatible <code>wpad</code> package is installed.
+								</div>
+								<div class="monitoring-controls" style="margin-bottom: 12px">
+									<div class="form-group" style="margin-bottom: 0">
+										<label class="form-label">SCAN DEVICE</label>
+										<select id="wireless-wwan-device" class="form-input"></select>
+									</div>
+									<div class="form-group" style="margin-bottom: 0">
+										<label class="form-label">ATTACH TO RADIO</label>
+										<select id="wireless-wwan-radio" class="form-input"></select>
+									</div>
+									<div class="quick-actions" style="margin-top: 0; align-items: end">
+										<button class="action-btn" id="wireless-wwan-scan-btn">SCAN APS</button>
+									</div>
+								</div>
+								<table class="data-table" id="wireless-wwan-scan-table">
+									<thead>
+										<tr>
+											<th>SSID</th>
+											<th>BSSID</th>
+											<th>CHANNEL</th>
+											<th>SIGNAL</th>
+											<th>ENCRYPTION</th>
+											<th>ACTION</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td colspan="6" style="text-align: center; color: var(--steel-muted)">
+												Click SCAN APS to find nearby networks.
+											</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+
 							<div class="stat-card">
 								<table class="data-table" id="wireless-table">
 									<thead>
@@ -542,6 +589,55 @@
 										</tr>
 									</tbody>
 								</table>
+							</div>
+						</div>
+
+						<div class="modal hidden" id="wireless-wwan-connect-modal">
+							<div class="modal-backdrop"></div>
+							<div class="modal-content">
+								<div class="modal-header">
+									<h3 class="modal-title">CONNECT WWAN UPLINK</h3>
+									<button class="modal-close" id="close-wireless-wwan-connect-modal">&times;</button>
+								</div>
+								<div class="modal-body">
+									<input type="hidden" id="wireless-wwan-selected-id" />
+									<div class="form-group">
+										<label class="form-label">RADIO</label>
+										<select id="wireless-wwan-connect-radio" class="form-input"></select>
+									</div>
+									<div class="form-group">
+										<label class="form-label">SSID</label>
+										<input type="text" id="wireless-wwan-connect-ssid" class="form-input" />
+									</div>
+									<div class="form-group">
+										<label class="form-label">BSSID (OPTIONAL)</label>
+										<input type="text" id="wireless-wwan-connect-bssid" class="form-input" placeholder="aa:bb:cc:dd:ee:ff" />
+									</div>
+									<div class="form-group">
+										<label class="form-label">ENCRYPTION</label>
+										<select id="wireless-wwan-connect-encryption" class="form-input">
+											<option value="none">Open (none)</option>
+											<option value="psk2">WPA2-PSK</option>
+											<option value="psk-mixed">WPA/WPA2 Mixed</option>
+											<option value="sae">WPA3-SAE</option>
+											<option value="sae-mixed">WPA2/WPA3 Mixed</option>
+										</select>
+									</div>
+									<div class="form-group">
+										<label class="form-label">PASSWORD / KEY</label>
+										<input type="password" id="wireless-wwan-connect-key" class="form-input" />
+									</div>
+									<div class="form-group">
+										<label style="display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--steel-muted)">
+											<input type="checkbox" id="wireless-wwan-replace-existing" checked />
+											Replace existing WWAN STA uplink
+										</label>
+									</div>
+								</div>
+								<div class="modal-footer">
+									<button class="action-btn" id="cancel-wireless-wwan-connect-btn">CANCEL</button>
+									<button class="action-btn" id="save-wireless-wwan-connect-btn">CONNECT</button>
+								</div>
 							</div>
 						</div>
 
