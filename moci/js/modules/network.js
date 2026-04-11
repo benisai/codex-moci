@@ -872,10 +872,10 @@ export default class NetworkModule {
 					return `<tr>
 					<td data-label="Radio">${this.core.escapeHtml(iface.device || 'N/A')}</td>
 					<td data-label="SSID">${this.core.escapeHtml(iface.ssid || 'N/A')}</td>
+					<td data-label="Password">${this.core.escapeHtml(password)}</td>
+					<td data-label="Security">${this.core.escapeHtml(security)}</td>
 					<td data-label="Channel">${this.core.escapeHtml(radio.channel || 'auto')}</td>
 					<td data-label="Status">${disabled ? this.core.renderBadge('error', 'DISABLED') : this.core.renderBadge('success', 'ENABLED')}</td>
-					<td data-label="Security">${this.core.escapeHtml(security)}</td>
-					<td data-label="Password">${this.core.escapeHtml(password)}</td>
 					<td data-label="Actions">${this.renderWirelessActionButtons(iface.section)}</td>
 				</tr>`;
 				})
