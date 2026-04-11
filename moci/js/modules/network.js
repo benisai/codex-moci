@@ -2082,12 +2082,13 @@ export default class NetworkModule {
 			}
 
 				const rows = await this.readQuarantineRules();
-				if (rows.length === 0) {
+				const activeRows = rows.filter(row => Boolean(row?.enabled));
+				if (activeRows.length === 0) {
 					this.core.renderEmptyTable(tbody, 6, 'No quarantined devices');
 					return;
 				}
 
-			tbody.innerHTML = rows
+			tbody.innerHTML = activeRows
 				.map(row => {
 					const statusBadge = row.enabled
 						? this.core.renderBadge('error', 'BLOCKED')
@@ -2285,6 +2286,7 @@ export default class NetworkModule {
 				params: ['-c', '/etc/init.d/firewall reload 2>/dev/null || /etc/init.d/firewall restart 2>/dev/null || true']
 			});
 			this.core.showToast('Device released from quarantine', 'success');
+			await new Promise(resolve => setTimeout(resolve, 250));
 			await this.loadQuarantine();
 		} catch {
 			this.core.showToast('Failed to release quarantined device', 'error');
