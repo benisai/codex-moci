@@ -14,6 +14,7 @@ export default class NetworkModule {
 		this.adblockClassicReportMaxTop = 10;
 		this.adblockClassicReportMaxResults = 50;
 		this.qosifyInstalled = null;
+		this.wirelessBySection = new Map();
 
 		this.core.registerRoute('/network', async (path, subPaths) => {
 			const pageElement = document.getElementById('network-page');
@@ -70,6 +71,12 @@ export default class NetworkModule {
 			cancelBtnId: 'cancel-wireless-btn',
 			saveBtnId: 'save-wireless-btn',
 			saveHandler: () => this.saveWireless()
+		});
+
+		this.core.setupModal({
+			modalId: 'wireless-qr-modal',
+			closeBtnId: 'close-wireless-qr-modal',
+			cancelBtnId: 'cancel-wireless-qr-btn'
 		});
 
 		this.core.setupModal({
@@ -225,7 +232,11 @@ export default class NetworkModule {
 				restart: id => this.restartInterface(id),
 				delete: id => this.deleteInterface(id)
 			},
-			'wireless-table': { edit: id => this.editWireless(id), delete: id => this.deleteWireless(id) },
+			'wireless-table': {
+				edit: id => this.editWireless(id),
+				delete: id => this.deleteWireless(id),
+				qr: id => this.openWirelessQr(id)
+			},
 			'firewall-table': { edit: id => this.editForward(id), delete: id => this.deleteForward(id) },
 			'fw-rules-table': { edit: id => this.editFirewallRule(id), delete: id => this.deleteFirewallRule(id) },
 			'dhcp-static-table': { edit: id => this.editStaticLease(id), delete: id => this.deleteStaticLease(id) },
@@ -824,7 +835,7 @@ export default class NetworkModule {
 	}
 
 	async loadWireless() {
-		await this.core.loadResource('wireless-table', 6, 'wireless', async () => {
+		await this.core.loadResource('wireless-table', 7, 'wireless', async () => {
 			const [status, result] = await this.core.uciGet('wireless');
 			if (status !== 0 || !result?.values) throw new Error('No data');
 			const config = result.values;
@@ -838,25 +849,109 @@ export default class NetworkModule {
 
 			const tbody = document.querySelector('#wireless-table tbody');
 			if (!tbody) return;
+			this.wirelessBySection = new Map();
 			if (ifaces.length === 0) {
-				this.core.renderEmptyTable(tbody, 6, 'No wireless interfaces found');
+				this.core.renderEmptyTable(tbody, 7, 'No wireless interfaces found');
 				return;
 			}
 			tbody.innerHTML = ifaces
 				.map(iface => {
 					const radio = radios[iface.device] || {};
 					const disabled = iface.disabled === '1';
+					const security = String(iface.encryption || 'none').toUpperCase();
+					const password =
+						String(iface.encryption || '').toLowerCase() === 'none'
+							? 'N/A'
+							: String(iface.key || iface.password || '').trim() || 'N/A';
+					this.wirelessBySection.set(String(iface.section), {
+						section: String(iface.section),
+						ssid: String(iface.ssid || ''),
+						encryption: String(iface.encryption || 'none'),
+						password
+					});
 					return `<tr>
 					<td data-label="Radio">${this.core.escapeHtml(iface.device || 'N/A')}</td>
 					<td data-label="SSID">${this.core.escapeHtml(iface.ssid || 'N/A')}</td>
 					<td data-label="Channel">${this.core.escapeHtml(radio.channel || 'auto')}</td>
 					<td data-label="Status">${disabled ? this.core.renderBadge('error', 'DISABLED') : this.core.renderBadge('success', 'ENABLED')}</td>
-					<td data-label="Security">${this.core.escapeHtml(iface.encryption || 'none').toUpperCase()}</td>
-					<td data-label="Actions">${this.core.renderActionButtons(iface.section)}</td>
+					<td data-label="Security">${this.core.escapeHtml(security)}</td>
+					<td data-label="Password">${this.core.escapeHtml(password)}</td>
+					<td data-label="Actions">${this.renderWirelessActionButtons(iface.section)}</td>
 				</tr>`;
 				})
 				.join('');
 		});
+	}
+
+	renderWirelessActionButtons(section) {
+		const id = this.core.escapeHtml(String(section || ''));
+		return `<button class="action-btn-sm" data-action="edit" data-id="${id}">EDIT</button><button class="action-btn-sm" data-action="qr" data-id="${id}">QR</button><button class="action-btn-sm danger" data-action="delete" data-id="${id}">DELETE</button>`;
+	}
+
+	escapeWifiQrValue(value) {
+		return String(value || '')
+			.replace(/\\/g, '\\\\')
+			.replace(/;/g, '\\;')
+			.replace(/,/g, '\\,')
+			.replace(/:/g, '\\:')
+			.replace(/"/g, '\\"');
+	}
+
+	buildWifiQrPayload(wifi) {
+		const ssid = this.escapeWifiQrValue(wifi?.ssid || '');
+		const password = this.escapeWifiQrValue(wifi?.password === 'N/A' ? '' : wifi?.password || '');
+		const encryption = String(wifi?.encryption || 'none').toLowerCase();
+		if (!ssid) return '';
+		if (encryption === 'none' || !password) {
+			return `WIFI:T:nopass;S:${ssid};H:false;;`;
+		}
+		return `WIFI:T:WPA;S:${ssid};P:${password};H:false;;`;
+	}
+
+	async buildWirelessQrImageSource(payload) {
+		if (!payload) return '';
+		try {
+			const cmd = `if command -v qrencode >/dev/null 2>&1; then printf %s ${this.shellQuote(payload)} | qrencode -o - -t PNG 2>/dev/null | base64 | tr -d '\\n'; fi`;
+			const [status, result] = await this.core.ubusCall(
+				'file',
+				'exec',
+				{ command: '/bin/sh', params: ['-c', cmd] },
+				{ timeout: 15000 }
+			);
+			const b64 = status === 0 ? String(result?.stdout || '').trim() : '';
+			if (b64) return `data:image/png;base64,${b64}`;
+		} catch {}
+		return `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(payload)}`;
+	}
+
+	async openWirelessQr(section) {
+		const row = this.wirelessBySection.get(String(section || ''));
+		if (!row) {
+			this.core.showToast('Wireless entry not found', 'error');
+			return;
+		}
+
+		const payload = this.buildWifiQrPayload(row);
+		if (!payload) {
+			this.core.showToast('SSID is missing for this entry', 'error');
+			return;
+		}
+
+		const ssidEl = document.getElementById('wireless-qr-ssid');
+		const imgEl = document.getElementById('wireless-qr-image');
+		const noteEl = document.getElementById('wireless-qr-note');
+		if (!ssidEl || !imgEl || !noteEl) return;
+
+		ssidEl.textContent = `SSID: ${row.ssid || 'N/A'}`;
+		imgEl.src = '';
+		noteEl.textContent = 'Generating QR...';
+		this.core.openModal('wireless-qr-modal');
+
+		const qrSrc = await this.buildWirelessQrImageSource(payload);
+		imgEl.src = qrSrc;
+		noteEl.textContent = qrSrc.startsWith('data:image/')
+			? 'Scan with phone camera to join Wi-Fi.'
+			: 'Scan with phone camera to join Wi-Fi. (Internet required for QR image service)';
 	}
 
 	async editWireless(id) {

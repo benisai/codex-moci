@@ -530,17 +530,48 @@
 											<th>CHANNEL</th>
 											<th>STATUS</th>
 											<th>ENCRYPTION</th>
+											<th>PASSWORD</th>
 											<th>ACTIONS</th>
 										</tr>
 									</thead>
 									<tbody>
 										<tr>
-											<td colspan="6" style="text-align: center; color: var(--steel-muted)">
+											<td colspan="7" style="text-align: center; color: var(--steel-muted)">
 												Loading...
 											</td>
 										</tr>
 									</tbody>
 								</table>
+							</div>
+						</div>
+
+						<div class="modal hidden" id="wireless-qr-modal">
+							<div class="modal-backdrop"></div>
+							<div class="modal-content">
+								<div class="modal-header">
+									<h3 class="modal-title">WIFI QR CODE</h3>
+									<button class="modal-close" id="close-wireless-qr-modal">&times;</button>
+								</div>
+								<div class="modal-body" style="text-align: center">
+									<div id="wireless-qr-ssid" style="font-family: var(--font-mono); font-size: 12px; margin-bottom: 10px"></div>
+									<div
+										style="
+											display: inline-flex;
+											padding: 12px;
+											border: 1px solid var(--glass-border);
+											border-radius: 8px;
+											background: #fff;
+										"
+									>
+										<img id="wireless-qr-image" alt="WiFi QR Code" style="width: 240px; height: 240px" />
+									</div>
+									<div id="wireless-qr-note" style="margin-top: 10px; color: var(--steel-muted); font-size: 11px; font-family: var(--font-mono)">
+										Scan with phone camera to join Wi-Fi.
+									</div>
+								</div>
+								<div class="modal-footer">
+									<button class="action-btn" id="cancel-wireless-qr-btn">CLOSE</button>
+								</div>
 							</div>
 						</div>
 
