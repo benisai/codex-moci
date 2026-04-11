@@ -1090,6 +1090,10 @@ rm -f "$tmp"
 		if (!btn) return;
 		const quarantined = Boolean(row?.quarantined);
 		btn.classList.toggle('hidden', !quarantined);
+		if (quarantined) {
+			btn.textContent = 'UNQUARANTINE';
+			btn.title = 'Release this device from quarantine';
+		}
 	}
 
 	syncStaticIpField() {
@@ -1294,12 +1298,9 @@ rm -f "$tmp"
 				'-c',
 				'/etc/init.d/firewall reload 2>/dev/null || /etc/init.d/firewall restart 2>/dev/null || true'
 			]);
-			this.core.showToast('Device released from quarantine', 'success');
-			await this.loadDevices();
-			const refreshed = this.rowsByMac.get(mac);
-			document.getElementById('devices-quarantine-rule-base').value = refreshed?.quarantineBase || '';
-			this.syncQuarantineActionUi(refreshed);
 			this.core.closeModal('devices-pin-modal');
+			await this.loadDevices();
+			this.core.showToast('Device released from quarantine', 'success');
 		} catch (err) {
 			console.error('Failed to release quarantined device:', err);
 			this.core.showToast('Failed to release quarantined device', 'error');
