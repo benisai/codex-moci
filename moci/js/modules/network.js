@@ -716,7 +716,170 @@ export default class NetworkModule {
 				</tr>`;
 				})
 				.join('');
+
+			await this.loadPortStatus(result.interface);
 		});
+	}
+
+	async loadPortStatus(interfaceDump = []) {
+		const grid = document.getElementById('port-status-grid');
+		if (!grid) return;
+
+		try {
+			const roleMap = await this.readBoardPortRoleMap();
+			let candidates = this.collectPortCandidates(interfaceDump, roleMap);
+			if (candidates.length === 0) {
+				candidates = await this.readSysfsPortCandidates();
+			}
+
+			if (candidates.length === 0) {
+				grid.innerHTML = '<div style="color: var(--steel-muted)">No wired ports detected.</div>';
+				return;
+			}
+
+			const portsArg = candidates.map(name => this.shellQuote(name)).join(' ');
+			const shellCmd = `
+for dev in ${portsArg}; do
+	[ -d "/sys/class/net/$dev" ] || continue
+	carrier="$(cat "/sys/class/net/$dev/carrier" 2>/dev/null || echo 0)"
+	speed="$(cat "/sys/class/net/$dev/speed" 2>/dev/null || echo 0)"
+	duplex="$(cat "/sys/class/net/$dev/duplex" 2>/dev/null || echo unknown)"
+	rx="$(cat "/sys/class/net/$dev/statistics/rx_bytes" 2>/dev/null || echo 0)"
+	tx="$(cat "/sys/class/net/$dev/statistics/tx_bytes" 2>/dev/null || echo 0)"
+	printf "%s|%s|%s|%s|%s|%s\\n" "$dev" "$carrier" "$speed" "$duplex" "$rx" "$tx"
+done`;
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', shellCmd]
+			});
+
+			if (status !== 0) throw new Error('port status read failed');
+			const rows = String(result?.stdout || '')
+				.split('\n')
+				.map(line => line.trim())
+				.filter(Boolean)
+				.map(line => {
+					const [name, carrierRaw, speedRaw, duplexRaw, rxRaw, txRaw] = line.split('|');
+					const carrier = Number(carrierRaw) === 1;
+					const speed = Number(speedRaw) || 0;
+					const duplex = String(duplexRaw || 'unknown').trim();
+					const rx = Number(rxRaw) || 0;
+					const tx = Number(txRaw) || 0;
+					return { name, carrier, speed, duplex, rx, tx };
+				});
+
+			if (rows.length === 0) {
+				grid.innerHTML = '<div style="color: var(--steel-muted)">No wired ports detected.</div>';
+				return;
+			}
+
+			grid.innerHTML = rows
+				.map(port => {
+					const role = roleMap.get(port.name) || '';
+					const speedText = this.formatPortSpeed(port.carrier, port.speed, port.duplex);
+					const barColor = port.carrier ? 'rgba(120, 230, 160, 0.45)' : 'rgba(255, 120, 120, 0.4)';
+					return `<div style="border:1px solid var(--glass-border); border-radius:8px; overflow:hidden; background: rgba(255,255,255,0.02)">
+						<div style="padding:8px 10px; border-bottom:1px solid var(--glass-border); font-family: var(--font-mono); font-size:13px; display:flex; justify-content:space-between; gap:8px; align-items:center">
+							<span>${this.core.escapeHtml(port.name)}</span>
+							${role ? `<span class="badge badge-info">${this.core.escapeHtml(role)}</span>` : ''}
+						</div>
+						<div style="padding:10px; text-align:center">
+							<div style="font-size:26px; line-height:1; margin-bottom:6px">${port.carrier ? '🔌' : '⚪'}</div>
+							<div style="font-family: var(--font-mono); font-size:16px; color: var(--steel-light)">${this.core.escapeHtml(speedText)}</div>
+						</div>
+						<div style="height:4px; background:${barColor};"></div>
+						<div style="padding:8px 10px; font-family: var(--font-mono); font-size:12px; color: var(--steel-muted)">
+							<div>▲ ${this.core.escapeHtml(this.core.formatBytes(port.tx))}</div>
+							<div>▼ ${this.core.escapeHtml(this.core.formatBytes(port.rx))}</div>
+						</div>
+					</div>`;
+				})
+				.join('');
+		} catch {
+			grid.innerHTML = '<div style="color: var(--steel-muted)">Failed to load port status.</div>';
+		}
+	}
+
+	async readBoardPortRoleMap() {
+		const map = new Map();
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'read', { path: '/etc/board.json' });
+			if (status !== 0 || !result?.data) return map;
+			const board = JSON.parse(String(result.data || '{}'));
+			const net = board?.network || {};
+
+			const addRole = (role, value) => {
+				const label = role === 'wan' ? 'WAN' : role === 'lan' ? 'LAN' : String(role || '').toUpperCase();
+				if (Array.isArray(value?.ports)) {
+					for (const p of value.ports) {
+						const name = String(p || '').trim();
+						if (name) map.set(name, label);
+					}
+				}
+				const device = String(value?.device || '').trim();
+				if (device) map.set(device, label);
+			};
+
+			addRole('lan', net.lan);
+			addRole('wan', net.wan);
+		} catch {}
+		return map;
+	}
+
+	collectPortCandidates(interfaceDump = [], roleMap = new Map()) {
+		const set = new Set();
+		for (const name of roleMap.keys()) set.add(String(name));
+
+		for (const iface of Array.isArray(interfaceDump) ? interfaceDump : []) {
+			const add = v => {
+				const n = String(v || '').trim();
+				if (!n || !this.isLikelyWiredPortName(n)) return;
+				set.add(n);
+			};
+			add(iface?.l3_device);
+			add(iface?.device);
+			if (Array.isArray(iface?.device)) {
+				for (const dev of iface.device) add(dev);
+			}
+			add(iface?.interface);
+		}
+		return Array.from(set).sort((a, b) => a.localeCompare(b));
+	}
+
+	async readSysfsPortCandidates() {
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', 'ls -1 /sys/class/net 2>/dev/null || true']
+			});
+			if (status !== 0) return [];
+			return String(result?.stdout || '')
+				.split('\n')
+				.map(v => v.trim())
+				.filter(Boolean)
+				.filter(name => this.isLikelyWiredPortName(name))
+				.sort((a, b) => a.localeCompare(b));
+		} catch {
+			return [];
+		}
+	}
+
+	isLikelyWiredPortName(name) {
+		const n = String(name || '').trim();
+		if (!n) return false;
+		if (n === 'lo') return false;
+		if (/^(br-|wlan|wl|phy|ifb|gre|gretap|ip6|sit|tun|tap|veth|docker|tailscale|wg|apcli|mesh)/i.test(n)) return false;
+		return /^(eth\d+|lan\d*|wan\d*|swp\d+|en[a-z0-9]+|port\d+)$/i.test(n) || /^(wan|lan)$/i.test(n);
+	}
+
+	formatPortSpeed(carrier, speed, duplex) {
+		if (!carrier) return 'no link';
+		if (!Number.isFinite(Number(speed)) || Number(speed) <= 0) return 'Connected';
+		const s = Number(speed);
+		const half = String(duplex || '').toLowerCase() === 'half' ? ' (H)' : '';
+		if (s < 1000) return `${s} M${half}`;
+		if (s === 1000) return `1 GbE${half}`;
+		return `${(s / 1000).toFixed(1)} GbE${half}`;
 	}
 
 	renderInterfaceStatusBadge(isUp) {
