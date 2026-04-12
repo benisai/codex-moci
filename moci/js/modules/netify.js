@@ -37,6 +37,8 @@ export default class NetifyModule {
 		this.lastTopAppsRefreshAt = 0;
 		this.isRefreshingTopApps = false;
 		this.pbrBypassAvailable = false;
+		this.lastSchemaRepairAt = 0;
+		this.schemaRepairCooldownMs = 15000;
 
 		this.core.registerRoute('/netify', async () => {
 			const pageElement = document.getElementById('netify-page');
@@ -507,19 +509,60 @@ pgrep -fa moci-netify-collector || true
 		const sqlQuoted = this.shellQuote(statement);
 		const shellCmd = `if command -v sqlite3 >/dev/null 2>&1; then sqlite3 ${db} ${sqlQuoted}; elif command -v sqlite3-cli >/dev/null 2>&1; then sqlite3-cli ${db} ${sqlQuoted}; else echo "sqlite3 not installed" >&2; exit 127; fi`;
 		let lastErr = null;
-		for (let attempt = 0; attempt < 2; attempt++) {
+		for (let attempt = 0; attempt < 3; attempt++) {
 			try {
 				const result = await this.exec('/bin/sh', ['-c', shellCmd], { timeout: 12000 });
 				return String(result?.stdout || '');
 			} catch (err) {
 				lastErr = err;
-				this.logDebug(`SQLite query attempt failed (shell): ${err?.message || 'unknown error'}`);
+				const msg = String(err?.message || 'unknown error');
+				this.logDebug(`SQLite query attempt failed (shell): ${msg}`);
+				if (this.isMissingFlowRawError(msg)) {
+					const repaired = await this.repairFlowRawSchema();
+					if (repaired) continue;
+				}
 				if (attempt === 0) {
 					await new Promise(resolve => setTimeout(resolve, 250));
 				}
 			}
 		}
 		throw lastErr || new Error('sqlite command failed');
+	}
+
+	isMissingFlowRawError(message) {
+		const text = String(message || '').toLowerCase();
+		return text.includes('no such table: flow_raw');
+	}
+
+	async repairFlowRawSchema() {
+		const now = Date.now();
+		if (now - this.lastSchemaRepairAt < this.schemaRepairCooldownMs) {
+			return false;
+		}
+		this.lastSchemaRepairAt = now;
+		const db = this.shellQuote(this.outputPath);
+		const schemaSql =
+			"PRAGMA busy_timeout=3000; " +
+			"CREATE TABLE IF NOT EXISTS flow_raw (" +
+			"id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+			"timeinsert INTEGER NOT NULL DEFAULT (strftime('%s','now')), " +
+			"json TEXT NOT NULL" +
+			"); " +
+			"CREATE INDEX IF NOT EXISTS idx_flow_raw_time ON flow_raw(timeinsert);";
+		const sqlQuoted = this.shellQuote(schemaSql);
+		const shellCmd =
+			`if command -v sqlite3 >/dev/null 2>&1; then sqlite3 ${db} ${sqlQuoted}; ` +
+			`elif command -v sqlite3-cli >/dev/null 2>&1; then sqlite3-cli ${db} ${sqlQuoted}; ` +
+			'else echo "sqlite3 not installed" >&2; exit 127; fi';
+
+		try {
+			await this.exec('/bin/sh', ['-c', shellCmd], { timeout: 12000 });
+			this.logDebug('Repaired missing flow_raw schema in sqlite DB');
+			return true;
+		} catch (err) {
+			this.logDebug(`Schema repair failed: ${err?.message || 'unknown error'}`);
+			return false;
+		}
 	}
 
 	logDebug(message) {
