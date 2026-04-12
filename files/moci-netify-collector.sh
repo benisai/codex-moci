@@ -23,9 +23,11 @@ STREAM_TIMEOUT="$DEFAULT_STREAM_TIMEOUT"
 EXCLUDE_PROTOCOLS="$DEFAULT_EXCLUDE_PROTOCOLS"
 IGNORE_WAN_SOURCE="$DEFAULT_IGNORE_WAN_SOURCE"
 WAN_PREFIX=""
+LAN_PREFIX=""
 SQLITE_BIN=""
 NETIFY_FEATURE_ENABLED="1"
 LAST_DB_DAY=""
+WAN_FILTER_AUTO_DISABLED="0"
 
 log() {
 	printf "%s %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -164,12 +166,37 @@ derive_wan_prefix() {
 	[ -n "$cleaned" ] && WAN_PREFIX="$cleaned"
 }
 
+derive_lan_prefix() {
+	local lan_ip cleaned
+	LAN_PREFIX=""
+	command -v uci >/dev/null 2>&1 || return 0
+	lan_ip="$(uci -q get network.lan.ipaddr 2>/dev/null || true)"
+	lan_ip="$(sanitize_text "$lan_ip")"
+	if [ -z "$lan_ip" ] && command -v ubus >/dev/null 2>&1; then
+		lan_ip="$(
+			ubus call network.interface.lan status 2>/dev/null |
+				sed -n 's/.*"address"[[:space:]]*:[[:space:]]*"\([0-9.]\+\)".*/\1/p' |
+				head -n 1
+		)"
+	fi
+	cleaned="$(printf "%s" "$lan_ip" | sed -n "s/^\([0-9]\+\)\.\([0-9]\+\)\.\([0-9]\+\)\.[0-9]\+$/\1.\2.\3/p")"
+	[ -n "$cleaned" ] && LAN_PREFIX="$cleaned"
+}
+
 refresh_runtime_config() {
 	load_config
 	RETENTION_ROWS="$(sanitize_int "$RETENTION_ROWS" "$DEFAULT_RETENTION_ROWS")"
 	STREAM_TIMEOUT="$(sanitize_int "$STREAM_TIMEOUT" "$DEFAULT_STREAM_TIMEOUT")"
 	IGNORE_WAN_SOURCE="$(sanitize_int "$IGNORE_WAN_SOURCE" "$DEFAULT_IGNORE_WAN_SOURCE")"
 	derive_wan_prefix
+	derive_lan_prefix
+	if [ "$IGNORE_WAN_SOURCE" = "1" ] && [ -n "$WAN_PREFIX" ] && [ -n "$LAN_PREFIX" ] && [ "$WAN_PREFIX" = "$LAN_PREFIX" ]; then
+		IGNORE_WAN_SOURCE="0"
+		if [ "$WAN_FILTER_AUTO_DISABLED" != "1" ]; then
+			log "auto-disabled ignore_wan_source: WAN and LAN share prefix $WAN_PREFIX"
+			WAN_FILTER_AUTO_DISABLED="1"
+		fi
+	fi
 	ensure_db_file
 	[ -n "$LAST_DB_DAY" ] || LAST_DB_DAY="$(date '+%Y-%m-%d')"
 }
