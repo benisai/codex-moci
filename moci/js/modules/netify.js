@@ -685,10 +685,14 @@ pgrep -fa moci-netify-collector || true
 		const apps = new Set(sourceFlows.map(f => f.app).filter(Boolean));
 		const totalBytes = sourceFlows.reduce((sum, f) => sum + (f.bytes || 0), 0);
 
-		document.getElementById('netify-flow-count').textContent = String(flowCount);
-		document.getElementById('netify-device-count').textContent = String(devices.size);
-		document.getElementById('netify-app-count').textContent = String(apps.size);
-		document.getElementById('netify-total-bytes').textContent = this.core.formatBytes(totalBytes);
+		const flowEl = document.getElementById('netify-flow-count');
+		const deviceEl = document.getElementById('netify-device-count');
+		const appEl = document.getElementById('netify-app-count');
+		const totalBytesEl = document.getElementById('netify-total-bytes');
+		if (flowEl) flowEl.textContent = String(flowCount);
+		if (deviceEl) deviceEl.textContent = String(devices.size);
+		if (appEl) appEl.textContent = String(apps.size);
+		if (totalBytesEl) totalBytesEl.textContent = this.core.formatBytes(totalBytes);
 	}
 
 	recomputeTopAppsRows(sourceFlows = this.flows) {
