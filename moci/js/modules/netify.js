@@ -560,9 +560,18 @@ pgrep -fa moci-netify-collector || true
 			this.logDebug('Repaired missing flow_raw schema in sqlite DB');
 			return true;
 		} catch (err) {
-			this.logDebug(`Schema repair failed: ${err?.message || 'unknown error'}`);
-			return false;
+			this.logDebug(`Schema repair SQL failed: ${err?.message || 'unknown error'}`);
 		}
+
+		// Fallback: invoke collector init path directly.
+		try {
+			await this.exec('/usr/bin/moci-netify-collector', ['--init-db'], { timeout: 12000 });
+			this.logDebug('Repaired flow_raw schema via collector --init-db');
+			return true;
+		} catch (err) {
+			this.logDebug(`Schema repair via collector failed: ${err?.message || 'unknown error'}`);
+		}
+		return false;
 	}
 
 	logDebug(message) {
