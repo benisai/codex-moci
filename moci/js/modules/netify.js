@@ -295,6 +295,7 @@ pgrep -fa moci-netify-collector || true
 		} catch (err) {
 			console.error('Failed to refresh Netify view:', err);
 			this.logDebug(`Refresh failed: ${err?.message || 'unknown error'}`);
+			if (err?.stack) this.logDebug(`Refresh stack: ${String(err.stack).split('\n').slice(0, 3).join(' | ')}`);
 			if (showErrorToast) this.core.showToast('Failed to refresh Netify data', 'error');
 		} finally {
 			this.isRefreshing = false;
@@ -314,6 +315,7 @@ pgrep -fa moci-netify-collector || true
 			this.lastCardsRefreshAt = Date.now();
 		} catch (err) {
 			this.logDebug(`Card auto-refresh failed: ${err?.message || 'unknown error'}`);
+			if (err?.stack) this.logDebug(`Card auto-refresh stack: ${String(err.stack).split('\n').slice(0, 3).join(' | ')}`);
 		} finally {
 			this.isRefreshingCards = false;
 		}
@@ -684,15 +686,21 @@ pgrep -fa moci-netify-collector || true
 		const devices = new Set(sourceFlows.map(f => f.device).filter(v => v && v !== 'unknown'));
 		const apps = new Set(sourceFlows.map(f => f.app).filter(Boolean));
 		const totalBytes = sourceFlows.reduce((sum, f) => sum + (f.bytes || 0), 0);
+		this.setTextIfPresent('netify-flow-count', String(flowCount));
+		this.setTextIfPresent('netify-device-count', String(devices.size));
+		this.setTextIfPresent('netify-app-count', String(apps.size));
+		this.setTextIfPresent('netify-total-bytes', this.core.formatBytes(totalBytes));
+	}
 
-		const flowEl = document.getElementById('netify-flow-count');
-		const deviceEl = document.getElementById('netify-device-count');
-		const appEl = document.getElementById('netify-app-count');
-		const totalBytesEl = document.getElementById('netify-total-bytes');
-		if (flowEl) flowEl.textContent = String(flowCount);
-		if (deviceEl) deviceEl.textContent = String(devices.size);
-		if (appEl) appEl.textContent = String(apps.size);
-		if (totalBytesEl) totalBytesEl.textContent = this.core.formatBytes(totalBytes);
+	setTextIfPresent(id, value) {
+		const el = document.getElementById(id);
+		if (!el) return false;
+		try {
+			el.textContent = String(value ?? '');
+			return true;
+		} catch {
+			return false;
+		}
 	}
 
 	recomputeTopAppsRows(sourceFlows = this.flows) {
