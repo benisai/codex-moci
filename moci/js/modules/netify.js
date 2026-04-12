@@ -36,9 +36,6 @@ export default class NetifyModule {
 		this.cardsRefreshIntervalMs = 10000;
 		this.lastTopAppsRefreshAt = 0;
 		this.isRefreshingTopApps = false;
-		this.pbrBypassAvailable = false;
-		this.lastSchemaRepairAt = 0;
-		this.schemaRepairCooldownMs = 15000;
 
 		this.core.registerRoute('/netify', async () => {
 			const pageElement = document.getElementById('netify-page');
@@ -159,7 +156,6 @@ export default class NetifyModule {
 		this.userPausedAutoRefresh = true;
 		this.updateAutoRefreshToggleUi();
 		await this.loadConfig();
-		await this.refreshPbrBypassAvailability();
 		this.syncCollectorPanel();
 		this.startPolling();
 		await this.refresh(false, true);
@@ -221,15 +217,15 @@ export default class NetifyModule {
 					this.outputPath = configuredDbPath;
 				} else if (configuredOutput && /\.sqlite(?:3)?$/i.test(configuredOutput)) {
 					this.outputPath = configuredOutput;
-					}
-					this.maxLines = Number(c.retention_rows || c.max_lines) || this.maxLines;
 				}
-			} catch {}
+				this.maxLines = Number(c.retention_rows || c.max_lines) || this.maxLines;
+			}
+		} catch {}
 
-			const pathEl = document.getElementById('netify-db-path');
-			if (pathEl) pathEl.textContent = this.outputPath;
-			this.logDebug(`Config loaded; db=${this.outputPath} retention=${this.maxLines}`);
-		}
+		const pathEl = document.getElementById('netify-db-path');
+		if (pathEl) pathEl.textContent = this.outputPath;
+		this.logDebug(`Config loaded; db=${this.outputPath} retention=${this.maxLines}`);
+	}
 
 	async runServiceAction(action) {
 		try {
@@ -509,69 +505,19 @@ pgrep -fa moci-netify-collector || true
 		const sqlQuoted = this.shellQuote(statement);
 		const shellCmd = `if command -v sqlite3 >/dev/null 2>&1; then sqlite3 ${db} ${sqlQuoted}; elif command -v sqlite3-cli >/dev/null 2>&1; then sqlite3-cli ${db} ${sqlQuoted}; else echo "sqlite3 not installed" >&2; exit 127; fi`;
 		let lastErr = null;
-		for (let attempt = 0; attempt < 3; attempt++) {
+		for (let attempt = 0; attempt < 2; attempt++) {
 			try {
 				const result = await this.exec('/bin/sh', ['-c', shellCmd], { timeout: 12000 });
 				return String(result?.stdout || '');
 			} catch (err) {
 				lastErr = err;
-				const msg = String(err?.message || 'unknown error');
-				this.logDebug(`SQLite query attempt failed (shell): ${msg}`);
-				if (this.isMissingFlowRawError(msg)) {
-					const repaired = await this.repairFlowRawSchema();
-					if (repaired) continue;
-				}
+				this.logDebug(`SQLite query attempt failed (shell): ${err?.message || 'unknown error'}`);
 				if (attempt === 0) {
 					await new Promise(resolve => setTimeout(resolve, 250));
 				}
 			}
 		}
 		throw lastErr || new Error('sqlite command failed');
-	}
-
-	isMissingFlowRawError(message) {
-		const text = String(message || '').toLowerCase();
-		return text.includes('no such table: flow_raw');
-	}
-
-	async repairFlowRawSchema() {
-		const now = Date.now();
-		if (now - this.lastSchemaRepairAt < this.schemaRepairCooldownMs) {
-			return false;
-		}
-		this.lastSchemaRepairAt = now;
-		const db = this.shellQuote(this.outputPath);
-		const schemaSql =
-			"PRAGMA busy_timeout=3000; " +
-			"CREATE TABLE IF NOT EXISTS flow_raw (" +
-			"id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-			"timeinsert INTEGER NOT NULL DEFAULT (strftime('%s','now')), " +
-			"json TEXT NOT NULL" +
-			"); " +
-			"CREATE INDEX IF NOT EXISTS idx_flow_raw_time ON flow_raw(timeinsert);";
-		const sqlQuoted = this.shellQuote(schemaSql);
-		const shellCmd =
-			`if command -v sqlite3 >/dev/null 2>&1; then sqlite3 ${db} ${sqlQuoted}; ` +
-			`elif command -v sqlite3-cli >/dev/null 2>&1; then sqlite3-cli ${db} ${sqlQuoted}; ` +
-			'else echo "sqlite3 not installed" >&2; exit 127; fi';
-
-		try {
-			await this.exec('/bin/sh', ['-c', shellCmd], { timeout: 12000 });
-			this.logDebug('Repaired missing flow_raw schema in sqlite DB');
-			return true;
-		} catch (err) {
-			this.logDebug(`Schema repair SQL failed: ${err?.message || 'unknown error'}`);
-		}
-
-		// Fallback: invoke collector init path directly.
-		try {
-			await this.exec('/usr/bin/moci-netify-collector', ['--init-db'], { timeout: 12000 });
-			this.logDebug('Repaired flow_raw schema via collector --init-db');
-			return true;
-		} catch (err) {
-			this.logDebug(`Schema repair via collector failed: ${err?.message || 'unknown error'}`);
-		}
-		return false;
 	}
 
 	logDebug(message) {
@@ -737,10 +683,12 @@ pgrep -fa moci-netify-collector || true
 		const flowCount = Number(totalFlowCount) > 0 ? totalFlowCount : sourceFlows.length;
 		const devices = new Set(sourceFlows.map(f => f.device).filter(v => v && v !== 'unknown'));
 		const apps = new Set(sourceFlows.map(f => f.app).filter(Boolean));
+		const totalBytes = sourceFlows.reduce((sum, f) => sum + (f.bytes || 0), 0);
 
 		document.getElementById('netify-flow-count').textContent = String(flowCount);
 		document.getElementById('netify-device-count').textContent = String(devices.size);
 		document.getElementById('netify-app-count').textContent = String(apps.size);
+		document.getElementById('netify-total-bytes').textContent = this.core.formatBytes(totalBytes);
 	}
 
 	recomputeTopAppsRows(sourceFlows = this.flows) {
@@ -946,9 +894,6 @@ pgrep -fa moci-netify-collector || true
 		const actionType = document.getElementById('netify-action-type');
 		if (actionType) {
 			actionType.value = domainInput?.value ? 'domain' : 'ip';
-			if (!this.pbrBypassAvailable && actionType.value === 'vpn_bypass') {
-				actionType.value = domainInput?.value ? 'domain' : 'ip';
-			}
 		}
 		this.syncActionTypeUi();
 		this.core.openModal('netify-flow-action-modal');
@@ -959,8 +904,7 @@ pgrep -fa moci-netify-collector || true
 		const domainGroup = document.getElementById('netify-domain-group');
 		const ipGroup = document.getElementById('netify-ip-block-group');
 		if (!domainGroup || !ipGroup) return;
-		const currentDomain = this.sanitizeDomain(document.getElementById('netify-action-domain')?.value || '');
-		const isDomain = type === 'domain' || (type === 'vpn_bypass' && !!currentDomain);
+		const isDomain = type === 'domain';
 		domainGroup.classList.toggle('hidden', !isDomain);
 		ipGroup.classList.toggle('hidden', isDomain);
 	}
@@ -992,15 +936,10 @@ pgrep -fa moci-netify-collector || true
 				}
 				await this.blockDomainInCustomDns(domain);
 				this.core.showToast(`Blocked domain via custom DNS: ${domain}`, 'success');
-			} else if (type === 'ip') {
+			} else {
 				const scope = document.getElementById('netify-action-scope')?.value || 'all_sources';
 				await this.blockDestinationIp(flow, scope);
 				this.core.showToast('Firewall block rule added', 'success');
-			} else if (type === 'vpn_bypass') {
-				await this.addPbrVpnBypass(flow);
-				this.core.showToast('PBR VPN bypass rule added', 'success');
-			} else {
-				throw new Error('Unsupported action type');
 			}
 
 			this.core.closeModal('netify-flow-action-modal');
@@ -1085,108 +1024,6 @@ pgrep -fa moci-netify-collector || true
 		} catch (err) {
 			console.warn('Firewall restart failed after rule commit:', err);
 		}
-	}
-
-	async refreshPbrBypassAvailability() {
-		let available = false;
-		const featureEnabled = this.core.isFeatureEnabled('pbr');
-		if (featureEnabled) {
-			try {
-				const [status, result] = await this.core.uciGet('pbr');
-				available = status === 0 && !!result?.values;
-				if (!available) {
-					const [s2, r2] = await this.exec('/bin/sh', ['-c', 'uci -q show pbr 2>/dev/null | head -n 1']);
-					available = s2 === 0 && String(r2?.stdout || '').trim().length > 0;
-				}
-			} catch {
-				available = false;
-			}
-		}
-		this.pbrBypassAvailable = available;
-
-		const bypassOpt = document.getElementById('netify-action-type-vpn-bypass');
-		const actionType = document.getElementById('netify-action-type');
-		if (bypassOpt) {
-			bypassOpt.classList.toggle('hidden', !available);
-			bypassOpt.disabled = !available;
-		}
-		if (!available && actionType?.value === 'vpn_bypass') {
-			actionType.value = 'domain';
-		}
-	}
-
-	async addPbrVpnBypass(flow) {
-		if (!this.pbrBypassAvailable) {
-			throw new Error('PBR is not available/enabled');
-		}
-
-		const inputDomain = this.sanitizeDomain(document.getElementById('netify-action-domain')?.value || '');
-		const domainScope = document.getElementById('netify-action-domain-scope')?.value || 'full';
-		const rootDomain = this.extractRootDomain(inputDomain);
-		const domainTarget = domainScope === 'root' ? rootDomain || inputDomain : inputDomain;
-
-		let destTarget = '';
-		if (domainTarget) {
-			destTarget = domainTarget;
-		} else if (this.isValidIp(flow.destIp)) {
-			destTarget = String(flow.destIp || '').trim();
-		}
-		if (!destTarget) {
-			throw new Error('No valid domain/IP found for VPN bypass');
-		}
-
-		const bypassName = 'VPN-Bypass';
-		const [pbrStatus, pbrResult] = await this.core.uciGet('pbr');
-		let targetSection = '';
-		let existingDest = '';
-		if (pbrStatus === 0 && pbrResult?.values) {
-			for (const [section, cfg] of Object.entries(pbrResult.values)) {
-				if (String(cfg?.['.type'] || '') !== 'policy') continue;
-				const name = String(cfg?.name || '').trim();
-				if (name === bypassName || name.startsWith(`${bypassName} `)) {
-					targetSection = section;
-					existingDest = String(cfg?.dest_addr || '').trim();
-					break;
-				}
-			}
-		}
-
-		const mergedDest = this.mergeTargetList(existingDest, destTarget);
-		const values = {
-			enabled: '1',
-			name: bypassName,
-			src_addr: '',
-			src_port: '',
-			dest_addr: mergedDest,
-			dest_port: '',
-			proto: 'all',
-			chain: 'prerouting',
-			interface: 'wan'
-		};
-
-		if (targetSection) {
-			await this.core.uciSet('pbr', targetSection, values);
-		} else {
-			const [status, result] = await this.core.uciAdd('pbr', 'policy');
-			if (status !== 0 || !result?.section) throw new Error('Failed to create PBR policy');
-			await this.core.uciSet('pbr', result.section, values);
-		}
-		await this.core.uciCommit('pbr');
-		try {
-			await this.exec('/etc/init.d/pbr', ['restart']);
-		} catch {}
-	}
-
-	mergeTargetList(currentValue, nextValue) {
-		const tokens = String(currentValue || '')
-			.split(/[\s,]+/)
-			.map(v => String(v || '').trim())
-			.filter(Boolean);
-		const set = new Set(tokens);
-		set.add(String(nextValue || '').trim());
-		return Array.from(set)
-			.filter(Boolean)
-			.join(' ');
 	}
 
 	sanitizeDomain(value) {
