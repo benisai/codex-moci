@@ -52,14 +52,11 @@ export default class SystemModule {
 		document.getElementById('reset-btn')?.addEventListener('click', () => this.factoryReset());
 		document.getElementById('reboot-btn')?.addEventListener('click', () => this.rebootSystem());
 		document.getElementById('moci-state-backup-apply-btn')?.addEventListener('click', () => this.saveMociStateBackupSettings());
-		document.getElementById('moci-state-backup-save-btn')?.addEventListener('click', () => this.runMociStateBackupAction('save'));
-		document.getElementById('moci-state-backup-restore-btn')?.addEventListener('click', () => this.runMociStateBackupAction('restore'));
-		document.getElementById('processes-pause-btn')?.addEventListener('click', () => this.toggleProcessesPause());
-		document.getElementById('processes-sort')?.addEventListener('change', event => {
-			const nextSort = String(event?.target?.value || 'cpu').trim().toLowerCase();
-			this.processesSort = ['cpu', 'mem', 'pid'].includes(nextSort) ? nextSort : 'cpu';
-			this.renderProcessesTable();
-		});
+			document.getElementById('moci-state-backup-save-btn')?.addEventListener('click', () => this.runMociStateBackupAction('save'));
+			document.getElementById('moci-state-backup-restore-btn')?.addEventListener('click', () => this.runMociStateBackupAction('restore'));
+			document.getElementById('processes-pause-btn')?.addEventListener('click', () => this.toggleProcessesPause());
+			document.getElementById('processes-sort-cpu-btn')?.addEventListener('click', () => this.setProcessesSort('cpu'));
+			document.getElementById('processes-sort-mem-btn')?.addEventListener('click', () => this.setProcessesSort('mem'));
 		document.getElementById('packages-search')?.addEventListener('input', event => {
 			this.packagesQuery = String(event?.target?.value || '')
 				.trim()
@@ -760,6 +757,23 @@ export default class SystemModule {
 		});
 		this.startProcessesAutoRefresh();
 		this.updateProcessesPauseButton();
+		this.updateProcessesSortButtons();
+	}
+
+	setProcessesSort(nextSort) {
+		const normalized = String(nextSort || 'cpu')
+			.trim()
+			.toLowerCase();
+		this.processesSort = ['cpu', 'mem'].includes(normalized) ? normalized : 'cpu';
+		this.updateProcessesSortButtons();
+		this.renderProcessesTable();
+	}
+
+	updateProcessesSortButtons() {
+		const cpuBtn = document.getElementById('processes-sort-cpu-btn');
+		const memBtn = document.getElementById('processes-sort-mem-btn');
+		if (cpuBtn) cpuBtn.classList.toggle('is-active', this.processesSort === 'cpu');
+		if (memBtn) memBtn.classList.toggle('is-active', this.processesSort === 'mem');
 	}
 
 	startProcessesAutoRefresh() {
