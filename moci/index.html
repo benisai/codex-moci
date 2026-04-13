@@ -148,11 +148,11 @@
 								</div>
 							</div>
 
-							<div class="stat-card" style="margin-top: 24px" data-feature="traffic_history">
-								<div class="traffic-header-row">
-									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">
-										TRAFFIC HISTORY (VNSTAT)
-									</div>
+								<div class="stat-card" style="margin-top: 24px" data-feature="traffic_history">
+									<div class="traffic-header-row">
+										<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">
+											TRAFFIC HISTORY (VNSTAT)
+										</div>
 									<div class="traffic-period-switch">
 										<button class="action-btn-sm" id="traffic-period-5min">5 MIN</button>
 										<button class="action-btn-sm is-active" id="traffic-period-hourly">HOURLY</button>
@@ -173,13 +173,40 @@
 										<span class="legend-color legend-upload"></span>
 										<span>Upload</span>
 									</div>
+									</div>
 								</div>
-							</div>
 
-							<div class="stat-card" style="margin-top: 24px">
-								<div class="section-title">ACTIVE CONNECTIONS</div>
-								<div class="stat-value" id="conntrack-usage">Loading...</div>
-								<div class="stat-label" id="conntrack-detail" style="margin-top: 6px">Polling conntrack...</div>
+								<div class="stat-card" style="margin-top: 24px">
+									<div class="section-title">MONTHLY USAGE</div>
+									<div class="progress-bar" style="margin-top: 10px">
+										<div
+											class="progress-fill conntrack-progress-fill"
+											id="monthly-usage-bar"
+											style="width: 0%"
+										></div>
+									</div>
+									<div
+										style="
+											margin-top: 12px;
+											display: flex;
+											align-items: baseline;
+											justify-content: space-between;
+											gap: 12px;
+											flex-wrap: wrap;
+										"
+									>
+										<div id="monthly-usage-total" style="font-size: 20px">0 B used</div>
+										<div id="monthly-usage-days-left" style="font-size: 20px; color: var(--steel-muted)">-- days left</div>
+									</div>
+									<div class="stat-label" id="monthly-usage-meta" style="margin-top: 8px">
+										Billing cycle starts on day 10
+									</div>
+								</div>
+
+								<div class="stat-card" style="margin-top: 24px">
+									<div class="section-title">ACTIVE CONNECTIONS</div>
+									<div class="stat-value" id="conntrack-usage">Loading...</div>
+									<div class="stat-label" id="conntrack-detail" style="margin-top: 6px">Polling conntrack...</div>
 								<div class="progress-bar" style="margin-top: 12px">
 									<div class="progress-fill conntrack-progress-fill" id="conntrack-bar" style="width: 0%"></div>
 								</div>

@@ -31,6 +31,9 @@ export default class DashboardModule {
 		this.trafficProviderPreference = 'auto';
 		this.activeTrafficProvider = 'interface';
 		this.lastBandixTotals = null;
+		this.monthlyBandwidthGb = 500;
+		this.monthStartDay = 10;
+		this.lastMonthlyUsageRefresh = 0;
 
 		this.core.registerRoute('/dashboard', () => this.load());
 	}
@@ -189,6 +192,13 @@ export default class DashboardModule {
 		this.bandwidthHistoryMaxPoints = Math.max(20, Math.ceil(this.bandwidthWindowSeconds / this.bandwidthSampleSeconds));
 		this.trimBandwidthHistory();
 		this.updateNetworkActivityTitle();
+
+		const monthlyBandwidthGb = Number(sectionValues?.monthly_bandwidth_gb ?? 500);
+		this.monthlyBandwidthGb = Number.isFinite(monthlyBandwidthGb) ? Math.max(0, monthlyBandwidthGb) : 500;
+
+		const monthStartDay = Number(sectionValues?.month_start_day ?? 10);
+		const roundedMonthStartDay = Number.isFinite(monthStartDay) ? Math.round(monthStartDay) : 10;
+		this.monthStartDay = Math.min(31, Math.max(1, roundedMonthStartDay));
 	}
 
 	formatWindowLabel(seconds) {
@@ -222,16 +232,17 @@ export default class DashboardModule {
 			await this.updateNetworkStats();
 			await this.updateWANStatus();
 			await this.updateSystemLog();
-			await this.updateConnections();
-			await this.updateConntrackUsage();
-			this.initTrafficControls();
-			this.initMonthlyGraph();
-			await this.updateTrafficChart(true);
-		} catch (err) {
-			console.error('Failed to load dashboard:', err);
-			this.core.showToast('Failed to load system information', 'error');
+				await this.updateConnections();
+				await this.updateConntrackUsage();
+				this.initTrafficControls();
+				this.initMonthlyGraph();
+				await this.updateTrafficChart(true);
+				await this.updateMonthlyUsagePanel(true);
+			} catch (err) {
+				console.error('Failed to load dashboard:', err);
+				this.core.showToast('Failed to load system information', 'error');
+			}
 		}
-	}
 
 	applyLanVisibility() {
 		const lanDetailEl = document.getElementById('lan-detail');
@@ -250,6 +261,113 @@ export default class DashboardModule {
 		await this.updateWANStatus();
 		await this.updateConntrackUsage();
 		await this.updateTrafficChart(false);
+		await this.updateMonthlyUsagePanel(false);
+	}
+
+	async updateMonthlyUsagePanel(force = false) {
+		const now = Date.now();
+		if (!force && now - this.lastMonthlyUsageRefresh < 60000) return;
+		this.lastMonthlyUsageRefresh = now;
+
+		const barEl = document.getElementById('monthly-usage-bar');
+		const totalEl = document.getElementById('monthly-usage-total');
+		const daysLeftEl = document.getElementById('monthly-usage-days-left');
+		const metaEl = document.getElementById('monthly-usage-meta');
+		if (!barEl || !totalEl || !daysLeftEl || !metaEl) return;
+
+		try {
+			const payload = await this.fetchVnstatPayload();
+			const summary = this.computeMonthlyUsageSummary(payload);
+			const usedBytes = summary.usedBytes;
+			const limitBytes = summary.limitBytes;
+			const percent = limitBytes > 0 ? Math.min(100, (usedBytes / limitBytes) * 100) : summary.progressByDays;
+
+			barEl.style.width = `${percent.toFixed(1)}%`;
+			totalEl.textContent = `${this.core.formatBytes(usedBytes)} used`;
+			daysLeftEl.textContent = `${summary.daysLeft} day${summary.daysLeft === 1 ? '' : 's'} left`;
+			metaEl.textContent = `Cycle: ${summary.startLabel} - ${summary.endLabel} • Limit: ${summary.limitLabel}`;
+		} catch {
+			barEl.style.width = '0%';
+			totalEl.textContent = '0 B used';
+			daysLeftEl.textContent = '-- days left';
+			metaEl.textContent = `Billing cycle starts on day ${this.monthStartDay}`;
+		}
+	}
+
+	async fetchVnstatPayload() {
+		const commands = [
+			{ command: '/usr/bin/vnstat', params: ['--json'] },
+			{ command: '/usr/sbin/vnstat', params: ['--json'] }
+		];
+
+		let lastErr = null;
+		for (const c of commands) {
+			try {
+				const [status, result] = await this.core.ubusCall('file', 'exec', c, { timeout: 12000 });
+				if (status !== 0 || !result?.stdout) continue;
+				return JSON.parse(result.stdout);
+			} catch (err) {
+				lastErr = err;
+			}
+		}
+		throw lastErr || new Error('vnstat json unavailable');
+	}
+
+	computeMonthlyUsageSummary(payload) {
+		const interfaces = Array.isArray(payload?.interfaces) ? payload.interfaces : [];
+		const picked = interfaces.find(i => this.getVnstatPeriodRows(i?.traffic, 'daily').length > 0) || interfaces[0];
+		const dailyRows = this.getVnstatPeriodRows(picked?.traffic, 'daily');
+
+		const range = this.getBillingRange();
+		const usedBytes = dailyRows.reduce((sum, row) => {
+			const mapped = this.mapVnstatRow(row, 'daily');
+			if (!mapped) return sum;
+			if (mapped.ts < range.startTs || mapped.ts > range.endTs) return sum;
+			return sum + mapped.rx + mapped.tx;
+		}, 0);
+
+		const limitBytes = this.monthlyBandwidthGb > 0 ? this.monthlyBandwidthGb * 1024 * 1024 * 1024 : 0;
+		const totalDays = Math.max(1, Math.round((range.endTs - range.startTs) / 86400000) + 1);
+		const elapsedDays = Math.max(1, Math.round((Date.now() - range.startTs) / 86400000) + 1);
+		const progressByDays = Math.min(100, (elapsedDays / totalDays) * 100);
+		const daysLeft = Math.max(0, Math.ceil((range.endTs - Date.now()) / 86400000));
+
+		return {
+			usedBytes,
+			limitBytes,
+			daysLeft,
+			progressByDays,
+			startLabel: this.formatDateShort(range.startTs),
+			endLabel: this.formatDateShort(range.endTs),
+			limitLabel: limitBytes > 0 ? `${this.monthlyBandwidthGb} GB` : 'Not set'
+		};
+	}
+
+	getBillingRange(nowMs = Date.now()) {
+		const now = new Date(nowMs);
+		const day = this.monthStartDay;
+		let start = this.makeCycleDate(now.getFullYear(), now.getMonth(), day);
+		if (now < start) {
+			start = this.makeCycleDate(now.getFullYear(), now.getMonth() - 1, day);
+		}
+		const end = new Date(this.makeCycleDate(start.getFullYear(), start.getMonth() + 1, day).getTime() - 1);
+		return {
+			startTs: start.getTime(),
+			endTs: end.getTime()
+		};
+	}
+
+	makeCycleDate(year, monthIndex, startDay) {
+		const base = new Date(year, monthIndex, 1);
+		const y = base.getFullYear();
+		const m = base.getMonth();
+		const lastDay = new Date(y, m + 1, 0).getDate();
+		const day = Math.min(Math.max(1, startDay), lastDay);
+		return new Date(y, m, day, 0, 0, 0, 0);
+	}
+
+	formatDateShort(ts) {
+		return new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' });
 	}
 
 	async fetchCpuStats() {
