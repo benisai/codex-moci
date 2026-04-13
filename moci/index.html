@@ -2948,19 +2948,18 @@ Endpoint = host:51820"
 
 						<div id="system-page" class="page hidden">
 							<h2>SYSTEM</h2>
-						<div class="tabs">
-							<button class="tab-btn active" data-tab="general">GENERAL</button>
-							<button class="tab-btn" data-tab="admin">ADMINISTRATION</button>
-							<button class="tab-btn" data-tab="backup" data-feature="backup">BACKUP/RESTORE</button>
-							<button class="tab-btn" data-tab="software" data-feature="packages">SOFTWARE</button>
-							<button class="tab-btn" data-tab="processes">PROCESSES</button>
-							<button class="tab-btn" data-tab="startup" data-feature="services">STARTUP</button>
-							<button class="tab-btn" data-tab="cron">SCHEDULED TASKS</button>
-							<button class="tab-btn" data-tab="ssh-keys" data-feature="ssh_keys">SSH KEYS</button>
-							<button class="tab-btn" data-tab="mounts" data-feature="storage">STORAGE</button>
-							<button class="tab-btn" data-tab="led" data-feature="leds">LED</button>
-							<button class="tab-btn" data-tab="upgrade" data-feature="firmware">FIRMWARE</button>
-						</div>
+							<div class="tabs">
+								<button class="tab-btn active" data-tab="general">GENERAL</button>
+								<button class="tab-btn" data-tab="admin">ADMINISTRATION</button>
+								<button class="tab-btn" data-tab="backup" data-feature="backup">BACKUP/RESTORE</button>
+								<button class="tab-btn" data-tab="software" data-feature="packages">SOFTWARE</button>
+								<button class="tab-btn" data-tab="processes">PROCESSES</button>
+								<button class="tab-btn" data-tab="startup" data-feature="services">STARTUP</button>
+								<button class="tab-btn" data-tab="cron">SCHEDULED TASKS</button>
+								<button class="tab-btn" data-tab="mounts" data-feature="storage">STORAGE</button>
+								<button class="tab-btn" data-tab="led" data-feature="leds">LED</button>
+								<button class="tab-btn" data-tab="upgrade" data-feature="firmware">FIRMWARE</button>
+							</div>
 
 						<div class="tab-content" id="tab-general">
 							<div class="stat-card">
@@ -2990,9 +2989,9 @@ Endpoint = host:51820"
 							</div>
 						</div>
 
-						<div class="tab-content hidden" id="tab-admin">
-							<div class="stat-card">
-								<div class="section-title">CHANGE PASSWORD</div>
+							<div class="tab-content hidden" id="tab-admin">
+								<div class="stat-card">
+									<div class="section-title">CHANGE PASSWORD</div>
 								<form id="password-form" onsubmit="return false;">
 									<input
 										type="text"
@@ -3021,14 +3020,37 @@ Endpoint = host:51820"
 											autocomplete="new-password"
 										/>
 									</div>
-									<div class="quick-actions">
-										<button type="button" class="action-btn" id="change-password-btn">
-											CHANGE PASSWORD
-										</button>
+										<div class="quick-actions">
+											<button type="button" class="action-btn" id="change-password-btn">
+												CHANGE PASSWORD
+											</button>
+										</div>
+									</form>
+								</div>
+								<div class="stat-card" style="margin-top: 24px" data-feature="ssh_keys">
+									<div class="section-title">SSH AUTHORIZED KEYS</div>
+									<div class="quick-actions" style="margin-bottom: 16px">
+										<button class="action-btn" id="add-ssh-key-btn">ADD KEY</button>
 									</div>
-								</form>
+									<table class="data-table" id="ssh-keys-table">
+										<thead>
+											<tr>
+												<th>TYPE</th>
+												<th>KEY</th>
+												<th>COMMENT</th>
+												<th>ACTIONS</th>
+											</tr>
+										</thead>
+										<tbody>
+											<tr>
+												<td colspan="4" style="text-align: center; color: var(--steel-muted)">
+													Loading...
+												</td>
+											</tr>
+										</tbody>
+									</table>
+								</div>
 							</div>
-						</div>
 
 						<div class="tab-content hidden" id="tab-backup" data-feature="backup">
 							<div class="stat-card">
@@ -3193,32 +3215,6 @@ Endpoint = host:51820"
 											<th>SCHEDULE</th>
 											<th>COMMAND</th>
 											<th>ENABLED</th>
-											<th>ACTIONS</th>
-										</tr>
-									</thead>
-									<tbody>
-										<tr>
-											<td colspan="4" style="text-align: center; color: var(--steel-muted)">
-												Loading...
-											</td>
-										</tr>
-									</tbody>
-								</table>
-							</div>
-						</div>
-
-						<div class="tab-content hidden" id="tab-ssh-keys" data-feature="ssh_keys">
-							<div class="stat-card">
-								<div class="section-title">SSH AUTHORIZED KEYS</div>
-								<div class="quick-actions" style="margin-bottom: 16px">
-									<button class="action-btn" id="add-ssh-key-btn">ADD KEY</button>
-								</div>
-								<table class="data-table" id="ssh-keys-table">
-									<thead>
-										<tr>
-											<th>TYPE</th>
-											<th>KEY</th>
-											<th>COMMENT</th>
 											<th>ACTIONS</th>
 										</tr>
 									</thead>

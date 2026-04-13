@@ -29,7 +29,6 @@ export default class SystemModule {
 					processes: () => this.loadProcesses(),
 					startup: () => this.loadStartup(),
 					cron: () => this.loadCron(),
-					'ssh-keys': () => this.loadSSHKeys(),
 					mounts: () => this.loadMounts(),
 					led: () => this.loadLED(),
 					upgrade: () => this.loadUpgrade()
@@ -375,7 +374,9 @@ export default class SystemModule {
 		}
 	}
 
-	async loadAdmin() {}
+	async loadAdmin() {
+		await this.loadSSHKeys();
+	}
 
 	async changePassword() {
 		const newPw = document.getElementById('new-password').value;
