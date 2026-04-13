@@ -24,6 +24,7 @@ export default class DashboardModule {
 		this.systemLogQuery = '';
 		this.systemLogSearchBound = false;
 		this.systemLogJumpBottomBound = false;
+		this.monthlyUsageSettingsBound = false;
 		this.bandwidthSampleSeconds = 3;
 		this.bandwidthWindowSeconds = 900;
 		this.bandwidthHistoryMaxPoints = Math.max(20, Math.ceil(this.bandwidthWindowSeconds / this.bandwidthSampleSeconds));
@@ -218,8 +219,9 @@ export default class DashboardModule {
 		if (pageElement) pageElement.classList.remove('hidden');
 		this.applyLanVisibility();
 		this.applyDashboardColorTheme();
-		this.initSystemLogSearch();
-		await this.loadTrafficSettings();
+			this.initSystemLogSearch();
+			this.bindMonthlyUsageSettings();
+			await this.loadTrafficSettings();
 		this.restoreBandwidthHistory();
 		this.initBandwidthGraph();
 		this.updateBandwidthGraph();
@@ -291,6 +293,64 @@ export default class DashboardModule {
 			totalEl.textContent = '0 B used';
 			daysLeftEl.textContent = '-- days left';
 			metaEl.textContent = `Billing cycle starts on day ${this.monthStartDay}`;
+		}
+	}
+
+	bindMonthlyUsageSettings() {
+		if (this.monthlyUsageSettingsBound) return;
+		this.monthlyUsageSettingsBound = true;
+
+		this.core.setupModal({
+			modalId: 'monthly-usage-settings-modal',
+			openBtnId: 'monthly-usage-settings-btn',
+			closeBtnId: 'close-monthly-usage-settings-modal',
+			cancelBtnId: 'cancel-monthly-usage-settings-btn',
+			saveBtnId: 'save-monthly-usage-settings-btn',
+			saveHandler: () => this.saveMonthlyUsageSettings()
+		});
+
+		document.getElementById('monthly-usage-settings-btn')?.addEventListener('click', () => {
+			const limitInput = document.getElementById('monthly-usage-limit-gb-input');
+			const dayInput = document.getElementById('monthly-usage-start-day-input');
+			if (limitInput) limitInput.value = String(this.monthlyBandwidthGb ?? 500);
+			if (dayInput) dayInput.value = String(this.monthStartDay ?? 10);
+		});
+	}
+
+	async saveMonthlyUsageSettings() {
+		const limitInput = document.getElementById('monthly-usage-limit-gb-input');
+		const dayInput = document.getElementById('monthly-usage-start-day-input');
+		const saveBtn = document.getElementById('save-monthly-usage-settings-btn');
+		if (!limitInput || !dayInput || !saveBtn) return;
+
+		const rawLimit = Number(limitInput.value);
+		const rawDay = Number(dayInput.value);
+		const limit = Number.isFinite(rawLimit) ? Math.max(0, Math.round(rawLimit)) : 500;
+		const day = Number.isFinite(rawDay) ? Math.min(31, Math.max(1, Math.round(rawDay))) : 10;
+
+		saveBtn.disabled = true;
+		const oldLabel = saveBtn.textContent;
+		saveBtn.textContent = 'SAVING...';
+		try {
+			await this.core.uciSet('moci', 'dashboard', {
+				monthly_bandwidth_gb: String(limit),
+				month_start_day: String(day)
+			});
+			await this.core.uciCommit('moci');
+
+			this.monthlyBandwidthGb = limit;
+			this.monthStartDay = day;
+			this.lastMonthlyUsageRefresh = 0;
+			await this.updateMonthlyUsagePanel(true);
+
+			this.core.closeModal('monthly-usage-settings-modal');
+			this.core.showToast('Monthly usage settings saved', 'success');
+		} catch (err) {
+			console.error('Failed to save monthly usage settings:', err);
+			this.core.showToast('Failed to save monthly usage settings', 'error');
+		} finally {
+			saveBtn.disabled = false;
+			saveBtn.textContent = oldLabel || 'SAVE';
 		}
 	}
 

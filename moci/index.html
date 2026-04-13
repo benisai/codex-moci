@@ -177,7 +177,26 @@
 								</div>
 
 								<div class="stat-card" style="margin-top: 24px">
-									<div class="section-title">MONTHLY USAGE</div>
+									<div
+										style="
+											display: flex;
+											align-items: center;
+											justify-content: space-between;
+											gap: 10px;
+											flex-wrap: wrap;
+										"
+									>
+										<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">MONTHLY USAGE</div>
+										<button
+											class="action-btn-sm"
+											id="monthly-usage-settings-btn"
+											type="button"
+											title="Monthly usage settings"
+											aria-label="Monthly usage settings"
+										>
+											⚙
+										</button>
+									</div>
 									<div class="progress-bar" style="margin-top: 10px">
 										<div
 											class="progress-fill conntrack-progress-fill"
@@ -200,6 +219,44 @@
 									</div>
 									<div class="stat-label" id="monthly-usage-meta" style="margin-top: 8px">
 										Billing cycle starts on day 10
+									</div>
+								</div>
+								<div class="modal hidden" id="monthly-usage-settings-modal">
+									<div class="modal-backdrop"></div>
+									<div class="modal-content">
+										<div class="modal-header">
+											<h3 class="modal-title">MONTHLY USAGE SETTINGS</h3>
+											<button class="modal-close" id="close-monthly-usage-settings-modal">&times;</button>
+										</div>
+										<div class="modal-body">
+											<div class="form-group">
+												<label class="form-label">MONTHLY BANDWIDTH LIMIT (GB)</label>
+												<input
+													type="number"
+													id="monthly-usage-limit-gb-input"
+													class="form-input"
+													min="0"
+													step="1"
+													placeholder="500"
+												/>
+											</div>
+											<div class="form-group">
+												<label class="form-label">BILLING CYCLE START DAY (1-31)</label>
+												<input
+													type="number"
+													id="monthly-usage-start-day-input"
+													class="form-input"
+													min="1"
+													max="31"
+													step="1"
+													placeholder="10"
+												/>
+											</div>
+										</div>
+										<div class="modal-footer">
+											<button class="action-btn" id="cancel-monthly-usage-settings-btn">CANCEL</button>
+											<button class="action-btn" id="save-monthly-usage-settings-btn">SAVE</button>
+										</div>
 									</div>
 								</div>
 
