@@ -967,14 +967,14 @@ fi`;
 				this.core.renderEmptyTable(tbody, 4, 'No services found');
 				return;
 			}
-			tbody.innerHTML = services
-				.map(
-					s => `<tr>
-				<td>${this.core.escapeHtml(s.name)}</td>
-				<td>${s.running ? this.core.renderBadge('success', 'RUNNING') : this.core.renderBadge('error', 'STOPPED')}</td>
-				<td>${this.core.renderBadge('info', 'N/A')}</td>
-				<td>
-					<div class="action-buttons">
+				tbody.innerHTML = services
+					.map(
+						s => `<tr>
+					<td>${this.core.escapeHtml(s.name)}</td>
+					<td><span class="badge ${s.running ? 'badge-interface-up' : 'badge-interface-down'}">${s.running ? 'RUNNING' : 'STOPPED'}</span></td>
+					<td>${this.core.renderBadge('info', 'N/A')}</td>
+					<td>
+						<div class="action-buttons">
 						<button class="action-btn success" data-action="start" data-id="${this.core.escapeHtml(s.name)}" style="font-size:11px;padding:4px 8px">
 							START
 						</button>
