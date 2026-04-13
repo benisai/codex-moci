@@ -772,8 +772,14 @@ export default class SystemModule {
 	updateProcessesSortButtons() {
 		const cpuBtn = document.getElementById('processes-sort-cpu-btn');
 		const memBtn = document.getElementById('processes-sort-mem-btn');
-		if (cpuBtn) cpuBtn.classList.toggle('is-active', this.processesSort === 'cpu');
-		if (memBtn) memBtn.classList.toggle('is-active', this.processesSort === 'mem');
+		if (cpuBtn) {
+			cpuBtn.classList.toggle('is-active', this.processesSort === 'cpu');
+			cpuBtn.classList.toggle('success', this.processesSort === 'cpu');
+		}
+		if (memBtn) {
+			memBtn.classList.toggle('is-active', this.processesSort === 'mem');
+			memBtn.classList.toggle('success', this.processesSort === 'mem');
+		}
 	}
 
 	startProcessesAutoRefresh() {
