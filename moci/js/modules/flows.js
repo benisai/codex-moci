@@ -190,8 +190,16 @@ export default class FlowsModule {
 			this.core.showToast(`Connection flows collector ${action}ed`, 'success');
 			setTimeout(() => this.refresh(false), 500);
 		} catch (err) {
-			console.error(`Failed to ${action} connection-flows collector:`, err);
-			this.core.showToast(this.describeExecFailure(err, `Failed to ${action} collector`), 'error');
+			// ACL/session profiles can block direct init.d exec; fallback via /bin/sh command path.
+			try {
+				await this.exec('/bin/sh', ['-c', `/etc/init.d/connection-flows-collector ${action}`]);
+				this.core.showToast(`Connection flows collector ${action}ed`, 'success');
+				setTimeout(() => this.refresh(false), 500);
+				return;
+			} catch (fallbackErr) {
+				console.error(`Failed to ${action} connection-flows collector:`, fallbackErr);
+				this.core.showToast(this.describeExecFailure(fallbackErr, `Failed to ${action} collector`), 'error');
+			}
 		}
 	}
 
@@ -201,8 +209,15 @@ export default class FlowsModule {
 			this.core.showToast('Connection flows database initialized', 'success');
 			await this.refresh(false);
 		} catch (err) {
-			console.error('Failed to initialize connection flows db:', err);
-			this.core.showToast(this.describeExecFailure(err, 'Failed to initialize database'), 'error');
+			try {
+				await this.exec('/bin/sh', ['-c', '/usr/bin/moci-connection-flow-collector --init-db']);
+				this.core.showToast('Connection flows database initialized', 'success');
+				await this.refresh(false);
+				return;
+			} catch (fallbackErr) {
+				console.error('Failed to initialize connection flows db:', fallbackErr);
+				this.core.showToast(this.describeExecFailure(fallbackErr, 'Failed to initialize database'), 'error');
+			}
 		}
 	}
 
