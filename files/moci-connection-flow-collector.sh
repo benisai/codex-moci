@@ -9,11 +9,13 @@ export PATH
 DEFAULT_DB="/tmp/connection-flows.sqlite"
 DEFAULT_POLL_SECONDS="5"
 DEFAULT_RETENTION_ROWS="50000"
+DEFAULT_EXCLUDE_ENDPOINTS="127.0.0.1:7150"
 LOG_FILE="/tmp/moci-connection-flows-collector.log"
 
 FLOW_DB="$DEFAULT_DB"
 POLL_SECONDS="$DEFAULT_POLL_SECONDS"
 RETENTION_ROWS="$DEFAULT_RETENTION_ROWS"
+EXCLUDE_ENDPOINTS="$DEFAULT_EXCLUDE_ENDPOINTS"
 SQLITE_BIN=""
 
 log() {
@@ -86,6 +88,10 @@ load_config() {
 		value="$(uci -q get moci.connection_flows.retention_rows 2>/dev/null || true)"
 		value="$(sanitize_text "$value")"
 		[ -n "$value" ] && RETENTION_ROWS="$value"
+
+		value="$(uci -q get moci.connection_flows.exclude_endpoints 2>/dev/null || true)"
+		value="$(sanitize_text "$value")"
+		[ -n "$value" ] && EXCLUDE_ENDPOINTS="$value"
 	fi
 
 	POLL_SECONDS="$(sanitize_int "$POLL_SECONDS" "$DEFAULT_POLL_SECONDS")"
@@ -122,6 +128,28 @@ prune_db() {
 
 sql_escape() {
 	printf "%s" "$1" | sed "s/'/''/g"
+}
+
+should_skip_endpoint() {
+	local source destination token old_ifs
+	source="$(printf "%s" "${1:-}" | tr '[:upper:]' '[:lower:]')"
+	destination="$(printf "%s" "${2:-}" | tr '[:upper:]' '[:lower:]')"
+	[ -n "$source" ] || return 1
+	[ -n "$destination" ] || return 1
+
+	old_ifs="$IFS"
+	IFS=','
+	for token in $EXCLUDE_ENDPOINTS; do
+		token="$(sanitize_text "$token")"
+		token="$(printf "%s" "$token" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')"
+		[ -n "$token" ] || continue
+		if [ "$source" = "$token" ] || [ "$destination" = "$token" ]; then
+			IFS="$old_ifs"
+			return 0
+		fi
+	done
+	IFS="$old_ifs"
+	return 1
 }
 
 conntrack_source() {
@@ -181,6 +209,9 @@ insert_rows() {
 	sql="BEGIN;"
 	while IFS='|' read -r protocol source destination transfer status; do
 		[ -n "$protocol" ] || continue
+		if should_skip_endpoint "$source" "$destination"; then
+			continue
+		fi
 		sig="${protocol}|${source}|${destination}|${transfer}|${status}"
 		protocol="$(sql_escape "$protocol")"
 		source="$(sql_escape "$source")"
