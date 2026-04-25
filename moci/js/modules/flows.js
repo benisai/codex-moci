@@ -12,11 +12,10 @@ export default class FlowsModule {
 		this.flowsPage = 0;
 		this.flowsPageSize = 50;
 		this.sqlChunkSize = 200;
-		this.sqlChunkCalls = 15;
+		this.sqlChunkCalls = 100;
 		this.loadedOffset = 0;
 		this.hasMoreRows = true;
 		this.isLoadingMore = false;
-		this.totalRowCount = 0;
 
 		this.core.registerRoute('/flows', async () => {
 			const pageElement = document.getElementById('flows-page');
@@ -215,11 +214,6 @@ export default class FlowsModule {
 			this.loadedOffset = 0;
 			this.hasMoreRows = true;
 			this.isLoadingMore = false;
-			try {
-				this.totalRowCount = await this.queryTotalCount();
-			} catch {
-				this.totalRowCount = 0;
-			}
 		}
 		const sql = `SELECT id, protocol, source, destination, transfer, status FROM connection_flows ORDER BY id DESC LIMIT ${limit} OFFSET ${this.loadedOffset};`;
 		const out = await this.querySql(sql);
@@ -265,16 +259,6 @@ export default class FlowsModule {
 		} finally {
 			this.isLoadingMore = false;
 		}
-	}
-
-	async queryTotalCount() {
-		const out = await this.querySql('SELECT COUNT(*) FROM connection_flows;');
-		const first = String(out || '')
-			.split('\n')
-			.map(v => v.trim())
-			.find(Boolean);
-		const n = Number(first);
-		return Number.isFinite(n) && n >= 0 ? n : 0;
 	}
 
 	getWindowRows() {
@@ -337,16 +321,9 @@ export default class FlowsModule {
 		const infoEl = document.getElementById('flows-page-info');
 		const prevBtn = document.getElementById('flows-prev-btn');
 		const nextBtn = document.getElementById('flows-next-btn');
-		const totalLoaded = Number(this.rows?.length || 0);
-		const dbTotal = Math.max(totalLoaded, Number(this.totalRowCount) || 0);
 		if (infoEl) {
-			if (total <= 0) {
-				infoEl.textContent = '0-0 of 0';
-			} else if (this.searchQuery) {
-				infoEl.textContent = `${start}-${end} (${total} matching rows)`;
-			} else {
-				infoEl.textContent = `${start}-${end} (${dbTotal} total rows)`;
-			}
+			if (total <= 0) infoEl.textContent = '0-0 of 0';
+			else infoEl.textContent = `${start}-${end} of ${total}`;
 		}
 		if (prevBtn) prevBtn.disabled = this.flowsPage <= 0 || total <= 0;
 		if (nextBtn) nextBtn.disabled = (this.flowsPage >= maxPage && !this.hasMoreRows) || total <= 0 || this.isLoadingMore;
