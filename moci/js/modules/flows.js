@@ -337,8 +337,20 @@ export default class FlowsModule {
 		const infoEl = document.getElementById('flows-page-info');
 		const prevBtn = document.getElementById('flows-prev-btn');
 		const nextBtn = document.getElementById('flows-next-btn');
-		const effectiveTotal = this.searchQuery ? total : Math.max(total, Number(this.totalRowCount) || 0);
-		if (infoEl) infoEl.textContent = total > 0 ? `${start}-${end} of ${effectiveTotal}` : '0-0 of 0';
+		const totalLoaded = Number(this.rows?.length || 0);
+		const dbTotal = Math.max(totalLoaded, Number(this.totalRowCount) || 0);
+		const effectiveTotal = this.searchQuery ? total : dbTotal;
+		if (infoEl) {
+			if (total <= 0) {
+				infoEl.textContent = '0-0 of 0';
+			} else if (this.searchQuery) {
+				infoEl.textContent = `${start}-${end} of ${effectiveTotal} (filtered)`;
+			} else if (dbTotal > totalLoaded) {
+				infoEl.textContent = `${start}-${end} of ${effectiveTotal} (${totalLoaded} loaded)`;
+			} else {
+				infoEl.textContent = `${start}-${end} of ${effectiveTotal}`;
+			}
+		}
 		if (prevBtn) prevBtn.disabled = this.flowsPage <= 0 || total <= 0;
 		if (nextBtn) nextBtn.disabled = (this.flowsPage >= maxPage && !this.hasMoreRows) || total <= 0 || this.isLoadingMore;
 	}
