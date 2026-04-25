@@ -11,6 +11,12 @@ export default class FlowsModule {
 		this.searchQuery = '';
 		this.flowsPage = 0;
 		this.flowsPageSize = 50;
+		this.sqlChunkSize = 200;
+		this.sqlChunkCalls = 15;
+		this.loadedOffset = 0;
+		this.hasMoreRows = true;
+		this.isLoadingMore = false;
+		this.totalRowCount = 0;
 
 		this.core.registerRoute('/flows', async () => {
 			const pageElement = document.getElementById('flows-page');
@@ -43,8 +49,16 @@ export default class FlowsModule {
 			this.flowsPage = Math.max(0, this.flowsPage - 1);
 			this.renderRows();
 		});
-		document.getElementById('flows-next-btn')?.addEventListener('click', () => {
-			this.flowsPage += 1;
+		document.getElementById('flows-next-btn')?.addEventListener('click', async () => {
+			const totalLoaded = this.getFilteredRows().length;
+			const maxLoadedPage = totalLoaded > 0 ? Math.max(0, Math.ceil(totalLoaded / this.flowsPageSize) - 1) : 0;
+
+			if (this.flowsPage >= maxLoadedPage && this.hasMoreRows) {
+				const loaded = await this.loadMoreRows();
+				if (loaded) this.flowsPage += 1;
+			} else {
+				this.flowsPage += 1;
+			}
 			this.renderRows();
 		});
 
@@ -71,7 +85,8 @@ export default class FlowsModule {
 	startPolling() {
 		if (this.pollInterval) return;
 		this.pollInterval = setInterval(() => {
-			if (this.core.currentRoute && this.core.currentRoute.startsWith('/flows')) {
+			// Preserve user paging position while browsing history.
+			if (this.core.currentRoute && this.core.currentRoute.startsWith('/flows') && this.flowsPage === 0) {
 				this.refresh(false);
 			}
 		}, 10000);
@@ -123,7 +138,7 @@ export default class FlowsModule {
 				const db = String(values.db_path || '').trim();
 				if (db) this.dbPath = db;
 				const limit = Number(values.retention_rows || values.max_rows || 0);
-				if (Number.isFinite(limit) && limit > 0) this.maxRows = Math.min(500, Math.max(50, limit));
+				if (Number.isFinite(limit) && limit > 0) this.maxRows = Math.max(50, limit);
 			}
 		} catch {}
 
@@ -136,7 +151,7 @@ export default class FlowsModule {
 		this.isRefreshing = true;
 		try {
 			await this.updateStatus();
-			await this.loadRows();
+			await this.loadRows(true);
 			this.renderRows();
 		} catch (err) {
 			console.error('Failed to refresh flows:', err);
@@ -192,27 +207,92 @@ export default class FlowsModule {
 		}
 	}
 
-	async loadRows() {
-		const limit = Math.min(500, Math.max(50, Number(this.maxRows) || 200));
-		const sql = `SELECT protocol, source, destination, transfer, status FROM connection_flows ORDER BY id DESC LIMIT ${limit};`;
+	async loadRows(reset = false) {
+		const limit = this.getWindowRows();
+		if (reset) {
+			this.rows = [];
+			this.visibleRows = [];
+			this.loadedOffset = 0;
+			this.hasMoreRows = true;
+			this.isLoadingMore = false;
+			try {
+				this.totalRowCount = await this.queryTotalCount();
+			} catch {
+				this.totalRowCount = 0;
+			}
+		}
+		const sql = `SELECT id, protocol, source, destination, transfer, status FROM connection_flows ORDER BY id DESC LIMIT ${limit} OFFSET ${this.loadedOffset};`;
 		const out = await this.querySql(sql);
 		const lines = String(out || '')
 			.split('\n')
 			.map(line => line.trim())
 			.filter(Boolean);
-		this.rows = lines
+		const newRows = lines
 			.map(line => {
 				const parts = line.split('|');
-				if (parts.length < 5) return null;
+				if (parts.length < 6) return null;
 				return {
-					protocol: parts[0] || 'UNKNOWN',
-					source: parts[1] || 'N/A',
-					destination: parts[2] || 'N/A',
-					transfer: parts[3] || '0 B (0 Pkts.)',
-					status: parts[4] || 'ACTIVE'
+					id: Number(parts[0]) || 0,
+					protocol: parts[1] || 'UNKNOWN',
+					source: parts[2] || 'N/A',
+					destination: parts[3] || 'N/A',
+					transfer: parts[4] || '0 B (0 Pkts.)',
+					status: parts[5] || 'ACTIVE'
 				};
 			})
 			.filter(Boolean);
+		this.loadedOffset += newRows.length;
+		this.hasMoreRows = newRows.length >= limit;
+
+		if (reset || this.rows.length === 0) {
+			this.rows = newRows;
+			return;
+		}
+
+		const seen = new Set(this.rows.map(r => r.id));
+		for (const row of newRows) {
+			if (!seen.has(row.id)) this.rows.push(row);
+		}
+	}
+
+	async loadMoreRows() {
+		if (this.isLoadingMore || !this.hasMoreRows) return false;
+		this.isLoadingMore = true;
+		const before = this.rows.length;
+		try {
+			await this.loadRows(false);
+			return this.rows.length > before;
+		} finally {
+			this.isLoadingMore = false;
+		}
+	}
+
+	async queryTotalCount() {
+		const out = await this.querySql('SELECT COUNT(*) FROM connection_flows;');
+		const first = String(out || '')
+			.split('\n')
+			.map(v => v.trim())
+			.find(Boolean);
+		const n = Number(first);
+		return Number.isFinite(n) && n >= 0 ? n : 0;
+	}
+
+	getWindowRows() {
+		const maxWindowRows = Math.max(20, this.sqlChunkSize * this.sqlChunkCalls);
+		if (Number.isFinite(this.maxRows) && this.maxRows > 0) {
+			return Math.min(maxWindowRows, Math.max(50, Number(this.maxRows)));
+		}
+		return maxWindowRows;
+	}
+
+	getFilteredRows() {
+		return this.searchQuery
+			? this.rows.filter(row =>
+					[row.protocol, row.source, row.destination, row.transfer, row.status]
+						.map(v => String(v || '').toLowerCase())
+						.some(v => v.includes(this.searchQuery))
+			  )
+			: this.rows;
 	}
 
 	renderRows() {
@@ -223,13 +303,7 @@ export default class FlowsModule {
 			this.updatePagination(0, 0, 0, 0);
 			return;
 		}
-		const filteredRows = this.searchQuery
-			? this.rows.filter(row =>
-					[row.protocol, row.source, row.destination, row.transfer, row.status]
-						.map(v => String(v || '').toLowerCase())
-						.some(v => v.includes(this.searchQuery))
-			  )
-			: this.rows;
+		const filteredRows = this.getFilteredRows();
 		if (!filteredRows.length) {
 			this.core.renderEmptyTable(tbody, 5, 'No matching flows');
 			this.visibleRows = [];
@@ -263,9 +337,10 @@ export default class FlowsModule {
 		const infoEl = document.getElementById('flows-page-info');
 		const prevBtn = document.getElementById('flows-prev-btn');
 		const nextBtn = document.getElementById('flows-next-btn');
-		if (infoEl) infoEl.textContent = total > 0 ? `${start}-${end} of ${total}` : '0-0 of 0';
+		const effectiveTotal = this.searchQuery ? total : Math.max(total, Number(this.totalRowCount) || 0);
+		if (infoEl) infoEl.textContent = total > 0 ? `${start}-${end} of ${effectiveTotal}` : '0-0 of 0';
 		if (prevBtn) prevBtn.disabled = this.flowsPage <= 0 || total <= 0;
-		if (nextBtn) nextBtn.disabled = this.flowsPage >= maxPage || total <= 0;
+		if (nextBtn) nextBtn.disabled = (this.flowsPage >= maxPage && !this.hasMoreRows) || total <= 0 || this.isLoadingMore;
 	}
 
 	handleRowClick(event) {
