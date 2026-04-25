@@ -4,6 +4,8 @@
 # Samples conntrack every few seconds and stores unique snapshots in SQLite.
 
 set -e
+PATH="/usr/sbin:/usr/bin:/sbin:/bin"
+export PATH
 
 DEFAULT_DB="/tmp/connection-flows.sqlite"
 DEFAULT_POLL_SECONDS="5"
