@@ -9,7 +9,7 @@ export PATH
 DEFAULT_DB="/tmp/connection-flows.sqlite"
 DEFAULT_POLL_SECONDS="5"
 DEFAULT_RETENTION_ROWS="50000"
-DEFAULT_EXCLUDE_ENDPOINTS="127.0.0.1:7150"
+DEFAULT_EXCLUDE_ENDPOINTS="127.0.0.1"
 LOG_FILE="/tmp/moci-connection-flows-collector.log"
 
 FLOW_DB="$DEFAULT_DB"
@@ -131,11 +131,13 @@ sql_escape() {
 }
 
 should_skip_endpoint() {
-	local source destination token old_ifs
+	local source destination source_host destination_host token old_ifs
 	source="$(printf "%s" "${1:-}" | tr '[:upper:]' '[:lower:]')"
 	destination="$(printf "%s" "${2:-}" | tr '[:upper:]' '[:lower:]')"
 	[ -n "$source" ] || return 1
 	[ -n "$destination" ] || return 1
+	source_host="$(printf "%s" "$source" | sed -E 's/^(([0-9]{1,3}\.){3}[0-9]{1,3}):[0-9]+$/\1/')"
+	destination_host="$(printf "%s" "$destination" | sed -E 's/^(([0-9]{1,3}\.){3}[0-9]{1,3}):[0-9]+$/\1/')"
 
 	old_ifs="$IFS"
 	IFS=','
@@ -143,7 +145,7 @@ should_skip_endpoint() {
 		token="$(sanitize_text "$token")"
 		token="$(printf "%s" "$token" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')"
 		[ -n "$token" ] || continue
-		if [ "$source" = "$token" ] || [ "$destination" = "$token" ]; then
+		if [ "$source" = "$token" ] || [ "$destination" = "$token" ] || [ "$source_host" = "$token" ] || [ "$destination_host" = "$token" ]; then
 			IFS="$old_ifs"
 			return 0
 		fi
