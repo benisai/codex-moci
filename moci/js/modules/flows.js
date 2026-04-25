@@ -8,6 +8,7 @@ export default class FlowsModule {
 		this.maxRows = 200;
 		this.rows = [];
 		this.visibleRows = [];
+		this.searchQuery = '';
 
 		this.core.registerRoute('/flows', async () => {
 			const pageElement = document.getElementById('flows-page');
@@ -29,6 +30,12 @@ export default class FlowsModule {
 		document.getElementById('flows-restart-btn')?.addEventListener('click', () => this.runServiceAction('restart'));
 		document.getElementById('flows-init-db-btn')?.addEventListener('click', () => this.initCollectorDb());
 		document.getElementById('flows-collector-toggle-btn')?.addEventListener('click', () => this.toggleCollectorPanel());
+		document.getElementById('flows-search-input')?.addEventListener('input', event => {
+			this.searchQuery = String(event?.target?.value || '')
+				.trim()
+				.toLowerCase();
+			this.renderRows();
+		});
 
 		document.querySelector('#flows-table tbody')?.addEventListener('click', event => this.handleRowClick(event));
 		document.getElementById('flows-action-type')?.addEventListener('change', () => this.syncActionTypeUi());
@@ -200,13 +207,24 @@ export default class FlowsModule {
 	renderRows() {
 		const tbody = document.querySelector('#flows-table tbody');
 		if (!tbody) return;
-		this.visibleRows = this.rows;
 		if (!this.rows.length) {
 			this.core.renderEmptyTable(tbody, 5, 'No connection flow data yet');
 			return;
 		}
+		const filteredRows = this.searchQuery
+			? this.rows.filter(row =>
+					[row.protocol, row.source, row.destination, row.transfer, row.status]
+						.map(v => String(v || '').toLowerCase())
+						.some(v => v.includes(this.searchQuery))
+			  )
+			: this.rows;
+		this.visibleRows = filteredRows;
+		if (!filteredRows.length) {
+			this.core.renderEmptyTable(tbody, 5, 'No matching flows');
+			return;
+		}
 
-		tbody.innerHTML = this.rows
+		tbody.innerHTML = filteredRows
 			.map(
 				(row, idx) => `<tr class="netify-flow-row" data-flow-index="${idx}" style="cursor: pointer" title="Click for actions">
 				<td>${this.core.escapeHtml(row.protocol)}</td>
