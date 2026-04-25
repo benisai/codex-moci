@@ -9,6 +9,8 @@ export default class FlowsModule {
 		this.rows = [];
 		this.visibleRows = [];
 		this.searchQuery = '';
+		this.flowsPage = 0;
+		this.flowsPageSize = 50;
 
 		this.core.registerRoute('/flows', async () => {
 			const pageElement = document.getElementById('flows-page');
@@ -34,6 +36,15 @@ export default class FlowsModule {
 			this.searchQuery = String(event?.target?.value || '')
 				.trim()
 				.toLowerCase();
+			this.flowsPage = 0;
+			this.renderRows();
+		});
+		document.getElementById('flows-prev-btn')?.addEventListener('click', () => {
+			this.flowsPage = Math.max(0, this.flowsPage - 1);
+			this.renderRows();
+		});
+		document.getElementById('flows-next-btn')?.addEventListener('click', () => {
+			this.flowsPage += 1;
 			this.renderRows();
 		});
 
@@ -209,6 +220,7 @@ export default class FlowsModule {
 		if (!tbody) return;
 		if (!this.rows.length) {
 			this.core.renderEmptyTable(tbody, 5, 'No connection flow data yet');
+			this.updatePagination(0, 0, 0, 0);
 			return;
 		}
 		const filteredRows = this.searchQuery
@@ -218,13 +230,22 @@ export default class FlowsModule {
 						.some(v => v.includes(this.searchQuery))
 			  )
 			: this.rows;
-		this.visibleRows = filteredRows;
 		if (!filteredRows.length) {
 			this.core.renderEmptyTable(tbody, 5, 'No matching flows');
+			this.visibleRows = [];
+			this.flowsPage = 0;
+			this.updatePagination(0, 0, 0, 0);
 			return;
 		}
+		const total = filteredRows.length;
+		const maxPage = Math.max(0, Math.ceil(total / this.flowsPageSize) - 1);
+		this.flowsPage = Math.min(this.flowsPage, maxPage);
+		const startIdx = this.flowsPage * this.flowsPageSize;
+		const endIdx = Math.min(total, startIdx + this.flowsPageSize);
+		const pageRows = filteredRows.slice(startIdx, endIdx);
+		this.visibleRows = pageRows;
 
-		tbody.innerHTML = filteredRows
+		tbody.innerHTML = pageRows
 			.map(
 				(row, idx) => `<tr class="netify-flow-row" data-flow-index="${idx}" style="cursor: pointer" title="Click for actions">
 				<td>${this.core.escapeHtml(row.protocol)}</td>
@@ -235,6 +256,16 @@ export default class FlowsModule {
 			</tr>`
 			)
 			.join('');
+		this.updatePagination(total, startIdx + 1, endIdx, maxPage);
+	}
+
+	updatePagination(total, start, end, maxPage) {
+		const infoEl = document.getElementById('flows-page-info');
+		const prevBtn = document.getElementById('flows-prev-btn');
+		const nextBtn = document.getElementById('flows-next-btn');
+		if (infoEl) infoEl.textContent = total > 0 ? `${start}-${end} of ${total}` : '0-0 of 0';
+		if (prevBtn) prevBtn.disabled = this.flowsPage <= 0 || total <= 0;
+		if (nextBtn) nextBtn.disabled = this.flowsPage >= maxPage || total <= 0;
 	}
 
 	handleRowClick(event) {
