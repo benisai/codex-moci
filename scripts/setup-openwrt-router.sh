@@ -21,6 +21,38 @@ have_cmd() {
 SCRIPT_PATH="$0"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" 2>/dev/null && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)"
+INSTALL_NETIFY=0
+
+usage() {
+	cat <<'EOF'
+Usage: sh scripts/setup-openwrt-router.sh [--with-netify] [--without-netify] [--help]
+
+Options:
+  --with-netify      Install and enable netifyd + netify-collector
+  --without-netify   Skip netifyd + netify-collector install (default)
+  --help             Show this help
+EOF
+}
+
+for arg in "$@"; do
+	case "$arg" in
+	--with-netify)
+		INSTALL_NETIFY=1
+		;;
+	--without-netify)
+		INSTALL_NETIFY=0
+		;;
+	--help|-h)
+		usage
+		exit 0
+		;;
+	*)
+		echo "Unknown option: $arg"
+		usage
+		exit 1
+		;;
+	esac
+done
 
 require_file() {
 	if [ ! -f "$1" ]; then
@@ -98,13 +130,11 @@ set_uci() {
 	uci set "$key=$value"
 }
 
-require_file "$REPO_DIR/files/moci-netify-collector.sh"
 require_file "$REPO_DIR/files/moci-connection-flow-collector.sh"
 require_file "$REPO_DIR/files/moci-ping-monitor.sh"
 require_file "$REPO_DIR/files/moci-speedtest-monitor.sh"
 require_file "$REPO_DIR/files/moci-state-sync.sh"
 require_file "$REPO_DIR/files/moci-device-quarantine.sh"
-require_file "$REPO_DIR/files/netify-collector.init"
 require_file "$REPO_DIR/files/connection-flows-collector.init"
 require_file "$REPO_DIR/files/ping-monitor.init"
 require_file "$REPO_DIR/files/moci-state-sync.init"
@@ -112,6 +142,10 @@ require_file "$REPO_DIR/files/device-quarantine.init"
 require_file "$REPO_DIR/files/moci.config"
 require_file "$REPO_DIR/rpcd-acl.json"
 require_file "$REPO_DIR/moci/index.html"
+if [ "$INSTALL_NETIFY" = "1" ]; then
+	require_file "$REPO_DIR/files/moci-netify-collector.sh"
+	require_file "$REPO_DIR/files/netify-collector.init"
+fi
 
 log "Updating package feeds"
 PKG_MGR=""
@@ -133,7 +167,6 @@ for pkg in \
 	sed \
 	coreutils-sort \
 	uhttpd-mod-ubus \
-	netifyd \
 	vnstat2 \
 	vnstati2 \
 	luci-app-vnstat2 \
@@ -153,8 +186,14 @@ do
 	install_pkg_if_available "$pkg"
 done
 
+if [ "$INSTALL_NETIFY" = "1" ]; then
+	install_pkg_if_available "netifyd"
+fi
+
 # Dependency package names can vary between opkg and apk feeds.
-install_first_available_pkg "netcat" netcat netcat-openbsd
+if [ "$INSTALL_NETIFY" = "1" ]; then
+	install_first_available_pkg "netcat" netcat netcat-openbsd
+fi
 install_first_available_pkg "sqlite-cli" sqlite3-cli sqlite3
 install_first_available_pkg "speedtest" speedtestcpp python3-speedtest-cli
 
@@ -166,17 +205,19 @@ log "Installing ACL"
 install_file "$REPO_DIR/rpcd-acl.json" /usr/share/rpcd/acl.d/moci.json 0644
 
 log "Installing backend workers and init scripts"
-install_file "$REPO_DIR/files/moci-netify-collector.sh" /usr/bin/moci-netify-collector 0755
 install_file "$REPO_DIR/files/moci-connection-flow-collector.sh" /usr/bin/moci-connection-flow-collector 0755
 install_file "$REPO_DIR/files/moci-ping-monitor.sh" /usr/bin/moci-ping-monitor 0755
 install_file "$REPO_DIR/files/moci-speedtest-monitor.sh" /usr/bin/moci-speedtest-monitor 0755
 install_file "$REPO_DIR/files/moci-state-sync.sh" /usr/bin/moci-state-sync 0755
 install_file "$REPO_DIR/files/moci-device-quarantine.sh" /usr/bin/moci-device-quarantine 0755
-install_file "$REPO_DIR/files/netify-collector.init" /etc/init.d/netify-collector 0755
 install_file "$REPO_DIR/files/connection-flows-collector.init" /etc/init.d/connection-flows-collector 0755
 install_file "$REPO_DIR/files/ping-monitor.init" /etc/init.d/ping-monitor 0755
 install_file "$REPO_DIR/files/moci-state-sync.init" /etc/init.d/moci-state-sync 0755
 install_file "$REPO_DIR/files/device-quarantine.init" /etc/init.d/moci-device-quarantine 0755
+if [ "$INSTALL_NETIFY" = "1" ]; then
+	install_file "$REPO_DIR/files/moci-netify-collector.sh" /usr/bin/moci-netify-collector 0755
+	install_file "$REPO_DIR/files/netify-collector.init" /etc/init.d/netify-collector 0755
+fi
 
 if [ -f /etc/config/moci ]; then
 	cp /etc/config/moci "/etc/config/moci.bak.$(date +%Y%m%d%H%M%S)"
@@ -190,7 +231,8 @@ uci commit uhttpd
 
 log "Applying MoCI runtime defaults"
 set_uci moci.features.qosify "1"
-set_uci moci.collector.enabled "1"
+set_uci moci.features.netify "$INSTALL_NETIFY"
+set_uci moci.collector.enabled "$INSTALL_NETIFY"
 set_uci moci.collector.host "127.0.0.1"
 set_uci moci.collector.port "7150"
 set_uci moci.collector.db_path "/tmp/moci-netify.sqlite"
@@ -227,15 +269,20 @@ set_uci moci.state_backup.backup_time "720"
 set_uci moci.state_backup.state_dir "/overlay/moci-state"
 uci commit moci
 
-NETIFYD_CONF="/etc/netifyd.conf"
-if [ -f "$NETIFYD_CONF" ]; then
-	if grep -q "^listen_address\[0\]" "$NETIFYD_CONF"; then
-		sed -i "s|^listen_address\[0\].*|listen_address[0] = 127.0.0.1|" "$NETIFYD_CONF"
-	else
-		grep -q "^\[socket\]" "$NETIFYD_CONF" || echo "[socket]" >>"$NETIFYD_CONF"
-		sed -i "/^\[socket\]/a listen_address[0] = 127.0.0.1" "$NETIFYD_CONF"
+if [ "$INSTALL_NETIFY" = "1" ]; then
+	NETIFYD_CONF="/etc/netifyd.conf"
+	if [ -f "$NETIFYD_CONF" ]; then
+		if grep -q "^listen_address\[0\]" "$NETIFYD_CONF"; then
+			sed -i "s|^listen_address\[0\].*|listen_address[0] = 127.0.0.1|" "$NETIFYD_CONF"
+		else
+			grep -q "^\[socket\]" "$NETIFYD_CONF" || echo "[socket]" >>"$NETIFYD_CONF"
+			sed -i "/^\[socket\]/a listen_address[0] = 127.0.0.1" "$NETIFYD_CONF"
+		fi
+		log "Updated netifyd listen_address[0] to 127.0.0.1"
 	fi
-	log "Updated netifyd listen_address[0] to 127.0.0.1"
+elif [ -x /etc/init.d/netify-collector ]; then
+	/etc/init.d/netify-collector stop || true
+	/etc/init.d/netify-collector disable || true
 fi
 
 NLBW_CONF="/etc/config/nlbwmon"
@@ -246,17 +293,19 @@ if [ -f "$NLBW_CONF" ]; then
 fi
 
 log "Initializing data files"
-/usr/bin/moci-netify-collector --init-db || true
+if [ "$INSTALL_NETIFY" = "1" ] && [ -x /usr/bin/moci-netify-collector ]; then
+	/usr/bin/moci-netify-collector --init-db || true
+fi
 /usr/bin/moci-connection-flow-collector --init-db || true
 /usr/bin/moci-ping-monitor --once || true
 /usr/bin/moci-speedtest-monitor --init-file || true
 /usr/bin/moci-state-sync restore || true
 /usr/bin/moci-state-sync sync-cron || true
 
-if ! have_cmd nc; then
+if [ "$INSTALL_NETIFY" = "1" ] && ! have_cmd nc; then
 	log "WARNING: nc command not found; netify collector will not ingest flows."
 fi
-if ! have_cmd sqlite3 && ! have_cmd sqlite3-cli; then
+if [ "$INSTALL_NETIFY" = "1" ] && ! have_cmd sqlite3 && ! have_cmd sqlite3-cli; then
 	log "WARNING: sqlite3/sqlite3-cli not found; netify collector and UI sqlite queries will fail."
 fi
 
@@ -287,7 +336,11 @@ cp "$TMP_CRON" "$CRON_PATH"
 rm -f "$TMP_CRON"
 /bin/sh -c '/etc/init.d/cron reload 2>/dev/null || /etc/init.d/cron restart 2>/dev/null || /etc/init.d/crond reload 2>/dev/null || /etc/init.d/crond restart 2>/dev/null || killall -HUP crond 2>/dev/null || true'
 
-for svc in vnstat nlbwmon netifyd netify-collector connection-flows-collector ping-monitor moci-state-sync moci-device-quarantine; do
+SERVICES="vnstat nlbwmon connection-flows-collector ping-monitor moci-state-sync moci-device-quarantine"
+if [ "$INSTALL_NETIFY" = "1" ]; then
+	SERVICES="vnstat nlbwmon netifyd netify-collector connection-flows-collector ping-monitor moci-state-sync moci-device-quarantine"
+fi
+for svc in $SERVICES; do
 	if [ -x "/etc/init.d/$svc" ]; then
 		/etc/init.d/"$svc" enable || true
 		/etc/init.d/"$svc" restart || true

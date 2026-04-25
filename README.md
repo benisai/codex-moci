@@ -98,7 +98,11 @@ opkg update or apk update
 opkg install / apk add git git-http ca-bundle nano
 git clone https://github.com/benisai/codex-moci.git
 cd codex-moci
+# Default (no Netify install)
 sh scripts/setup-openwrt-router.sh
+
+# Optional: include Netify packages + collector
+sh scripts/setup-openwrt-router.sh --with-netify
 
 cp rpcd-acl.json /usr/share/rpcd/acl.d/moci.json
 /etc/init.d/rpcd restart
@@ -117,7 +121,8 @@ Access at `http://192.168.1.1/moci/` and login with your root credentials.
 
 
 What does the shell script do?:
-- installs required packages (`netifyd`, `netcat`, `vnstat`, `nlbwmon`, `speedtestcpp`, etc.)
+- installs required packages (`vnstat`, `nlbwmon`, `speedtestcpp`, etc.)
+- optionally installs Netify (`netifyd`, `netcat`, Netify collector) when run with `--with-netify`
 - deploys web UI to `/www/moci`
 - installs/updates `rpcd` ACL (`/usr/share/rpcd/acl.d/moci.json`)
 - installs backend workers + init scripts:
