@@ -99,11 +99,13 @@ set_uci() {
 }
 
 require_file "$REPO_DIR/files/moci-netify-collector.sh"
+require_file "$REPO_DIR/files/moci-connection-flow-collector.sh"
 require_file "$REPO_DIR/files/moci-ping-monitor.sh"
 require_file "$REPO_DIR/files/moci-speedtest-monitor.sh"
 require_file "$REPO_DIR/files/moci-state-sync.sh"
 require_file "$REPO_DIR/files/moci-device-quarantine.sh"
 require_file "$REPO_DIR/files/netify-collector.init"
+require_file "$REPO_DIR/files/connection-flows-collector.init"
 require_file "$REPO_DIR/files/ping-monitor.init"
 require_file "$REPO_DIR/files/moci-state-sync.init"
 require_file "$REPO_DIR/files/device-quarantine.init"
@@ -165,11 +167,13 @@ install_file "$REPO_DIR/rpcd-acl.json" /usr/share/rpcd/acl.d/moci.json 0644
 
 log "Installing backend workers and init scripts"
 install_file "$REPO_DIR/files/moci-netify-collector.sh" /usr/bin/moci-netify-collector 0755
+install_file "$REPO_DIR/files/moci-connection-flow-collector.sh" /usr/bin/moci-connection-flow-collector 0755
 install_file "$REPO_DIR/files/moci-ping-monitor.sh" /usr/bin/moci-ping-monitor 0755
 install_file "$REPO_DIR/files/moci-speedtest-monitor.sh" /usr/bin/moci-speedtest-monitor 0755
 install_file "$REPO_DIR/files/moci-state-sync.sh" /usr/bin/moci-state-sync 0755
 install_file "$REPO_DIR/files/moci-device-quarantine.sh" /usr/bin/moci-device-quarantine 0755
 install_file "$REPO_DIR/files/netify-collector.init" /etc/init.d/netify-collector 0755
+install_file "$REPO_DIR/files/connection-flows-collector.init" /etc/init.d/connection-flows-collector 0755
 install_file "$REPO_DIR/files/ping-monitor.init" /etc/init.d/ping-monitor 0755
 install_file "$REPO_DIR/files/moci-state-sync.init" /etc/init.d/moci-state-sync 0755
 install_file "$REPO_DIR/files/device-quarantine.init" /etc/init.d/moci-device-quarantine 0755
@@ -194,6 +198,10 @@ set_uci moci.collector.retention_rows "500000"
 set_uci moci.collector.stream_timeout "45"
 set_uci moci.collector.exclude_protocols "MDNS,DNS,QUIC,DHCPv6,ICMP"
 set_uci moci.collector.ignore_wan_source "1"
+set_uci moci.connection_flows.enabled "1"
+set_uci moci.connection_flows.db_path "/tmp/connection-flows.sqlite"
+set_uci moci.connection_flows.poll_seconds "5"
+set_uci moci.connection_flows.retention_rows "50000"
 set_uci moci.ping_monitor.enabled "1"
 set_uci moci.ping_monitor.target "1.1.1.1"
 set_uci moci.ping_monitor.interval "60"
@@ -238,6 +246,7 @@ fi
 
 log "Initializing data files"
 /usr/bin/moci-netify-collector --init-db || true
+/usr/bin/moci-connection-flow-collector --init-db || true
 /usr/bin/moci-ping-monitor --once || true
 /usr/bin/moci-speedtest-monitor --init-file || true
 /usr/bin/moci-state-sync restore || true
@@ -277,7 +286,7 @@ cp "$TMP_CRON" "$CRON_PATH"
 rm -f "$TMP_CRON"
 /bin/sh -c '/etc/init.d/cron reload 2>/dev/null || /etc/init.d/cron restart 2>/dev/null || /etc/init.d/crond reload 2>/dev/null || /etc/init.d/crond restart 2>/dev/null || killall -HUP crond 2>/dev/null || true'
 
-for svc in vnstat nlbwmon netifyd netify-collector ping-monitor moci-state-sync moci-device-quarantine; do
+for svc in vnstat nlbwmon netifyd netify-collector connection-flows-collector ping-monitor moci-state-sync moci-device-quarantine; do
 	if [ -x "/etc/init.d/$svc" ]; then
 		/etc/init.d/"$svc" enable || true
 		/etc/init.d/"$svc" restart || true

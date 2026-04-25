@@ -65,14 +65,15 @@
 						</svg>
 						<span>OPENWRT</span>
 					</div>
-					<nav class="nav">
-						<a href="#/dashboard" class="active">DASHBOARD</a>
-						<a href="#/devices" data-feature="devices">DEVICES</a>
-						<a href="#/netify" data-feature="netify">NETIFY</a>
-						<a href="#/monitoring" data-feature="monitoring">MONITORING</a>
-						<a href="#/network">NETWORK</a>
-						<a href="#/system">SYSTEM</a>
-					</nav>
+						<nav class="nav">
+							<a href="#/dashboard" class="active">DASHBOARD</a>
+							<a href="#/devices" data-feature="devices">DEVICES</a>
+							<a href="#/netify" data-feature="netify">NETIFY</a>
+							<a href="#/flows" data-feature="flows">FLOWS</a>
+							<a href="#/monitoring" data-feature="monitoring">MONITORING</a>
+							<a href="#/network">NETWORK</a>
+							<a href="#/system">SYSTEM</a>
+						</nav>
 					<button id="logout-btn" class="logout-btn">LOGOUT</button>
 				</header>
 
@@ -2742,6 +2743,111 @@ Endpoint = host:51820"
 												<button class="action-btn-sm" id="monitoring-speedtest-debug-clear-btn" type="button">CLEAR LOG</button>
 											</div>
 										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div id="flows-page" class="page hidden" data-feature="flows">
+							<h2>FLOWS</h2>
+							<div class="stat-card" style="margin-top: 24px">
+								<div class="section-title">RECENT FLOWS</div>
+								<table class="data-table" id="flows-table">
+									<thead>
+										<tr>
+											<th>PROTOCOL</th>
+											<th>SOURCE</th>
+											<th>DESTINATION</th>
+											<th>TRANSFER</th>
+											<th>STATUS</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td colspan="5" style="text-align: center; color: var(--steel-muted)">Loading...</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+
+							<div class="modal hidden" id="flows-action-modal">
+								<div class="modal-backdrop"></div>
+								<div class="modal-content">
+									<div class="modal-header">
+										<h3 class="modal-title">FLOW ACTION</h3>
+										<button class="modal-close" id="close-flows-action-modal">&times;</button>
+									</div>
+									<div class="modal-body">
+										<input type="hidden" id="flows-action-row-index" />
+
+										<div class="form-group">
+											<label class="form-label">ACTION TYPE</label>
+											<select id="flows-action-type" class="form-input">
+												<option value="ip">BLOCK DESTINATION IP (FIREWALL)</option>
+												<option value="domain">BLOCK DOMAIN (CUSTOM DNS)</option>
+											</select>
+										</div>
+
+										<div class="form-group hidden" id="flows-domain-group">
+											<label class="form-label">DOMAIN</label>
+											<input type="text" id="flows-action-domain" class="form-input" />
+										</div>
+
+										<div id="flows-ip-block-group">
+											<div class="form-group">
+												<label class="form-label">SCOPE</label>
+												<select id="flows-action-scope" class="form-input">
+													<option value="source_dest">THIS SOURCE TO DESTINATION</option>
+													<option value="all_sources">ALL SOURCES TO DESTINATION</option>
+												</select>
+											</div>
+											<div class="form-group">
+												<label class="form-label">SOURCE IP</label>
+												<input type="text" id="flows-action-source-ip" class="form-input" readonly />
+											</div>
+											<div class="form-group">
+												<label class="form-label">DESTINATION IP</label>
+												<input type="text" id="flows-action-dest-ip" class="form-input" readonly />
+											</div>
+										</div>
+									</div>
+									<div class="modal-footer">
+										<button class="action-btn" id="cancel-flows-action-btn">CANCEL</button>
+										<button class="action-btn" id="save-flows-action-btn">SAVE ACTION</button>
+									</div>
+								</div>
+							</div>
+
+							<div class="stat-card netify-collapsible-card" style="margin-top: 24px">
+								<div class="netify-collapsible-header">
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">COLLECTOR STATUS</div>
+									<button class="netify-toggle-btn" id="flows-collector-toggle-btn" type="button" aria-expanded="false">
+										<span id="flows-collector-toggle-icon">▸</span>
+									</button>
+								</div>
+								<div id="flows-collector-body" style="margin-top: 16px; display: none">
+									<div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px">
+										<div>
+											<div class="stat-label">SERVICE</div>
+											<div id="flows-service-status" style="margin-top: 8px">Loading...</div>
+										</div>
+										<div>
+											<div class="stat-label">SQLITE DB</div>
+											<div id="flows-db-status" style="margin-top: 8px">Loading...</div>
+										</div>
+										<div>
+											<div class="stat-label">DB PATH</div>
+											<div id="flows-db-path" style="margin-top: 8px; font-family: monospace; color: var(--steel-light)">
+												/tmp/connection-flows.sqlite
+											</div>
+										</div>
+									</div>
+									<div class="quick-actions">
+										<button class="action-btn" id="flows-start-btn">START COLLECTOR</button>
+										<button class="action-btn" id="flows-stop-btn">STOP COLLECTOR</button>
+										<button class="action-btn" id="flows-restart-btn">RESTART COLLECTOR</button>
+										<button class="action-btn" id="flows-init-db-btn">INIT DB</button>
+										<button class="action-btn" id="flows-refresh-btn">REFRESH</button>
 									</div>
 								</div>
 							</div>

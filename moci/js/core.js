@@ -22,6 +22,7 @@ export class OpenWrtCore {
 			devices: 'devices',
 			network: 'network',
 			monitoring: 'monitoring',
+			flows: 'flows',
 			system: 'system',
 			netify: 'netify'
 		};
@@ -132,6 +133,7 @@ export class OpenWrtCore {
 			network: '1',
 			traffic_history: '1',
 			monitoring: '1',
+			flows: '1',
 			netify: '1',
 			show_lan_ip: '0',
 			colorful_graphs: '0',
@@ -175,6 +177,7 @@ export class OpenWrtCore {
 			devices: './modules/devices.js',
 			network: './modules/network.js',
 			monitoring: './modules/monitoring.js',
+			flows: './modules/flows.js',
 			system: './modules/system.js',
 			netify: './modules/netify.js',
 			vpn: './modules/vpn.js',
@@ -224,6 +227,7 @@ export class OpenWrtCore {
 					'quarantine'
 				],
 			monitoring: ['monitoring'],
+			flows: ['flows'],
 			system: ['system', 'backup', 'packages', 'services', 'ssh_keys', 'storage', 'leds', 'firmware'],
 			netify: ['netify'],
 			vpn: ['wireguard'],
