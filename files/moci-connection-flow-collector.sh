@@ -61,13 +61,11 @@ find_sqlite_bin() {
 }
 
 sql_exec() {
-	local query output rc
+	local query output
 	query="$1"
-	output="$("$SQLITE_BIN" "$FLOW_DB" "PRAGMA busy_timeout=3000; $query" 2>&1)"
-	rc=$?
-	if [ "$rc" -ne 0 ]; then
+	if ! output="$("$SQLITE_BIN" "$FLOW_DB" "PRAGMA busy_timeout=3000; $query" 2>&1)"; then
 		log "sqlite error: $output"
-		return "$rc"
+		return 1
 	fi
 	return 0
 }
