@@ -339,16 +339,13 @@ export default class FlowsModule {
 		const nextBtn = document.getElementById('flows-next-btn');
 		const totalLoaded = Number(this.rows?.length || 0);
 		const dbTotal = Math.max(totalLoaded, Number(this.totalRowCount) || 0);
-		const effectiveTotal = this.searchQuery ? total : dbTotal;
 		if (infoEl) {
 			if (total <= 0) {
 				infoEl.textContent = '0-0 of 0';
 			} else if (this.searchQuery) {
-				infoEl.textContent = `${start}-${end} of ${effectiveTotal} (filtered)`;
-			} else if (dbTotal > totalLoaded) {
-				infoEl.textContent = `${start}-${end} of ${effectiveTotal} (${totalLoaded} loaded)`;
+				infoEl.textContent = `${start}-${end} (${total} matching rows)`;
 			} else {
-				infoEl.textContent = `${start}-${end} of ${effectiveTotal}`;
+				infoEl.textContent = `${start}-${end} (${dbTotal} total rows)`;
 			}
 		}
 		if (prevBtn) prevBtn.disabled = this.flowsPage <= 0 || total <= 0;
