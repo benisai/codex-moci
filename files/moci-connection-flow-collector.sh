@@ -3,7 +3,6 @@
 # MoCI lightweight connection flow collector for OpenWrt.
 # Samples conntrack every few seconds and stores unique snapshots in SQLite.
 
-set -e
 PATH="/usr/sbin:/usr/bin:/sbin:/bin"
 export PATH
 
@@ -69,6 +68,7 @@ sql_exec() {
 		log "sqlite error: $output"
 		return 1
 	fi
+	[ -n "$output" ] && log "sqlite: $output"
 	return 0
 }
 
@@ -103,18 +103,10 @@ ensure_db_file() {
 }
 
 init_db() {
-	sql_exec "PRAGMA journal_mode=WAL;"
-	sql_exec "CREATE TABLE IF NOT EXISTS connection_flows (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		timeinsert INTEGER NOT NULL DEFAULT (strftime('%s','now')),
-		protocol TEXT,
-		source TEXT,
-		destination TEXT,
-		transfer TEXT,
-		status TEXT,
-		sig TEXT UNIQUE
-	);"
-	sql_exec "CREATE INDEX IF NOT EXISTS idx_connection_flows_time ON connection_flows(timeinsert);"
+	sql_exec "PRAGMA journal_mode=WAL;" || return 1
+	sql_exec "CREATE TABLE IF NOT EXISTS connection_flows (id INTEGER PRIMARY KEY AUTOINCREMENT,timeinsert INTEGER NOT NULL DEFAULT (strftime('%s','now')),protocol TEXT,source TEXT,destination TEXT,transfer TEXT,status TEXT,sig TEXT UNIQUE);" || return 1
+	sql_exec "CREATE INDEX IF NOT EXISTS idx_connection_flows_time ON connection_flows(timeinsert);" || return 1
+	return 0
 }
 
 prune_db() {
@@ -206,7 +198,7 @@ insert_rows() {
 run_once() {
 	load_config
 	ensure_db_file
-	conntrack_source | parse_conntrack | insert_rows
+	conntrack_source | parse_conntrack | insert_rows || true
 	prune_db
 }
 
@@ -224,6 +216,7 @@ run_daemon() {
 
 main() {
 	init_logging
+	log "collector boot mode=${1:---daemon}"
 	find_sqlite_bin || {
 		log "sqlite3 not found; install sqlite3-cli"
 		exit 1
@@ -236,7 +229,11 @@ main() {
 	case "${1:-}" in
 		--init-db)
 			load_config
-			ensure_db_file
+			log "init-db db=$FLOW_DB poll=${POLL_SECONDS}s retention=$RETENTION_ROWS"
+			ensure_db_file || {
+				log "init-db failed for db=$FLOW_DB"
+				exit 1
+			}
 			log "initialized sqlite db at $FLOW_DB"
 			;;
 		--once)
