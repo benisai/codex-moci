@@ -38,6 +38,7 @@ export default class FlowsModule {
 		document.getElementById('flows-stop-btn')?.addEventListener('click', () => this.runServiceAction('stop'));
 		document.getElementById('flows-restart-btn')?.addEventListener('click', () => this.runServiceAction('restart'));
 		document.getElementById('flows-init-db-btn')?.addEventListener('click', () => this.initCollectorDb());
+		document.getElementById('flows-save-settings-btn')?.addEventListener('click', () => this.saveCollectorSettings());
 		document.getElementById('flows-collector-toggle-btn')?.addEventListener('click', () => this.toggleCollectorPanel());
 		document.getElementById('flows-search-input')?.addEventListener('input', event => {
 			this.searchQuery = String(event?.target?.value || '')
@@ -140,11 +141,45 @@ export default class FlowsModule {
 				if (db) this.dbPath = db;
 				const limit = Number(values.retention_rows || values.max_rows || 0);
 				if (Number.isFinite(limit) && limit > 0) this.maxRows = Math.max(50, limit);
+				const lanWanOnlyInput = document.getElementById('flows-lan-wan-only-checkbox');
+				if (lanWanOnlyInput) lanWanOnlyInput.checked = String(values.lan_to_wan_only || '0') === '1';
 			}
 		} catch {}
 
 		const pathEl = document.getElementById('flows-db-path');
 		if (pathEl) pathEl.textContent = this.dbPath;
+	}
+
+	async saveCollectorSettings() {
+		const saveBtn = document.getElementById('flows-save-settings-btn');
+		const lanWanOnlyInput = document.getElementById('flows-lan-wan-only-checkbox');
+		if (!lanWanOnlyInput) return;
+		if (saveBtn) {
+			saveBtn.disabled = true;
+			saveBtn.style.opacity = '0.6';
+			saveBtn.textContent = 'SAVING...';
+		}
+		try {
+			const lanToWanOnly = lanWanOnlyInput.checked ? '1' : '0';
+			await this.core.uciSet('moci', 'connection_flows', { lan_to_wan_only: lanToWanOnly });
+			await this.core.uciCommit('moci');
+			try {
+				await this.exec('/etc/init.d/connection-flows-collector', ['restart']);
+			} catch {
+				await this.exec('/bin/sh', ['-c', '/etc/init.d/connection-flows-collector restart']);
+			}
+			this.core.showToast('Flow collector settings saved', 'success');
+			await this.refresh(false);
+		} catch (err) {
+			console.error('Failed to save flow collector settings:', err);
+			this.core.showToast(this.describeExecFailure(err, 'Failed to save flow collector settings'), 'error');
+		} finally {
+			if (saveBtn) {
+				saveBtn.disabled = false;
+				saveBtn.style.opacity = '1';
+				saveBtn.textContent = 'SAVE SETTINGS';
+			}
+		}
 	}
 
 	async refresh(showErrorToast = true) {

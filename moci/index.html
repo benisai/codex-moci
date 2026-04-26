@@ -2844,31 +2844,38 @@ Endpoint = host:51820"
 										<span id="flows-collector-toggle-icon">▸</span>
 									</button>
 								</div>
-								<div id="flows-collector-body" style="margin-top: 16px; display: none">
-									<div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px">
-										<div>
-											<div class="stat-label">SERVICE</div>
-											<div id="flows-service-status" style="margin-top: 8px">Loading...</div>
-										</div>
-										<div>
-											<div class="stat-label">SQLITE DB</div>
-											<div id="flows-db-status" style="margin-top: 8px">Loading...</div>
-										</div>
-										<div>
-											<div class="stat-label">DB PATH</div>
-											<div id="flows-db-path" style="margin-top: 8px; font-family: monospace; color: var(--steel-light)">
-												/tmp/connection-flows.sqlite
+									<div id="flows-collector-body" style="margin-top: 16px; display: none">
+										<div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px">
+											<div>
+												<div class="stat-label">SERVICE</div>
+												<div id="flows-service-status" style="margin-top: 8px">Loading...</div>
+											</div>
+											<div>
+												<div class="stat-label">SQLITE DB</div>
+												<div id="flows-db-status" style="margin-top: 8px">Loading...</div>
+											</div>
+											<div>
+												<div class="stat-label">DB PATH</div>
+												<div id="flows-db-path" style="margin-top: 8px; font-family: monospace; color: var(--steel-light)">
+													/tmp/connection-flows.sqlite
+												</div>
 											</div>
 										</div>
+										<div class="form-group" style="margin-bottom: 16px">
+											<label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer">
+												<input type="checkbox" id="flows-lan-wan-only-checkbox" />
+												<span>LAN -> WAN ONLY</span>
+											</label>
+										</div>
+										<div class="quick-actions">
+											<button class="action-btn" id="flows-save-settings-btn">SAVE SETTINGS</button>
+											<button class="action-btn" id="flows-start-btn">START COLLECTOR</button>
+											<button class="action-btn" id="flows-stop-btn">STOP COLLECTOR</button>
+											<button class="action-btn" id="flows-restart-btn">RESTART COLLECTOR</button>
+											<button class="action-btn" id="flows-init-db-btn">INIT DB</button>
+											<button class="action-btn" id="flows-refresh-btn">REFRESH</button>
+										</div>
 									</div>
-									<div class="quick-actions">
-										<button class="action-btn" id="flows-start-btn">START COLLECTOR</button>
-										<button class="action-btn" id="flows-stop-btn">STOP COLLECTOR</button>
-										<button class="action-btn" id="flows-restart-btn">RESTART COLLECTOR</button>
-										<button class="action-btn" id="flows-init-db-btn">INIT DB</button>
-										<button class="action-btn" id="flows-refresh-btn">REFRESH</button>
-									</div>
-								</div>
 							</div>
 						</div>
 
