@@ -191,7 +191,8 @@ parse_conntrack() {
 				}
 			}
 			if (src=="" || dst=="") next;
-			source=src; if (sport!="") source=source ":" sport;
+			# Store SOURCE as IP only (no port) so sqlite data stays consistent.
+			source=src;
 			destination=dst; if (dport!="") destination=destination ":" dport;
 			transfer=bytes " B (" packets " Pkts.)";
 			printf "%s|%s|%s|%s|%s\n", proto, source, destination, transfer, state;
