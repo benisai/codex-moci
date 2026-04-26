@@ -1733,7 +1733,7 @@ done`;
 						<td data-label="Name">${this.core.escapeHtml(r.name || r.section)}</td>
 						<td data-label="Source">${this.core.escapeHtml(r.src || 'Any')}</td>
 						<td data-label="Source IP">${this.core.escapeHtml(r.src_ip || 'Any')}</td>
-						<td data-label="Destination">${this.core.escapeHtml(r.dest || 'Any')}</td>
+						<td data-label="Destination">${this.core.escapeHtml(r.dest_ip || r.dest || 'Any')}</td>
 						<td data-label="Protocol">${this.core.escapeHtml(r.proto || 'Any')}</td>
 						<td data-label="Port">${this.core.escapeHtml(r.dest_port || 'Any')}</td>
 						<td data-label="Action">${this.renderFirewallTargetBadge(r.target)}</td>
