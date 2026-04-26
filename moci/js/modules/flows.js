@@ -16,6 +16,8 @@ export default class FlowsModule {
 		this.loadedOffset = 0;
 		this.hasMoreRows = true;
 		this.isLoadingMore = false;
+		this.hostnameByIp = new Map();
+		this.lastHostRefreshAt = 0;
 
 		this.core.registerRoute('/flows', async () => {
 			const pageElement = document.getElementById('flows-page');
@@ -151,6 +153,7 @@ export default class FlowsModule {
 		try {
 			await this.updateStatus();
 			await this.loadRows(true);
+			await this.refreshHostnameMap();
 			this.renderRows();
 		} catch (err) {
 			console.error('Failed to refresh flows:', err);
@@ -244,6 +247,7 @@ export default class FlowsModule {
 					id: Number(parts[0]) || 0,
 					protocol: parts[1] || 'UNKNOWN',
 					source: parts[2] || 'N/A',
+					sourceIp: this.extractIpFromEndpoint(parts[2]) || '',
 					destination: parts[3] || 'N/A',
 					transfer: parts[4] || '0 B (0 Pkts.)',
 					status: parts[5] || 'ACTIVE'
@@ -287,7 +291,7 @@ export default class FlowsModule {
 	getFilteredRows() {
 		return this.searchQuery
 			? this.rows.filter(row =>
-					[row.protocol, row.source, row.destination, row.transfer, row.status]
+					[row.protocol, this.resolveSourceLabel(row), row.source, row.sourceIp, row.destination, row.transfer, row.status]
 						.map(v => String(v || '').toLowerCase())
 						.some(v => v.includes(this.searchQuery))
 			  )
@@ -322,7 +326,7 @@ export default class FlowsModule {
 			.map(
 				(row, idx) => `<tr class="netify-flow-row" data-flow-index="${idx}" style="cursor: pointer" title="Click for actions">
 				<td>${this.core.escapeHtml(row.protocol)}</td>
-				<td>${this.core.escapeHtml(row.source)}</td>
+				<td title="${this.core.escapeHtml(row.source)}">${this.core.escapeHtml(this.resolveSourceLabel(row))}</td>
 				<td>${this.core.escapeHtml(row.destination)}</td>
 				<td>${this.core.escapeHtml(row.transfer)}</td>
 				<td>${this.core.escapeHtml(row.status)}</td>
@@ -342,6 +346,45 @@ export default class FlowsModule {
 		}
 		if (prevBtn) prevBtn.disabled = this.flowsPage <= 0 || total <= 0;
 		if (nextBtn) nextBtn.disabled = (this.flowsPage >= maxPage && !this.hasMoreRows) || total <= 0 || this.isLoadingMore;
+	}
+
+	async refreshHostnameMap() {
+		const now = Date.now();
+		if (now - this.lastHostRefreshAt < 15000 && this.hostnameByIp.size > 0) return;
+
+		const byIp = new Map();
+		try {
+			const [status, result] = await this.core.ubusCall('luci-rpc', 'getDHCPLeases', {});
+			if (status === 0 && Array.isArray(result?.dhcp_leases)) {
+				for (const lease of result.dhcp_leases) {
+					const hostname = String(lease.hostname || '').trim();
+					const ip = String(lease.ipaddr || '').trim();
+					if (hostname && ip) byIp.set(ip, hostname);
+				}
+			}
+		} catch {}
+
+		try {
+			const [status, result] = await this.core.uciGet('dhcp');
+			if (status === 0 && result?.values) {
+				for (const [, cfg] of Object.entries(result.values)) {
+					if (cfg?.['.type'] !== 'host') continue;
+					const hostname = String(cfg.name || '').trim();
+					const ip = String(cfg.ip || '').trim();
+					if (hostname && ip && !byIp.has(ip)) byIp.set(ip, hostname);
+				}
+			}
+		} catch {}
+
+		this.hostnameByIp = byIp;
+		this.lastHostRefreshAt = now;
+	}
+
+	resolveSourceLabel(row) {
+		const ip = String(row?.sourceIp || this.extractIpFromEndpoint(row?.source || '') || '').trim();
+		if (!ip) return row?.source || 'N/A';
+		const host = this.hostnameByIp.get(ip);
+		return host || ip;
 	}
 
 	handleRowClick(event) {
