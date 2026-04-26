@@ -11,6 +11,7 @@ DEFAULT_POLL_SECONDS="5"
 DEFAULT_RETENTION_ROWS="50000"
 DEFAULT_EXCLUDE_ENDPOINTS="127.0.0.1"
 DEFAULT_IGNORE_IPV6="1"
+DEFAULT_LAN_TO_WAN_ONLY="0"
 LOG_FILE="/tmp/moci-connection-flows-collector.log"
 
 FLOW_DB="$DEFAULT_DB"
@@ -18,6 +19,7 @@ POLL_SECONDS="$DEFAULT_POLL_SECONDS"
 RETENTION_ROWS="$DEFAULT_RETENTION_ROWS"
 EXCLUDE_ENDPOINTS="$DEFAULT_EXCLUDE_ENDPOINTS"
 IGNORE_IPV6="$DEFAULT_IGNORE_IPV6"
+LAN_TO_WAN_ONLY="$DEFAULT_LAN_TO_WAN_ONLY"
 SQLITE_BIN=""
 
 log() {
@@ -98,14 +100,20 @@ load_config() {
 		value="$(uci -q get moci.connection_flows.ignore_ipv6 2>/dev/null || true)"
 		value="$(sanitize_text "$value")"
 		[ -n "$value" ] && IGNORE_IPV6="$value"
+
+		value="$(uci -q get moci.connection_flows.lan_to_wan_only 2>/dev/null || true)"
+		value="$(sanitize_text "$value")"
+		[ -n "$value" ] && LAN_TO_WAN_ONLY="$value"
 	fi
 
 	POLL_SECONDS="$(sanitize_int "$POLL_SECONDS" "$DEFAULT_POLL_SECONDS")"
 	RETENTION_ROWS="$(sanitize_int "$RETENTION_ROWS" "$DEFAULT_RETENTION_ROWS")"
 	IGNORE_IPV6="$(sanitize_int "$IGNORE_IPV6" "$DEFAULT_IGNORE_IPV6")"
+	LAN_TO_WAN_ONLY="$(sanitize_int "$LAN_TO_WAN_ONLY" "$DEFAULT_LAN_TO_WAN_ONLY")"
 	[ "$POLL_SECONDS" -lt 1 ] && POLL_SECONDS=5
 	[ "$RETENTION_ROWS" -lt 100 ] && RETENTION_ROWS=100
 	[ "$IGNORE_IPV6" -ne 1 ] && IGNORE_IPV6=0
+	[ "$LAN_TO_WAN_ONLY" -ne 1 ] && LAN_TO_WAN_ONLY=0
 }
 
 ensure_db_file() {
@@ -174,6 +182,50 @@ is_ipv6_endpoint() {
 	printf "%s" "$value" | grep -q ':'
 }
 
+endpoint_host() {
+	local value
+	value="$(printf "%s" "${1:-}" | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+	printf "%s" "$value" | sed -E 's/^(([0-9]{1,3}\.){3}[0-9]{1,3}):[0-9]+$/\1/'
+}
+
+is_ipv4_addr() {
+	printf "%s" "${1:-}" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$'
+}
+
+is_rfc1918_ipv4() {
+	case "${1:-}" in
+	10.* | 192.168.* | 172.1[6-9].* | 172.2[0-9].* | 172.3[0-1].*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+is_private_or_local_ipv4() {
+	case "${1:-}" in
+	10.* | 192.168.* | 172.1[6-9].* | 172.2[0-9].* | 172.3[0-1].* | 127.* | 169.254.* | 100.6[4-9].* | 100.[7-9][0-9].* | 100.1[01][0-9].* | 100.12[0-7].*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+should_skip_non_lan_wan() {
+	local source_host destination_host
+	source_host="$(endpoint_host "$1")"
+	destination_host="$(endpoint_host "$2")"
+
+	is_ipv4_addr "$source_host" || return 0
+	is_ipv4_addr "$destination_host" || return 0
+	is_rfc1918_ipv4 "$source_host" || return 0
+	is_private_or_local_ipv4 "$destination_host" && return 0
+	return 1
+}
+
 conntrack_source() {
 	if command -v conntrack >/dev/null 2>&1; then
 		(conntrack -L -o extended 2>/dev/null || conntrack -L 2>/dev/null) | head -n 600
@@ -234,6 +286,11 @@ insert_rows() {
 		[ -n "$protocol" ] || continue
 		if [ "$IGNORE_IPV6" = "1" ]; then
 			if is_ipv6_endpoint "$source" || is_ipv6_endpoint "$destination"; then
+				continue
+			fi
+		fi
+		if [ "$LAN_TO_WAN_ONLY" = "1" ]; then
+			if should_skip_non_lan_wan "$source" "$destination"; then
 				continue
 			fi
 		fi
