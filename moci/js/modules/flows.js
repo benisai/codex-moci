@@ -233,7 +233,7 @@ export default class FlowsModule {
 			this.hasMoreRows = true;
 			this.isLoadingMore = false;
 		}
-		const sql = `SELECT id, protocol, source, destination, transfer, status FROM connection_flows ORDER BY id DESC LIMIT ${limit} OFFSET ${this.loadedOffset};`;
+		const sql = `SELECT id, timeinsert, protocol, source, destination, transfer, status FROM connection_flows ORDER BY id DESC LIMIT ${limit} OFFSET ${this.loadedOffset};`;
 		const out = await this.querySql(sql);
 		const lines = String(out || '')
 			.split('\n')
@@ -242,15 +242,18 @@ export default class FlowsModule {
 		const newRows = lines
 			.map(line => {
 				const parts = line.split('|');
-				if (parts.length < 6) return null;
+				if (parts.length < 7) return null;
+				const ts = Number(parts[1]) || 0;
 				return {
 					id: Number(parts[0]) || 0,
-					protocol: parts[1] || 'UNKNOWN',
-					source: parts[2] || 'N/A',
-					sourceIp: this.extractIpFromEndpoint(parts[2]) || '',
-					destination: parts[3] || 'N/A',
-					transfer: parts[4] || '0 B (0 Pkts.)',
-					status: parts[5] || 'ACTIVE'
+					timeinsert: ts,
+					timeLabel: this.formatTimestamp(ts),
+					protocol: parts[2] || 'UNKNOWN',
+					source: parts[3] || 'N/A',
+					sourceIp: this.extractIpFromEndpoint(parts[3]) || '',
+					destination: parts[4] || 'N/A',
+					transfer: parts[5] || '0 B (0 Pkts.)',
+					status: parts[6] || 'ACTIVE'
 				};
 			})
 			.filter(Boolean);
@@ -302,13 +305,13 @@ export default class FlowsModule {
 		const tbody = document.querySelector('#flows-table tbody');
 		if (!tbody) return;
 		if (!this.rows.length) {
-			this.core.renderEmptyTable(tbody, 5, 'No connection flow data yet');
+			this.core.renderEmptyTable(tbody, 6, 'No connection flow data yet');
 			this.updatePagination(0, 0, 0, 0);
 			return;
 		}
 		const filteredRows = this.getFilteredRows();
 		if (!filteredRows.length) {
-			this.core.renderEmptyTable(tbody, 5, 'No matching flows');
+			this.core.renderEmptyTable(tbody, 6, 'No matching flows');
 			this.visibleRows = [];
 			this.flowsPage = 0;
 			this.updatePagination(0, 0, 0, 0);
@@ -325,6 +328,7 @@ export default class FlowsModule {
 		tbody.innerHTML = pageRows
 			.map(
 				(row, idx) => `<tr class="netify-flow-row" data-flow-index="${idx}" style="cursor: pointer" title="Click for actions">
+				<td>${this.core.escapeHtml(row.timeLabel || '-')}</td>
 				<td>${this.core.escapeHtml(row.protocol)}</td>
 				<td title="${this.core.escapeHtml(row.source)}">${this.core.escapeHtml(this.resolveSourceLabel(row))}</td>
 				<td>${this.core.escapeHtml(row.destination)}</td>
@@ -334,6 +338,20 @@ export default class FlowsModule {
 			)
 			.join('');
 		this.updatePagination(total, startIdx + 1, endIdx, maxPage);
+	}
+
+	formatTimestamp(tsSeconds) {
+		if (!Number.isFinite(tsSeconds) || tsSeconds <= 0) return '-';
+		const d = new Date(tsSeconds * 1000);
+		if (Number.isNaN(d.getTime())) return '-';
+		return d.toLocaleString([], {
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		});
 	}
 
 	updatePagination(total, start, end, maxPage) {

@@ -126,7 +126,7 @@ ensure_db_file() {
 
 init_db() {
 	sql_exec "PRAGMA journal_mode=WAL;" || return 1
-	sql_exec "CREATE TABLE IF NOT EXISTS connection_flows (id INTEGER PRIMARY KEY AUTOINCREMENT,timeinsert INTEGER NOT NULL DEFAULT (strftime('%s','now')),protocol TEXT,source TEXT,destination TEXT,transfer TEXT,status TEXT,sig TEXT UNIQUE);" || return 1
+	sql_exec "CREATE TABLE IF NOT EXISTS connection_flows (id INTEGER PRIMARY KEY AUTOINCREMENT,timeinsert INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER)),protocol TEXT,source TEXT,destination TEXT,transfer TEXT,status TEXT,sig TEXT UNIQUE);" || return 1
 	sql_exec "CREATE INDEX IF NOT EXISTS idx_connection_flows_time ON connection_flows(timeinsert);" || return 1
 	return 0
 }
@@ -304,7 +304,7 @@ insert_rows() {
 		transfer="$(sql_escape "$transfer")"
 		status="$(sql_escape "$status")"
 		sig="$(sql_escape "$sig")"
-		sql="$sql INSERT OR IGNORE INTO connection_flows(timeinsert, protocol, source, destination, transfer, status, sig) VALUES (strftime('%s','now'), '$protocol', '$source', '$destination', '$transfer', '$status', '$sig');"
+		sql="$sql INSERT OR IGNORE INTO connection_flows(timeinsert, protocol, source, destination, transfer, status, sig) VALUES (CAST(strftime('%s','now') AS INTEGER), '$protocol', '$source', '$destination', '$transfer', '$status', '$sig');"
 	done <"$tmp"
 	sql="$sql COMMIT;"
 	rm -f "$tmp"
