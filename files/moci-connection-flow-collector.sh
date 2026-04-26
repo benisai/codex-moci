@@ -10,12 +10,14 @@ DEFAULT_DB="/tmp/connection-flows.sqlite"
 DEFAULT_POLL_SECONDS="5"
 DEFAULT_RETENTION_ROWS="50000"
 DEFAULT_EXCLUDE_ENDPOINTS="127.0.0.1"
+DEFAULT_IGNORE_IPV6="1"
 LOG_FILE="/tmp/moci-connection-flows-collector.log"
 
 FLOW_DB="$DEFAULT_DB"
 POLL_SECONDS="$DEFAULT_POLL_SECONDS"
 RETENTION_ROWS="$DEFAULT_RETENTION_ROWS"
 EXCLUDE_ENDPOINTS="$DEFAULT_EXCLUDE_ENDPOINTS"
+IGNORE_IPV6="$DEFAULT_IGNORE_IPV6"
 SQLITE_BIN=""
 
 log() {
@@ -92,12 +94,18 @@ load_config() {
 		value="$(uci -q get moci.connection_flows.exclude_endpoints 2>/dev/null || true)"
 		value="$(sanitize_text "$value")"
 		[ -n "$value" ] && EXCLUDE_ENDPOINTS="$value"
+
+		value="$(uci -q get moci.connection_flows.ignore_ipv6 2>/dev/null || true)"
+		value="$(sanitize_text "$value")"
+		[ -n "$value" ] && IGNORE_IPV6="$value"
 	fi
 
 	POLL_SECONDS="$(sanitize_int "$POLL_SECONDS" "$DEFAULT_POLL_SECONDS")"
 	RETENTION_ROWS="$(sanitize_int "$RETENTION_ROWS" "$DEFAULT_RETENTION_ROWS")"
+	IGNORE_IPV6="$(sanitize_int "$IGNORE_IPV6" "$DEFAULT_IGNORE_IPV6")"
 	[ "$POLL_SECONDS" -lt 1 ] && POLL_SECONDS=5
 	[ "$RETENTION_ROWS" -lt 100 ] && RETENTION_ROWS=100
+	[ "$IGNORE_IPV6" -ne 1 ] && IGNORE_IPV6=0
 }
 
 ensure_db_file() {
@@ -152,6 +160,18 @@ should_skip_endpoint() {
 	done
 	IFS="$old_ifs"
 	return 1
+}
+
+is_ipv6_endpoint() {
+	local value
+	value="$(printf "%s" "${1:-}" | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+	[ -n "$value" ] || return 1
+	# IPv4 or IPv4:port => not IPv6
+	if printf "%s" "$value" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}(:[0-9]+)?$'; then
+		return 1
+	fi
+	# Anything else containing ":" is treated as IPv6 endpoint.
+	printf "%s" "$value" | grep -q ':'
 }
 
 conntrack_source() {
@@ -212,6 +232,11 @@ insert_rows() {
 	sql="BEGIN;"
 	while IFS='|' read -r protocol source destination transfer status; do
 		[ -n "$protocol" ] || continue
+		if [ "$IGNORE_IPV6" = "1" ]; then
+			if is_ipv6_endpoint "$source" || is_ipv6_endpoint "$destination"; then
+				continue
+			fi
+		fi
 		if should_skip_endpoint "$source" "$destination"; then
 			continue
 		fi
