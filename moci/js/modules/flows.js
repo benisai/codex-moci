@@ -329,11 +329,11 @@ export default class FlowsModule {
 			.map(
 				(row, idx) => `<tr class="netify-flow-row" data-flow-index="${idx}" style="cursor: pointer" title="Click for actions">
 				<td>${this.core.escapeHtml(row.timeLabel || '-')}</td>
-				<td>${this.core.escapeHtml(row.protocol)}</td>
 				<td title="${this.core.escapeHtml(row.source)}">${this.core.escapeHtml(this.resolveSourceLabel(row))}</td>
 				<td>${this.core.escapeHtml(row.destination)}</td>
 				<td>${this.core.escapeHtml(row.transfer)}</td>
 				<td>${this.core.escapeHtml(row.status)}</td>
+				<td>${this.core.escapeHtml(row.protocol)}</td>
 			</tr>`
 			)
 			.join('');
