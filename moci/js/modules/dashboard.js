@@ -35,6 +35,7 @@ export default class DashboardModule {
 		this.monthlyBandwidthGb = 500;
 		this.monthStartDay = 10;
 		this.lastMonthlyUsageRefresh = 0;
+		this.systemCardShortcutsBound = false;
 
 		this.core.registerRoute('/dashboard', () => this.load());
 	}
@@ -217,6 +218,7 @@ export default class DashboardModule {
 	async load() {
 		const pageElement = document.getElementById('dashboard-page');
 		if (pageElement) pageElement.classList.remove('hidden');
+		this.bindSystemCardShortcuts();
 		this.applyLanVisibility();
 		this.applyDashboardColorTheme();
 			this.initSystemLogSearch();
@@ -255,6 +257,24 @@ export default class DashboardModule {
 		} else {
 			lanDetailEl.classList.add('hidden');
 		}
+	}
+
+	bindSystemCardShortcuts() {
+		if (this.systemCardShortcutsBound) return;
+		this.systemCardShortcutsBound = true;
+
+		const cpuValue = document.getElementById('cpu');
+		const memValue = document.getElementById('memory');
+		const cpuCard = cpuValue?.closest?.('.stat-card');
+		const memCard = memValue?.closest?.('.stat-card');
+		const openProcesses = () => this.core.navigate('/system/processes');
+
+		[cpuCard, memCard].forEach(card => {
+			if (!card) return;
+			card.style.cursor = 'pointer';
+			card.setAttribute('title', 'Open Processes');
+			card.addEventListener('click', openProcesses);
+		});
 	}
 
 	async update() {
