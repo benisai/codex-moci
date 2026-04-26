@@ -332,8 +332,8 @@ export default class FlowsModule {
 				<td title="${this.core.escapeHtml(row.source)}">${this.core.escapeHtml(this.resolveSourceLabel(row))}</td>
 				<td>${this.core.escapeHtml(row.destination)}</td>
 				<td>${this.core.escapeHtml(row.transfer)}</td>
-				<td>${this.core.escapeHtml(row.status)}</td>
 				<td>${this.core.escapeHtml(row.protocol)}</td>
+				<td>${this.core.escapeHtml(row.status)}</td>
 			</tr>`
 			)
 			.join('');
