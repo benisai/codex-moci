@@ -21,26 +21,105 @@ have_cmd() {
 SCRIPT_PATH="$0"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" 2>/dev/null && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)"
+INSTALL_PROFILE=""
+INSTALL_ADBLOCK=0
+INSTALL_PBR=0
 INSTALL_NETIFY=0
+INSTALL_ADBLOCK_OVERRIDE=""
+INSTALL_PBR_OVERRIDE=""
+INSTALL_NETIFY_OVERRIDE=""
 
 usage() {
 	cat <<'EOF'
-Usage: sh scripts/setup-openwrt-router.sh [--with-netify] [--without-netify] [--help]
+Usage: sh scripts/setup-openwrt-router.sh [--profile=1|2|3] [--with-netify] [--without-netify] [--with-adblock] [--without-adblock] [--with-pbr] [--without-pbr] [--help]
+
+Profiles:
+  1  Install Moci Stack (Ping, Speedtest, Flows, nlbw, vnstat)
+  2  Install Moci Stack + Adblock + PBR
+  3  Install Moci Stack + Adblock + PBR + Netify
 
 Options:
+  --profile=N         Choose profile 1, 2, or 3 (non-interactive)
   --with-netify      Install and enable netifyd + netify-collector
   --without-netify   Skip netifyd + netify-collector install (default)
+  --with-adblock     Install adblock package(s)
+  --without-adblock  Skip adblock package(s)
+  --with-pbr         Install pbr package(s)
+  --without-pbr      Skip pbr package(s)
   --help             Show this help
 EOF
 }
 
-for arg in "$@"; do
-	case "$arg" in
-	--with-netify)
+prompt_install_profile() {
+	while true; do
+		cat <<'EOF'
+
+Select installation profile:
+  1) Install Moci Stack (Ping, Speedtest, Flows, nlbw, vnstat)
+  2) Install Moci Stack + Adblock + PBR
+  3) Install Moci Stack + Adblock + PBR + Netify
+EOF
+		printf "Enter option [1-3] (default: 1): "
+		read -r choice
+		choice="${choice:-1}"
+		case "$choice" in
+		1|2|3)
+			INSTALL_PROFILE="$choice"
+			return 0
+			;;
+		*)
+			echo "Invalid selection: $choice"
+			;;
+		esac
+	done
+}
+
+apply_install_profile() {
+	case "$INSTALL_PROFILE" in
+	1)
+		INSTALL_ADBLOCK=0
+		INSTALL_PBR=0
+		INSTALL_NETIFY=0
+		;;
+	2)
+		INSTALL_ADBLOCK=1
+		INSTALL_PBR=1
+		INSTALL_NETIFY=0
+		;;
+	3)
+		INSTALL_ADBLOCK=1
+		INSTALL_PBR=1
 		INSTALL_NETIFY=1
 		;;
+	*)
+		echo "Invalid profile: $INSTALL_PROFILE"
+		exit 1
+		;;
+	esac
+}
+
+for arg in "$@"; do
+	case "$arg" in
+	--profile=*)
+		INSTALL_PROFILE="${arg#*=}"
+		;;
+	--with-netify)
+		INSTALL_NETIFY_OVERRIDE=1
+		;;
 	--without-netify)
-		INSTALL_NETIFY=0
+		INSTALL_NETIFY_OVERRIDE=0
+		;;
+	--with-adblock)
+		INSTALL_ADBLOCK_OVERRIDE=1
+		;;
+	--without-adblock)
+		INSTALL_ADBLOCK_OVERRIDE=0
+		;;
+	--with-pbr)
+		INSTALL_PBR_OVERRIDE=1
+		;;
+	--without-pbr)
+		INSTALL_PBR_OVERRIDE=0
 		;;
 	--help|-h)
 		usage
@@ -53,6 +132,22 @@ for arg in "$@"; do
 		;;
 	esac
 done
+
+if [ -z "$INSTALL_PROFILE" ]; then
+	if [ "$#" -eq 0 ] && [ -t 0 ]; then
+		prompt_install_profile
+	else
+		INSTALL_PROFILE=1
+	fi
+fi
+
+apply_install_profile
+
+[ -n "$INSTALL_ADBLOCK_OVERRIDE" ] && INSTALL_ADBLOCK="$INSTALL_ADBLOCK_OVERRIDE"
+[ -n "$INSTALL_PBR_OVERRIDE" ] && INSTALL_PBR="$INSTALL_PBR_OVERRIDE"
+[ -n "$INSTALL_NETIFY_OVERRIDE" ] && INSTALL_NETIFY="$INSTALL_NETIFY_OVERRIDE"
+
+log "Selected profile=$INSTALL_PROFILE (adblock=$INSTALL_ADBLOCK pbr=$INSTALL_PBR netify=$INSTALL_NETIFY)"
 
 require_file() {
 	if [ ! -f "$1" ]; then
@@ -177,14 +272,24 @@ for pkg in \
 	wireguard-tools \
 	kmod-wireguard \
 	luci-proto-wireguard \
-	adblock-fast \
-	luci-app-adblock-fast \
 	tcpdump-mini \
 	qrencode \
 	sqlite3-cli
 do
 	install_pkg_if_available "$pkg"
 done
+
+if [ "$INSTALL_ADBLOCK" = "1" ]; then
+	install_pkg_if_available "adblock"
+	install_pkg_if_available "luci-app-adblock"
+	install_pkg_if_available "adblock-fast"
+	install_pkg_if_available "luci-app-adblock-fast"
+fi
+
+if [ "$INSTALL_PBR" = "1" ]; then
+	install_pkg_if_available "pbr"
+	install_pkg_if_available "luci-app-pbr"
+fi
 
 if [ "$INSTALL_NETIFY" = "1" ]; then
 	install_pkg_if_available "netifyd"
@@ -231,6 +336,9 @@ uci commit uhttpd
 
 log "Applying MoCI runtime defaults"
 set_uci moci.features.qosify "1"
+set_uci moci.features.adblock "$INSTALL_ADBLOCK"
+set_uci moci.features.adblock_fast "$INSTALL_ADBLOCK"
+set_uci moci.features.pbr "$INSTALL_PBR"
 set_uci moci.features.netify "$INSTALL_NETIFY"
 set_uci moci.collector.enabled "$INSTALL_NETIFY"
 set_uci moci.collector.host "127.0.0.1"
@@ -341,6 +449,12 @@ rm -f "$TMP_CRON"
 SERVICES="vnstat nlbwmon connection-flows-collector ping-monitor moci-state-sync moci-device-quarantine"
 if [ "$INSTALL_NETIFY" = "1" ]; then
 	SERVICES="vnstat nlbwmon netifyd netify-collector connection-flows-collector ping-monitor moci-state-sync moci-device-quarantine"
+fi
+if [ "$INSTALL_ADBLOCK" = "1" ]; then
+	SERVICES="$SERVICES adblock adblock-fast"
+fi
+if [ "$INSTALL_PBR" = "1" ]; then
+	SERVICES="$SERVICES pbr"
 fi
 for svc in $SERVICES; do
 	if [ -x "/etc/init.d/$svc" ]; then
