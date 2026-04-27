@@ -18,6 +18,7 @@ export default class FlowsModule {
 		this.isLoadingMore = false;
 		this.hostnameByIp = new Map();
 		this.lastHostRefreshAt = 0;
+		this.destinationDnsCache = new Map();
 
 		this.core.registerRoute('/flows', async () => {
 			const pageElement = document.getElementById('flows-page');
@@ -57,7 +58,10 @@ export default class FlowsModule {
 
 			if (this.flowsPage >= maxLoadedPage && this.hasMoreRows) {
 				const loaded = await this.loadMoreRows();
-				if (loaded) this.flowsPage += 1;
+				if (loaded) {
+					await this.resolveDestinationHostnames(this.rows);
+					this.flowsPage += 1;
+				}
 			} else {
 				this.flowsPage += 1;
 			}
@@ -189,6 +193,7 @@ export default class FlowsModule {
 			await this.updateStatus();
 			await this.loadRows(true);
 			await this.refreshHostnameMap();
+			await this.resolveDestinationHostnames(this.rows);
 			this.renderRows();
 		} catch (err) {
 			console.error('Failed to refresh flows:', err);
@@ -274,24 +279,25 @@ export default class FlowsModule {
 			.split('\n')
 			.map(line => line.trim())
 			.filter(Boolean);
-		const newRows = lines
-			.map(line => {
-				const parts = line.split('|');
-				if (parts.length < 7) return null;
-				const ts = Number(parts[1]) || 0;
-				return {
-					id: Number(parts[0]) || 0,
-					timeinsert: ts,
-					timeLabel: this.formatTimestamp(ts),
-					protocol: parts[2] || 'UNKNOWN',
-					source: parts[3] || 'N/A',
-					sourceIp: this.extractIpFromEndpoint(parts[3]) || '',
-					destination: parts[4] || 'N/A',
-					transfer: parts[5] || '0 B (0 Pkts.)',
-					status: parts[6] || 'ACTIVE'
-				};
-			})
-			.filter(Boolean);
+			const newRows = lines
+				.map(line => {
+					const parts = line.split('|');
+					if (parts.length < 7) return null;
+					const ts = Number(parts[1]) || 0;
+					return {
+						id: Number(parts[0]) || 0,
+						timeinsert: ts,
+						timeLabel: this.formatTimestamp(ts),
+						protocol: parts[2] || 'UNKNOWN',
+						source: parts[3] || 'N/A',
+						sourceIp: this.extractIpFromEndpoint(parts[3]) || '',
+						destination: parts[4] || 'N/A',
+						destinationIp: this.extractIpFromEndpoint(parts[4]) || '',
+						transfer: parts[5] || '0 B (0 Pkts.)',
+						status: parts[6] || 'ACTIVE'
+					};
+				})
+				.filter(Boolean);
 		this.loadedOffset += newRows.length;
 		this.hasMoreRows = newRows.length >= limit;
 
@@ -329,7 +335,17 @@ export default class FlowsModule {
 	getFilteredRows() {
 		return this.searchQuery
 			? this.rows.filter(row =>
-					[row.protocol, this.resolveSourceLabel(row), row.source, row.sourceIp, row.destination, row.transfer, row.status]
+					[
+						row.protocol,
+						this.resolveSourceLabel(row),
+						row.source,
+						row.sourceIp,
+						this.resolveDestinationLabel(row),
+						row.destination,
+						row.destinationIp,
+						row.transfer,
+						row.status
+					]
 						.map(v => String(v || '').toLowerCase())
 						.some(v => v.includes(this.searchQuery))
 			  )
@@ -365,7 +381,7 @@ export default class FlowsModule {
 				(row, idx) => `<tr class="netify-flow-row" data-flow-index="${idx}" style="cursor: pointer" title="Click for actions">
 				<td>${this.core.escapeHtml(row.timeLabel || '-')}</td>
 				<td title="${this.core.escapeHtml(row.source)}">${this.core.escapeHtml(this.resolveSourceLabel(row))}</td>
-				<td>${this.core.escapeHtml(row.destination)}</td>
+				<td title="${this.core.escapeHtml(row.destination)}">${this.core.escapeHtml(this.resolveDestinationLabel(row))}</td>
 				<td>${this.core.escapeHtml(row.transfer)}</td>
 				<td>${this.core.escapeHtml(row.protocol)}</td>
 				<td>${this.core.escapeHtml(row.status)}</td>
@@ -438,6 +454,101 @@ export default class FlowsModule {
 		if (!ip) return row?.source || 'N/A';
 		const host = this.hostnameByIp.get(ip);
 		return host || ip;
+	}
+
+	resolveDestinationLabel(row) {
+		const ip = String(row?.destinationIp || this.extractIpFromEndpoint(row?.destination || '') || '').trim();
+		const endpoint = String(row?.destination || '').trim() || 'N/A';
+		if (!ip) return endpoint;
+		const resolved = String(this.destinationDnsCache.get(ip) || '').trim();
+		if (resolved) return `${resolved} (${endpoint})`;
+		return endpoint;
+	}
+
+	isLikelyIpv4(ip) {
+		const parts = String(ip || '')
+			.trim()
+			.split('.');
+		if (parts.length !== 4) return false;
+		return parts.every(part => {
+			if (!/^\d+$/.test(part)) return false;
+			const n = Number(part);
+			return Number.isInteger(n) && n >= 0 && n <= 255;
+		});
+	}
+
+	isLikelyIpv6(ip) {
+		return String(ip || '')
+			.trim()
+			.includes(':');
+	}
+
+	isLikelyIpAddress(ip) {
+		return this.isLikelyIpv4(ip) || this.isLikelyIpv6(ip);
+	}
+
+	async resolveDestinationHostnames(rows) {
+		const unresolvedIps = [
+			...new Set(
+				(rows || [])
+					.map(row => String(row?.destinationIp || '').trim())
+					.filter(ip => ip && this.isLikelyIpAddress(ip) && !this.destinationDnsCache.has(ip))
+			)
+		];
+		if (unresolvedIps.length === 0) return;
+
+		const batch = unresolvedIps.slice(0, 12);
+		const byIp = await this.reverseLookupIps(batch);
+		for (const ip of batch) {
+			const name = String(byIp.get(ip) || '').trim();
+			this.destinationDnsCache.set(ip, name);
+		}
+	}
+
+	async reverseLookupIps(ips) {
+		const results = new Map();
+		const list = Array.isArray(ips) ? ips.filter(Boolean) : [];
+		if (list.length === 0) return results;
+
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: [
+					'-c',
+					`for ip in "$@"; do
+name=""
+if command -v nslookup >/dev/null 2>&1; then
+	if command -v timeout >/dev/null 2>&1; then
+		name="$(timeout 2 nslookup "$ip" 2>/dev/null | sed -n 's/^.*name = //p' | head -n 1 | sed 's/\\.$//')"
+	else
+		name="$(nslookup "$ip" 2>/dev/null | sed -n 's/^.*name = //p' | head -n 1 | sed 's/\\.$//')"
+	fi
+fi
+if [ -z "$name" ] && command -v getent >/dev/null 2>&1; then
+	name="$(getent hosts "$ip" 2>/dev/null | awk '{print $2}' | head -n 1)"
+fi
+if [ -z "$name" ] && [ -r /etc/hosts ]; then
+	name="$(awk -v ip="$ip" '$1==ip {print $2; exit}' /etc/hosts 2>/dev/null)"
+fi
+printf '%s\\t%s\\n' "$ip" "$name"
+done`,
+					'sh',
+					...list
+				]
+			});
+			if (status !== 0) return results;
+			const lines = String(result?.stdout || '').split('\n');
+			for (const line of lines) {
+				const raw = String(line || '').replace(/\r$/, '');
+				if (!raw) continue;
+				const tab = raw.indexOf('\t');
+				if (tab < 0) continue;
+				const ip = raw.slice(0, tab).trim();
+				const name = raw.slice(tab + 1).trim();
+				if (ip) results.set(ip, name);
+			}
+		} catch {}
+		return results;
 	}
 
 	handleRowClick(event) {
