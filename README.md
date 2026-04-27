@@ -38,11 +38,6 @@
 
 A complete standalone web interface for OpenWrt routers. Not a LuCI theme—pure vanilla JavaScript SPA using OpenWrt's native ubus API.
 
-```bash
-scp -r moci/* root@192.168.1.1:/www/moci/
-# Access at http://192.168.1.1/moci/
-```
-
 ---
 
 ## Features
