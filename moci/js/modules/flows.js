@@ -551,15 +551,15 @@ done`,
 		return results;
 	}
 
-	handleRowClick(event) {
+	async handleRowClick(event) {
 		const tr = event.target?.closest?.('tr[data-flow-index]');
 		if (!tr) return;
 		const idx = Number(tr.getAttribute('data-flow-index'));
 		if (!Number.isInteger(idx) || idx < 0 || idx >= this.visibleRows.length) return;
-		this.openActionModal(idx);
+		await this.openActionModal(idx);
 	}
 
-	openActionModal(index) {
+	async openActionModal(index) {
 		const row = this.visibleRows[index];
 		if (!row) return;
 
@@ -570,11 +570,34 @@ done`,
 		const dstInput = document.getElementById('flows-action-dest-ip');
 		if (srcInput) srcInput.value = sourceIp;
 		if (dstInput) dstInput.value = destIp;
+		const domainInput = document.getElementById('flows-action-domain');
+		if (domainInput) domainInput.value = '';
+
+		if (destIp && this.isLikelyIpAddress(destIp)) {
+			let resolved = String(this.destinationDnsCache.get(destIp) || '').trim();
+			if (!resolved) {
+				const byIp = await this.reverseLookupIps([destIp]);
+				resolved = String(byIp.get(destIp) || '').trim();
+				this.destinationDnsCache.set(destIp, resolved);
+			}
+			const resolvedDomain = this.normalizeResolvedDomain(resolved);
+			if (domainInput && resolvedDomain) domainInput.value = resolvedDomain;
+		}
 
 		const scopeSelect = document.getElementById('flows-action-scope');
 		if (scopeSelect) scopeSelect.value = this.isValidIp(sourceIp) ? 'source_dest' : 'all_sources';
 		this.syncActionTypeUi();
 		this.core.openModal('flows-action-modal');
+	}
+
+	normalizeResolvedDomain(value) {
+		let domain = String(value || '')
+			.trim()
+			.toLowerCase();
+		if (!domain) return '';
+		domain = domain.split(/\s+/)[0] || '';
+		domain = domain.replace(/\.$/, '');
+		return this.sanitizeDomain(domain);
 	}
 
 	syncActionTypeUi() {
