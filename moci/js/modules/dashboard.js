@@ -267,6 +267,7 @@ export default class DashboardModule {
 		const memValue = document.getElementById('memory');
 		const clientsValue = document.getElementById('clients');
 		const wanStatusHero = document.getElementById('wan-status-hero');
+		const wanStatusLabel = wanStatusHero?.querySelector?.('.hero-label');
 		const cpuCard = cpuValue?.closest?.('.stat-card');
 		const memCard = memValue?.closest?.('.stat-card');
 		const devicesCard = clientsValue?.closest?.('.stat-card');
@@ -281,10 +282,10 @@ export default class DashboardModule {
 			card.addEventListener('click', openProcesses);
 		});
 
-		if (wanStatusHero) {
-			wanStatusHero.style.cursor = 'pointer';
-			wanStatusHero.setAttribute('title', 'Open Monitoring');
-			wanStatusHero.addEventListener('click', openMonitoring);
+		if (wanStatusLabel) {
+			wanStatusLabel.style.cursor = 'pointer';
+			wanStatusLabel.setAttribute('title', 'Open Monitoring');
+			wanStatusLabel.addEventListener('click', openMonitoring);
 		}
 
 		if (devicesCard) {
