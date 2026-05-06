@@ -74,7 +74,10 @@
 							<a href="#/network">NETWORK</a>
 							<a href="#/system">SYSTEM</a>
 						</nav>
+					<div class="header-actions">
+						<a id="notifications-bell" class="notify-btn" href="#/notifications" title="Notifications" aria-label="Notifications">🔔</a>
 					<button id="logout-btn" class="logout-btn">LOGOUT</button>
+					</div>
 				</header>
 
 					<main class="content">
@@ -406,6 +409,42 @@
 											<button class="action-btn" id="save-devices-pin-btn">SAVE</button>
 										</div>
 								</div>
+							</div>
+						</div>
+
+						<div id="notifications-page" class="page hidden">
+							<h2>NOTIFICATIONS</h2>
+							<div class="stat-card">
+								<div
+									style="
+										display: flex;
+										align-items: center;
+										justify-content: space-between;
+										gap: 12px;
+										flex-wrap: wrap;
+									"
+								>
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">
+										MOCI NOTIFICATIONS
+									</div>
+									<button class="action-btn" id="notifications-refresh-btn">REFRESH</button>
+								</div>
+								<table class="data-table" id="notifications-table">
+									<thead>
+										<tr>
+											<th>TIME</th>
+											<th>APP</th>
+											<th>MESSAGE</th>
+											<th>STATUS</th>
+											<th>ACTIONS</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr>
+											<td colspan="5" style="text-align: center; color: var(--steel-muted)">Loading...</td>
+										</tr>
+									</tbody>
+								</table>
 							</div>
 						</div>
 

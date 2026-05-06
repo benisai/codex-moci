@@ -23,6 +23,7 @@ export class OpenWrtCore {
 			network: 'network',
 			monitoring: 'monitoring',
 			flows: 'flows',
+			notifications: 'notifications',
 			system: 'system',
 			netify: 'netify'
 		};
@@ -38,9 +39,13 @@ export class OpenWrtCore {
 
 		document.querySelectorAll('.page').forEach(page => page.classList.add('hidden'));
 		document.querySelectorAll('.nav a').forEach(link => link.classList.remove('active'));
+		document.getElementById('notifications-bell')?.classList.remove('active');
 
 		const activeLink = document.querySelector(`.nav a[href="#/${basePath}"]`);
 		if (activeLink) activeLink.classList.add('active');
+		if (basePath === 'notifications') {
+			document.getElementById('notifications-bell')?.classList.add('active');
+		}
 
 		if (basePath === 'dashboard') {
 			this.startPolling();
@@ -178,6 +183,7 @@ export class OpenWrtCore {
 			network: './modules/network.js',
 			monitoring: './modules/monitoring.js',
 			flows: './modules/flows.js',
+			notifications: './modules/notifications.js',
 			system: './modules/system.js',
 			netify: './modules/netify.js',
 			vpn: './modules/vpn.js',
@@ -228,6 +234,7 @@ export class OpenWrtCore {
 				],
 			monitoring: ['monitoring'],
 			flows: ['flows'],
+			notifications: ['network'],
 			system: ['system', 'backup', 'packages', 'services', 'ssh_keys', 'storage', 'leds', 'firmware'],
 			netify: ['netify'],
 			vpn: ['wireguard'],

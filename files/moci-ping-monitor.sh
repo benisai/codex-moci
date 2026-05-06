@@ -10,12 +10,17 @@ DEFAULT_INTERVAL="60"
 DEFAULT_TIMEOUT="2"
 DEFAULT_OUTPUT="/tmp/moci-ping-monitor.txt"
 DEFAULT_MAX_LINES="2000"
+DEFAULT_THRESHOLD="100"
+DEFAULT_NOTIFICATIONS_DB="/tmp/moci-notifications.sqlite"
 
 PING_TARGET="$DEFAULT_TARGET"
 PING_INTERVAL="$DEFAULT_INTERVAL"
 PING_TIMEOUT="$DEFAULT_TIMEOUT"
 PING_OUTPUT="$DEFAULT_OUTPUT"
 PING_MAX_LINES="$DEFAULT_MAX_LINES"
+PING_THRESHOLD="$DEFAULT_THRESHOLD"
+NOTIFICATIONS_DB="$DEFAULT_NOTIFICATIONS_DB"
+SQLITE_BIN=""
 
 log() {
 	logger -t moci-ping-monitor "$*"
@@ -35,6 +40,12 @@ load_config() {
 
 		value="$(uci -q get moci.ping_monitor.max_lines 2>/dev/null || true)"
 		[ -n "$value" ] && PING_MAX_LINES="$value"
+
+		value="$(uci -q get moci.ping_monitor.threshold 2>/dev/null || true)"
+		[ -n "$value" ] && PING_THRESHOLD="$value"
+
+		value="$(uci -q get moci.notifications.db_path 2>/dev/null || true)"
+		[ -n "$value" ] && NOTIFICATIONS_DB="$value"
 	fi
 }
 
@@ -43,7 +54,45 @@ refresh_runtime_config() {
 	PING_INTERVAL="$DEFAULT_INTERVAL"
 	PING_TIMEOUT="$(sanitize_int "$PING_TIMEOUT" "$DEFAULT_TIMEOUT")"
 	PING_MAX_LINES="$(sanitize_int "$PING_MAX_LINES" "$DEFAULT_MAX_LINES")"
+	PING_THRESHOLD="$(sanitize_int "$PING_THRESHOLD" "$DEFAULT_THRESHOLD")"
 	ensure_output_file
+	detect_sqlite
+}
+
+detect_sqlite() {
+	if command -v sqlite3 >/dev/null 2>&1; then
+		SQLITE_BIN="$(command -v sqlite3)"
+	elif command -v sqlite3-cli >/dev/null 2>&1; then
+		SQLITE_BIN="$(command -v sqlite3-cli)"
+	else
+		SQLITE_BIN=""
+	fi
+}
+
+notification_db_ready() {
+	[ -n "$SQLITE_BIN" ] || return 1
+	mkdir -p "$(dirname "$NOTIFICATIONS_DB")"
+	"$SQLITE_BIN" "$NOTIFICATIONS_DB" <<'SQL' >/dev/null 2>&1
+CREATE TABLE IF NOT EXISTS notifications (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	timestamp INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER)),
+	app TEXT NOT NULL DEFAULT '',
+	msg TEXT NOT NULL DEFAULT '',
+	archived INTEGER NOT NULL DEFAULT 0,
+	"delete" INTEGER NOT NULL DEFAULT 0
+);
+SQL
+}
+
+write_notification() {
+	local message="$1"
+	notification_db_ready || return 0
+
+	local esc_msg
+	esc_msg="$(printf "%s" "$message" | sed "s/'/''/g")"
+
+	"$SQLITE_BIN" "$NOTIFICATIONS_DB" \
+		"INSERT INTO notifications (app, msg, archived, \"delete\") VALUES ('ping-monitor', '$esc_msg', 0, 0);" >/dev/null 2>&1 || true
 }
 
 sanitize_int() {
@@ -109,6 +158,16 @@ run_ping_once() {
 	fi
 
 	append_sample "$now" "$PING_TARGET" "$status" "$latency" "$message"
+
+	if [ "$status" = "OK" ]; then
+		local latency_int
+		latency_int="$(printf '%s' "$latency" | cut -d '.' -f1)"
+		latency_int="$(sanitize_int "$latency_int" "0")"
+		if [ "$latency_int" -ge "$PING_THRESHOLD" ]; then
+			write_notification "Ping threshold exceeded: target=$PING_TARGET latency=${latency}ms threshold=${PING_THRESHOLD}ms"
+		fi
+	fi
+
 	prune_file
 }
 
