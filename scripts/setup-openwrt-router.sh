@@ -228,6 +228,7 @@ set_uci() {
 require_file "$REPO_DIR/files/moci-connection-flow-collector.sh"
 require_file "$REPO_DIR/files/moci-ping-monitor.sh"
 require_file "$REPO_DIR/files/moci-speedtest-monitor.sh"
+require_file "$REPO_DIR/files/moci-notifications-db.sh"
 require_file "$REPO_DIR/files/moci-state-sync.sh"
 require_file "$REPO_DIR/files/moci-device-quarantine.sh"
 require_file "$REPO_DIR/files/connection-flows-collector.init"
@@ -313,6 +314,7 @@ log "Installing backend workers and init scripts"
 install_file "$REPO_DIR/files/moci-connection-flow-collector.sh" /usr/bin/moci-connection-flow-collector 0755
 install_file "$REPO_DIR/files/moci-ping-monitor.sh" /usr/bin/moci-ping-monitor 0755
 install_file "$REPO_DIR/files/moci-speedtest-monitor.sh" /usr/bin/moci-speedtest-monitor 0755
+install_file "$REPO_DIR/files/moci-notifications-db.sh" /usr/bin/moci-notifications-db 0755
 install_file "$REPO_DIR/files/moci-state-sync.sh" /usr/bin/moci-state-sync 0755
 install_file "$REPO_DIR/files/moci-device-quarantine.sh" /usr/bin/moci-device-quarantine 0755
 install_file "$REPO_DIR/files/connection-flows-collector.init" /etc/init.d/connection-flows-collector 0755
@@ -377,6 +379,7 @@ set_uci moci.quarantine.state_file "/tmp/moci-quarantine-known.txt"
 set_uci moci.quarantine.rule_prefix "moci_quarantine_"
 set_uci moci.state_backup.backup_time "720"
 set_uci moci.state_backup.state_dir "/overlay/moci-state"
+set_uci moci.notifications.db_path "/tmp/moci-notifications.sqlite"
 uci commit moci
 
 if [ "$INSTALL_NETIFY" = "1" ]; then
@@ -409,6 +412,7 @@ fi
 /usr/bin/moci-connection-flow-collector --init-db || true
 /usr/bin/moci-ping-monitor --once || true
 /usr/bin/moci-speedtest-monitor --init-file || true
+/usr/bin/moci-notifications-db --init-db || true
 /usr/bin/moci-state-sync restore || true
 /usr/bin/moci-state-sync sync-cron || true
 
