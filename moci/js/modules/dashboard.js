@@ -268,6 +268,7 @@ export default class DashboardModule {
 		const clientsValue = document.getElementById('clients');
 		const wanStatusHero = document.getElementById('wan-status-hero');
 		const wanStatusLabel = wanStatusHero?.querySelector?.('.hero-label');
+		const wanStatusValue = document.getElementById('wan-status');
 		const cpuCard = cpuValue?.closest?.('.stat-card');
 		const memCard = memValue?.closest?.('.stat-card');
 		const devicesCard = clientsValue?.closest?.('.stat-card');
@@ -286,6 +287,11 @@ export default class DashboardModule {
 			wanStatusLabel.style.cursor = 'pointer';
 			wanStatusLabel.setAttribute('title', 'Open Monitoring');
 			wanStatusLabel.addEventListener('click', openMonitoring);
+		}
+		if (wanStatusValue) {
+			wanStatusValue.style.cursor = 'pointer';
+			wanStatusValue.setAttribute('title', 'Open Monitoring');
+			wanStatusValue.addEventListener('click', openMonitoring);
 		}
 
 		if (devicesCard) {
