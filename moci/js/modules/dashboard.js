@@ -265,9 +265,14 @@ export default class DashboardModule {
 
 		const cpuValue = document.getElementById('cpu');
 		const memValue = document.getElementById('memory');
+		const clientsValue = document.getElementById('clients');
+		const wanStatusHero = document.getElementById('wan-status-hero');
 		const cpuCard = cpuValue?.closest?.('.stat-card');
 		const memCard = memValue?.closest?.('.stat-card');
+		const devicesCard = clientsValue?.closest?.('.stat-card');
 		const openProcesses = () => this.core.navigate('/system/processes');
+		const openMonitoring = () => this.core.navigate('/monitoring');
+		const openDevices = () => this.core.navigate('/devices');
 
 		[cpuCard, memCard].forEach(card => {
 			if (!card) return;
@@ -275,6 +280,18 @@ export default class DashboardModule {
 			card.setAttribute('title', 'Open Processes');
 			card.addEventListener('click', openProcesses);
 		});
+
+		if (wanStatusHero) {
+			wanStatusHero.style.cursor = 'pointer';
+			wanStatusHero.setAttribute('title', 'Open Monitoring');
+			wanStatusHero.addEventListener('click', openMonitoring);
+		}
+
+		if (devicesCard) {
+			devicesCard.style.cursor = 'pointer';
+			devicesCard.setAttribute('title', 'Open Devices');
+			devicesCard.addEventListener('click', openDevices);
+		}
 	}
 
 	async update() {
