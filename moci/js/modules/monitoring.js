@@ -891,18 +891,18 @@ export default class MonitoringModule {
 			return;
 		}
 
-		tbody.innerHTML = rows
-			.map(row => {
-				const latency = row.latency != null ? `${row.latency.toFixed(1)} ms avg` : 'timeout';
-				return `<tr>
-					<td>${this.core.escapeHtml(this.formatTime(row.ts))}</td>
-					<td>${this.core.escapeHtml(row.target || this.target)}</td>
-					<td>${this.core.escapeHtml(latency)}</td>
-					<td>${this.getStatusBadge(row.status)}</td>
-				</tr>`;
-			})
-			.join('');
-	}
+			tbody.innerHTML = rows
+				.map(row => {
+					const latency = row.latency != null ? `${row.latency.toFixed(1)} ms avg` : 'timeout';
+					return `<tr>
+						<td>${this.core.escapeHtml(this.formatMonthDayTime(row.ts))}</td>
+						<td>${this.core.escapeHtml(row.target || this.target)}</td>
+						<td>${this.core.escapeHtml(latency)}</td>
+						<td>${this.getStatusBadge(row.status)}</td>
+					</tr>`;
+				})
+				.join('');
+		}
 
 	renderSpeedtestPanel() {
 		const all = Array.isArray(this.speedtestSamples) ? this.speedtestSamples : [];
@@ -1081,6 +1081,13 @@ export default class MonitoringModule {
 			hour: '2-digit',
 			minute: '2-digit'
 		});
+	}
+
+	formatMonthDayTime(ts) {
+		const d = new Date(ts);
+		const datePart = d.toLocaleDateString([], { month: '2-digit', day: '2-digit' });
+		const timePart = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+		return `${datePart} ${timePart}`;
 	}
 
 	formatDate(ts, short = false) {
