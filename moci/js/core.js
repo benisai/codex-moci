@@ -6,6 +6,7 @@ export class OpenWrtCore {
 		this.routes = new Map();
 		this.currentRoute = null;
 		this.dashboardQuickActionsBound = false;
+		this.notificationPollInterval = null;
 	}
 
 	registerRoute(path, handler) {
@@ -247,6 +248,7 @@ export class OpenWrtCore {
 
 	startApplication() {
 		this.attachEventListeners();
+		this.startNotificationPoll();
 
 		window.addEventListener('hashchange', () => this.handleRouteChange());
 
@@ -264,6 +266,58 @@ export class OpenWrtCore {
 	attachEventListeners() {
 		document.getElementById('logout-btn')?.addEventListener('click', () => this.logout());
 		this.bindDashboardQuickActions();
+	}
+
+	startNotificationPoll() {
+		if (this.notificationPollInterval) return;
+		this.refreshNotificationBell();
+		this.notificationPollInterval = setInterval(() => this.refreshNotificationBell(), 15000);
+	}
+
+	async refreshNotificationBell() {
+		const bell = document.getElementById('notifications-bell');
+		if (!bell || !this.sessionId) return;
+
+		try {
+			const dbPath = await this.getNotificationsDbPath();
+			const sql = 'SELECT COUNT(*) FROM notifications WHERE archived = 0 AND "delete" = 0;';
+			const cmd = `
+SQLITE_BIN="$(command -v sqlite3 || command -v sqlite3-cli || true)"
+[ -n "$SQLITE_BIN" ] || exit 0
+[ -f ${this.shellQuote(dbPath)} ] || exit 0
+"$SQLITE_BIN" -noheader ${this.shellQuote(dbPath)} ${this.shellQuote(sql)}
+`;
+			const [status, result] = await this.ubusCall(
+				'file',
+				'exec',
+				{ command: '/bin/sh', params: ['-c', cmd] },
+				{ timeout: 7000 }
+			);
+			if (status !== 0 || Number(result?.code || 0) !== 0) {
+				bell.classList.remove('has-alert');
+				return;
+			}
+			const count = Number(String(result?.stdout || '').trim() || 0);
+			if (Number.isFinite(count) && count > 0) bell.classList.add('has-alert');
+			else bell.classList.remove('has-alert');
+		} catch {
+			bell.classList.remove('has-alert');
+		}
+	}
+
+	async getNotificationsDbPath() {
+		try {
+			const [status, result] = await this.uciGet('moci', 'notifications');
+			if (status === 0) {
+				const configured = String(result?.values?.db_path || '').trim();
+				if (configured) return configured;
+			}
+		} catch {}
+		return '/tmp/moci-notifications.sqlite';
+	}
+
+	shellQuote(value) {
+		return `'${String(value).replace(/'/g, `'\\''`)}'`;
 	}
 
 	bindDashboardQuickActions() {
