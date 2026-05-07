@@ -4,6 +4,7 @@ export default class NotificationsModule {
 		this.initialized = false;
 		this.dbPath = '/tmp/moci-notifications.sqlite';
 		this.pollInterval = null;
+		this.showArchived = false;
 
 		this.core.registerRoute('/notifications', async () => {
 			const pageElement = document.getElementById('notifications-page');
@@ -20,6 +21,9 @@ export default class NotificationsModule {
 
 	bindHandlers() {
 		document.getElementById('notifications-refresh-btn')?.addEventListener('click', () => this.loadRows(true));
+		document
+			.getElementById('notifications-toggle-archived-btn')
+			?.addEventListener('click', () => this.toggleArchivedFilter());
 
 		const tbody = document.querySelector('#notifications-table tbody');
 		tbody?.addEventListener('click', async event => {
@@ -37,8 +41,21 @@ export default class NotificationsModule {
 
 	async load() {
 		await this.loadConfig();
+		this.updateArchivedToggleLabel();
 		this.startPolling();
 		await this.loadRows(false);
+	}
+
+	toggleArchivedFilter() {
+		this.showArchived = !this.showArchived;
+		this.updateArchivedToggleLabel();
+		this.loadRows(false);
+	}
+
+	updateArchivedToggleLabel() {
+		const btn = document.getElementById('notifications-toggle-archived-btn');
+		if (!btn) return;
+		btn.textContent = this.showArchived ? 'HIDE ARCHIVED' : 'SHOW ARCHIVED';
 	}
 
 	startPolling() {
@@ -100,7 +117,8 @@ export default class NotificationsModule {
 	}
 
 	async fetchRows() {
-		const sql = `SELECT id, timestamp, app, msg, archived, "delete" FROM notifications WHERE "delete" = 0 ORDER BY timestamp DESC LIMIT 200;`;
+		const archivedClause = this.showArchived ? '' : ' AND archived = 0';
+		const sql = `SELECT id, timestamp, app, msg, archived, "delete" FROM notifications WHERE "delete" = 0${archivedClause} ORDER BY timestamp DESC LIMIT 200;`;
 		const cmd = `
 SQLITE_BIN="$(command -v sqlite3 || command -v sqlite3-cli || true)"
 [ -n "$SQLITE_BIN" ] || exit 7
