@@ -691,7 +691,7 @@ SQLITE_BIN="$(command -v sqlite3 || command -v sqlite3-cli || true)"
 				btn.classList.remove('active');
 			});
 
-			const tabContent = document.getElementById(`tab-${resolvedTab}`);
+			const tabContent = document.querySelector(`#${pageId} #tab-${resolvedTab}`);
 			if (tabContent) tabContent.classList.remove('hidden');
 
 			const tabBtn = document.querySelector(`#${pageId} .tab-btn[data-tab="${resolvedTab}"]`);
