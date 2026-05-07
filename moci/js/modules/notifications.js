@@ -66,16 +66,12 @@ export default class NotificationsModule {
 		try {
 			const rows = await this.fetchRows();
 			if (!rows.length) {
-				this.core.renderEmptyTable(tbody, 5, 'No notifications');
+				this.core.renderEmptyTable(tbody, 4, 'No notifications');
 				return;
 			}
 
 			tbody.innerHTML = rows
 				.map(row => {
-					const status = Number(row.archived) === 1 ? 'ARCHIVED' : 'ACTIVE';
-					const statusPill = Number(row.archived) === 1
-						? this.core.renderBadge('warning', status)
-						: this.core.renderBadge('success', status);
 					const archiveBtn =
 						Number(row.archived) === 1
 							? ''
@@ -85,7 +81,6 @@ export default class NotificationsModule {
 						<td>${this.core.escapeHtml(this.formatTimestamp(row.timestamp))}</td>
 						<td>${this.core.escapeHtml(row.app || '-')}</td>
 						<td>${this.core.escapeHtml(row.msg || '-')}</td>
-						<td>${statusPill}</td>
 						<td>
 							<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
 								${archiveBtn}
@@ -99,7 +94,7 @@ export default class NotificationsModule {
 			if (showToast) this.core.showToast('Notifications refreshed', 'success');
 		} catch (err) {
 			console.error('Failed to load notifications:', err);
-			this.core.renderEmptyTable(tbody, 5, 'Failed to load notifications');
+			this.core.renderEmptyTable(tbody, 4, 'Failed to load notifications');
 			if (showToast) this.core.showToast('Failed to load notifications', 'error');
 		}
 	}
