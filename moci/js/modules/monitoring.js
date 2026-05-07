@@ -981,7 +981,6 @@ export default class MonitoringModule {
 		this.renderRecentTable(aggregated);
 		const dnsAggregated = this.aggregateDnsSamples(this.dnsSamples);
 		this.renderDnsStatusCard(dnsAggregated);
-		this.renderDnsTimeline(dnsAggregated);
 		this.renderDnsRecentTable(dnsAggregated);
 		this.renderSpeedtestPanel();
 	}
@@ -1043,37 +1042,6 @@ export default class MonitoringModule {
 		const failPct = total > 0 ? (fail / total) * 100 : 0;
 		if (avgEl) avgEl.textContent = `${successPct.toFixed(0)}%`;
 		if (lossEl) lossEl.textContent = `${failPct.toFixed(0)}%`;
-	}
-
-	renderDnsTimeline(displaySamples = []) {
-		const bars = document.getElementById('monitoring-dns-timeline-bars');
-		const labels = document.getElementById('monitoring-dns-timeline-labels');
-		if (!bars || !labels) return;
-		const segments = displaySamples.slice(-12);
-		if (segments.length === 0) {
-			bars.innerHTML = '<div class="monitoring-empty">No data yet</div>';
-			labels.innerHTML = '';
-			return;
-		}
-		bars.innerHTML = segments
-			.map(sample => {
-				const cls =
-					sample.status === 'ok'
-						? 'ok'
-						: sample.status === 'good'
-							? 'good'
-							: sample.status === 'warn'
-								? 'warn'
-								: sample.status === 'critical'
-									? 'critical'
-									: 'error';
-					const title = `${sample.result || 'FAIL'} (${Math.round(sample.failPct || 0)}% fail)`;
-					return `<div class="monitoring-segment ${cls}" title="${this.core.escapeHtml(title)}"></div>`;
-			})
-			.join('');
-		labels.innerHTML = segments
-			.map(s => `<span>${this.core.escapeHtml(this.formatTime(s.ts))}</span>`)
-			.join('');
 	}
 
 	renderDnsRecentTable(displaySamples = []) {
