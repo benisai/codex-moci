@@ -36,6 +36,8 @@ export default class DashboardModule {
 		this.monthStartDay = 10;
 		this.lastMonthlyUsageRefresh = 0;
 		this.systemCardShortcutsBound = false;
+		this.lastCpu100NotificationAt = 0;
+		this.cpu100NotificationCooldownMs = 5 * 60 * 1000;
 
 		this.core.registerRoute('/dashboard', () => this.load());
 	}
@@ -521,10 +523,73 @@ export default class DashboardModule {
 			const currentStats = this.parseCpuStats(content);
 			const usage = this.calculateCpuUsage(currentStats, this.lastCpuStats);
 			this.renderCpuUsage(usage);
+			await this.maybeNotifyCpu100(usage);
 			this.lastCpuStats = currentStats;
 		} catch (err) {
 			this.renderCpuUsage(null);
 		}
+	}
+
+	async maybeNotifyCpu100(usageValue) {
+		const usage = Number(usageValue);
+		if (!Number.isFinite(usage)) return;
+		if (usage < 100) return;
+
+		const now = Date.now();
+		if (now - this.lastCpu100NotificationAt < this.cpu100NotificationCooldownMs) return;
+		this.lastCpu100NotificationAt = now;
+
+		try {
+			const dbPath = await this.getNotificationsDbPath();
+			const message = `CPU reached 100% on dashboard sample (${usage.toFixed(1)}%)`;
+			const sql = `INSERT INTO notifications (app, msg, archived, "delete") VALUES ('dashboard', '${this.escapeSql(message)}', 0, 0);`;
+			const cmd = `
+SQLITE_BIN="$(command -v sqlite3 || command -v sqlite3-cli || true)"
+[ -n "$SQLITE_BIN" ] || exit 7
+mkdir -p "$(dirname ${this.shellQuote(dbPath)})"
+"$SQLITE_BIN" ${this.shellQuote(dbPath)} <<'SQL'
+CREATE TABLE IF NOT EXISTS notifications (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	timestamp INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER)),
+	app TEXT NOT NULL DEFAULT '',
+	msg TEXT NOT NULL DEFAULT '',
+	archived INTEGER NOT NULL DEFAULT 0,
+	"delete" INTEGER NOT NULL DEFAULT 0
+);
+${sql}
+SQL
+`;
+			const [status, result] = await this.core.ubusCall(
+				'file',
+				'exec',
+				{ command: '/bin/sh', params: ['-c', cmd] },
+				{ timeout: 10000 }
+			);
+			if (status !== 0 || Number(result?.code || 0) !== 0) {
+				this.lastCpu100NotificationAt = 0;
+			}
+		} catch {
+			this.lastCpu100NotificationAt = 0;
+		}
+	}
+
+	async getNotificationsDbPath() {
+		try {
+			const [status, result] = await this.core.uciGet('moci', 'notifications');
+			if (status === 0) {
+				const configured = String(result?.values?.db_path || '').trim();
+				if (configured) return configured;
+			}
+		} catch {}
+		return '/tmp/moci-notifications.sqlite';
+	}
+
+	shellQuote(value) {
+		return `'${String(value).replace(/'/g, `'\\''`)}'`;
+	}
+
+	escapeSql(value) {
+		return String(value).replace(/'/g, "''");
 	}
 
 	async fetchNetworkStats() {
