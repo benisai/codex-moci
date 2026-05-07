@@ -361,12 +361,33 @@ export default class DashboardModule {
 
 		document.getElementById('monthly-usage-settings-btn')?.addEventListener('click', () => {
 			const limitInput = document.getElementById('monthly-usage-limit-gb-input');
-			const ifaceInput = document.getElementById('monthly-usage-vnstat-interface-input');
 			const dayInput = document.getElementById('monthly-usage-start-day-input');
 			if (limitInput) limitInput.value = String(this.monthlyBandwidthGb ?? 500);
-			if (ifaceInput) ifaceInput.value = String(this.vnstatInterface || 'br-lan');
+			this.populateVnstatInterfaceOptions(String(this.vnstatInterface || 'br-lan'));
 			if (dayInput) dayInput.value = String(this.monthStartDay ?? 10);
 		});
+	}
+
+	async populateVnstatInterfaceOptions(selectedValue = 'br-lan') {
+		const ifaceInput = document.getElementById('monthly-usage-vnstat-interface-input');
+		if (!ifaceInput) return;
+
+		const wanted = String(selectedValue || 'br-lan').trim() || 'br-lan';
+		const names = new Set(['br-lan']);
+
+		try {
+			const payload = await this.fetchVnstatPayload();
+			const interfaces = Array.isArray(payload?.interfaces) ? payload.interfaces : [];
+			interfaces.forEach(item => {
+				const name = String(item?.name || '').trim();
+				if (name) names.add(name);
+			});
+		} catch {}
+
+		if (wanted) names.add(wanted);
+		const sorted = Array.from(names).sort((a, b) => a.localeCompare(b));
+		ifaceInput.innerHTML = sorted.map(name => `<option value="${this.core.escapeHtml(name)}">${this.core.escapeHtml(name)}</option>`).join('');
+		ifaceInput.value = wanted;
 	}
 
 	async saveMonthlyUsageSettings() {
