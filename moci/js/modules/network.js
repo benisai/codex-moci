@@ -31,6 +31,7 @@ export default class NetworkModule {
 					firewall: () => this.loadFirewall(),
 					dhcp: () => this.loadDHCP(),
 					dns: () => this.loadDNS(),
+					banip: () => this.loadBanIP(),
 					'adblock-classic': () => this.loadAdblockClassic(),
 					'adblock-fast': () => this.loadAdblock(),
 					pbr: () => this.loadPBR(),
@@ -321,11 +322,34 @@ export default class NetworkModule {
 				this.syncAdblockClassicFeedSummary();
 			}
 		});
+		document.getElementById('banip-feed-list')?.addEventListener('change', event => {
+			const target = event?.target;
+			if (target && target.classList?.contains('banip-feed-checkbox')) {
+				this.syncBanIPSelectionSummary();
+			}
+		});
+		document.getElementById('banip-country-list')?.addEventListener('change', event => {
+			const target = event?.target;
+			if (target && target.classList?.contains('banip-country-checkbox')) {
+				this.syncBanIPSelectionSummary();
+			}
+		});
 		document.getElementById('add-adblock-list-btn')?.addEventListener('click', () => {
 			this.core.resetModal('adblock-list-modal');
 			this.resetAdblockListForm();
 			this.core.openModal('adblock-list-modal');
 		});
+		document.getElementById('save-banip-feed-btn')?.addEventListener('click', () => this.saveBanIPFeeds());
+		document.getElementById('refresh-banip-feed-btn')?.addEventListener('click', () => this.loadBanIP());
+		document.getElementById('save-banip-settings-btn')?.addEventListener('click', () => this.saveBanIPSettings());
+		document.getElementById('banip-start-btn')?.addEventListener('click', () => this.runBanIPServiceAction('start'));
+		document.getElementById('banip-stop-btn')?.addEventListener('click', () => this.runBanIPServiceAction('stop'));
+		document.getElementById('banip-restart-btn')?.addEventListener('click', () => this.runBanIPServiceAction('restart'));
+		document.getElementById('banip-enable-btn')?.addEventListener('click', () => this.runBanIPServiceAction('enable'));
+		document.getElementById('banip-disable-btn')?.addEventListener('click', () => this.runBanIPServiceAction('disable'));
+		document.getElementById('banip-settings-toggle-btn')?.addEventListener('click', () =>
+			this.toggleBanIPSettingsPanel()
+		);
 		document.getElementById('adblock-classic-settings-toggle-btn')?.addEventListener('click', () =>
 			this.toggleAdblockClassicSettingsPanel()
 		);
@@ -399,6 +423,7 @@ export default class NetworkModule {
 		});
 		this.syncAdblockSettingsPanel();
 		this.syncAdblockClassicSettingsPanel();
+		this.syncBanIPSettingsPanel();
 		this.syncAdblockSettingsButtons();
 		this.syncPbrSettingsPanel();
 		this.syncAllPbrSectionPanels();
@@ -509,6 +534,44 @@ export default class NetworkModule {
 		if (!body || !icon || !btn) return;
 
 		const expanded = localStorage.getItem('adblock_classic_settings_expanded') === '1';
+		if (expanded) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+		}
+	}
+
+	toggleBanIPSettingsPanel() {
+		const body = document.getElementById('banip-settings-body');
+		const icon = document.getElementById('banip-settings-toggle-icon');
+		const btn = document.getElementById('banip-settings-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const isHidden = body.style.display === 'none' || body.style.display === '';
+		if (isHidden) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+			localStorage.setItem('banip_settings_expanded', '1');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+			localStorage.setItem('banip_settings_expanded', '0');
+		}
+	}
+
+	syncBanIPSettingsPanel() {
+		const body = document.getElementById('banip-settings-body');
+		const icon = document.getElementById('banip-settings-toggle-icon');
+		const btn = document.getElementById('banip-settings-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const expanded = localStorage.getItem('banip_settings_expanded') === '1';
 		if (expanded) {
 			body.style.display = 'block';
 			icon.textContent = '▾';
@@ -2646,6 +2709,283 @@ done`;
 			}
 		} catch {}
 		return '';
+	}
+
+	async loadBanIP() {
+		const installHintEl = document.getElementById('banip-install-hint');
+		const feedListEl = document.getElementById('banip-feed-list');
+		const countryListEl = document.getElementById('banip-country-list');
+		const asnInput = document.getElementById('banip-asn-input');
+		const enabledEl = document.getElementById('banip-enabled');
+
+		if (!feedListEl || !countryListEl || !asnInput || !enabledEl) return;
+
+		if (!this.core.isFeatureEnabled('banip')) return;
+
+		feedListEl.innerHTML = '<div style="color: var(--steel-muted)">Loading...</div>';
+		countryListEl.innerHTML = '<div style="color: var(--steel-muted)">Loading...</div>';
+
+		let values = null;
+		try {
+			const [status, result] = await this.core.uciGet('banip', 'global');
+			if (status === 0 && result?.values) values = result.values;
+		} catch {}
+
+		let installed = false;
+		try {
+			const [status, result] = await this.core.ubusCall('service', 'list', { name: 'banip' });
+			installed = status === 0 && Boolean(result?.banip);
+		} catch {}
+		if (!installed) {
+			try {
+				const [status, result] = await this.core.ubusCall('file', 'exec', {
+					command: '/bin/sh',
+					params: ['-c', '[ -x /etc/init.d/banip ] && echo INSTALLED || echo MISSING']
+				});
+				installed = status === 0 && String(result?.stdout || '').trim() === 'INSTALLED';
+			} catch {}
+		}
+		if (installHintEl) installHintEl.classList.toggle('hidden', installed);
+
+		const selectedFeeds = (Array.isArray(values?.ban_feed) ? values.ban_feed : [values?.ban_feed])
+			.map(v => String(v || '').trim())
+			.filter(Boolean);
+		const selectedCountries = (Array.isArray(values?.ban_country) ? values.ban_country : [values?.ban_country])
+			.map(v => String(v || '').trim().toLowerCase())
+			.filter(Boolean);
+		const selectedAsn = (Array.isArray(values?.ban_asn) ? values.ban_asn : [values?.ban_asn])
+			.map(v => String(v || '').trim())
+			.filter(Boolean);
+
+		await this.loadBanIPFeedOptions(selectedFeeds);
+		await this.loadBanIPCountryOptions(selectedCountries);
+		asnInput.value = selectedAsn.join(', ');
+		enabledEl.value = String(values?.ban_enabled || '1') === '0' ? '0' : '1';
+		this.syncBanIPSelectionSummary();
+		await this.loadBanIPServiceState();
+	}
+
+	parseBanIPFeedsFromText(text) {
+		const map = new Map();
+		if (!text) return map;
+		try {
+			const obj = JSON.parse(text);
+			for (const [id, cfg] of Object.entries(obj || {})) {
+				const key = String(id || '').trim();
+				if (!key) continue;
+				const descr = String(cfg?.descr || '').trim();
+				map.set(key, descr ? `${key} (${descr})` : key);
+			}
+		} catch {}
+		return map;
+	}
+
+	parseBanIPCountriesFromText(text) {
+		const rows = [];
+		const content = String(text || '').trim();
+		if (!content) return rows;
+		const re = /([a-z]{2})\s+([A-Z]+)\s+(.+?)(?=\s+[a-z]{2}\s+[A-Z]+\s+|$)/g;
+		let match;
+		while ((match = re.exec(content))) {
+			const code = String(match[1] || '').trim().toLowerCase();
+			const rir = String(match[2] || '').trim();
+			const name = String(match[3] || '').trim();
+			if (!code) continue;
+			rows.push({ code, label: `${code.toUpperCase()} - ${name}${rir ? ` (${rir})` : ''}` });
+		}
+		return rows;
+	}
+
+	async loadBanIPFeedOptions(selectedFeeds = []) {
+		const list = document.getElementById('banip-feed-list');
+		if (!list) return;
+		const selectedSet = new Set((selectedFeeds || []).map(v => String(v || '').trim()).filter(Boolean));
+		const sourceMap = new Map();
+
+		for (const path of ['/etc/banip/banip.custom.feeds', '/etc/banip/banip.feeds']) {
+			const text = await this.readTextFileFlexible(path);
+			if (!text) continue;
+			const parsed = this.parseBanIPFeedsFromText(text);
+			for (const [id, label] of parsed.entries()) {
+				if (!sourceMap.has(id)) sourceMap.set(id, label || id);
+			}
+		}
+		for (const id of selectedSet) {
+			if (!sourceMap.has(id)) sourceMap.set(id, id);
+		}
+
+		const options = Array.from(sourceMap.entries()).sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+		list.innerHTML = options.length
+			? options
+					.map(([id, label]) => {
+						const escapedId = this.core.escapeHtml(id);
+						const escapedLabel = this.core.escapeHtml(label || id);
+						const checked = selectedSet.has(id) ? ' checked' : '';
+						return `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;">
+							<input type="checkbox" class="banip-feed-checkbox" value="${escapedId}"${checked} />
+							<span style="font-family: var(--font-mono); font-size: 11px;">${escapedLabel}</span>
+						</label>`;
+					})
+					.join('')
+			: '<div style="color: var(--steel-muted)">No feed catalog found</div>';
+	}
+
+	async loadBanIPCountryOptions(selectedCountries = []) {
+		const list = document.getElementById('banip-country-list');
+		if (!list) return;
+		const selectedSet = new Set((selectedCountries || []).map(v => String(v || '').trim().toLowerCase()).filter(Boolean));
+		const rows = this.parseBanIPCountriesFromText(await this.readTextFileFlexible('/etc/banip/banip.countries'));
+
+		for (const code of selectedSet) {
+			if (!rows.find(r => r.code === code)) {
+				rows.push({ code, label: code.toUpperCase() });
+			}
+		}
+		rows.sort((a, b) => String(a.code).localeCompare(String(b.code)));
+
+		list.innerHTML = rows.length
+			? rows
+					.map(row => {
+						const checked = selectedSet.has(row.code) ? ' checked' : '';
+						return `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;">
+							<input type="checkbox" class="banip-country-checkbox" value="${this.core.escapeHtml(row.code)}"${checked} />
+							<span style="font-family: var(--font-mono); font-size: 11px;">${this.core.escapeHtml(row.label)}</span>
+						</label>`;
+					})
+					.join('')
+			: '<div style="color: var(--steel-muted)">No country catalog found</div>';
+	}
+
+	getBanIPCheckedValues(selector) {
+		return Array.from(document.querySelectorAll(selector))
+			.filter(el => el.checked)
+			.map(el => String(el.value || '').trim())
+			.filter(Boolean);
+	}
+
+	parseBanIPAsnValues(raw) {
+		return Array.from(
+			new Set(
+				String(raw || '')
+					.split(/[\s,;]+/)
+					.map(v => String(v || '').trim().toUpperCase())
+					.filter(Boolean)
+					.map(v => (v.startsWith('AS') ? v.slice(2) : v))
+					.filter(v => /^\d+$/.test(v))
+			)
+		);
+	}
+
+	syncBanIPSelectionSummary() {
+		const feedSummary = document.getElementById('banip-feed-selected');
+		const countrySummary = document.getElementById('banip-country-selected');
+		if (feedSummary) {
+			const values = this.getBanIPCheckedValues('#banip-feed-list .banip-feed-checkbox');
+			feedSummary.textContent = values.length > 0 ? `${values.length} selected: ${values.join(', ')}` : 'No feeds selected';
+		}
+		if (countrySummary) {
+			const values = this.getBanIPCheckedValues('#banip-country-list .banip-country-checkbox').map(v =>
+				String(v || '').toUpperCase()
+			);
+			countrySummary.textContent =
+				values.length > 0 ? `${values.length} selected: ${values.join(', ')}` : 'No countries selected';
+		}
+	}
+
+	async saveBanIPFeeds() {
+		const saveBtn = document.getElementById('save-banip-feed-btn');
+		const feeds = this.getBanIPCheckedValues('#banip-feed-list .banip-feed-checkbox');
+		const countries = this.getBanIPCheckedValues('#banip-country-list .banip-country-checkbox').map(v =>
+			String(v || '').toLowerCase()
+		);
+		const asnValues = this.parseBanIPAsnValues(document.getElementById('banip-asn-input')?.value || '');
+
+		if (saveBtn) {
+			saveBtn.disabled = true;
+			saveBtn.textContent = 'SAVING...';
+		}
+		try {
+			const script = [
+				'uci -q del banip.global.ban_feed',
+				'uci -q del banip.global.ban_country',
+				'uci -q del banip.global.ban_asn',
+				...feeds.map(v => `uci add_list banip.global.ban_feed=${this.shellQuote(v)}`),
+				...countries.map(v => `uci add_list banip.global.ban_country=${this.shellQuote(v)}`),
+				...asnValues.map(v => `uci add_list banip.global.ban_asn=${this.shellQuote(v)}`),
+				'uci commit banip'
+			].join('; ');
+			const [status] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', script]
+			});
+			if (status !== 0) throw new Error('Unable to save banIP feed selection');
+			this.syncBanIPSelectionSummary();
+			this.core.showToast('BanIP feed selection saved', 'success');
+		} catch (err) {
+			console.error('Failed to save banIP feeds:', err);
+			this.core.showToast('Failed to save BanIP feed selection', 'error');
+		} finally {
+			if (saveBtn) {
+				saveBtn.disabled = false;
+				saveBtn.textContent = 'SAVE FEEDS';
+			}
+		}
+	}
+
+	async loadBanIPServiceState() {
+		const serviceStatusEl = document.getElementById('banip-service-status');
+		const bootStatusEl = document.getElementById('banip-boot-status');
+		if (!serviceStatusEl || !bootStatusEl) return;
+
+		try {
+			const [s1, r1] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', '/etc/init.d/banip running >/dev/null 2>&1 && echo RUNNING || echo STOPPED']
+			});
+			const running = s1 === 0 && String(r1?.stdout || '').trim() === 'RUNNING';
+			serviceStatusEl.innerHTML = this.core.renderBadge(running ? 'success' : 'error', running ? 'RUNNING' : 'STOPPED');
+		} catch {
+			serviceStatusEl.innerHTML = this.core.renderBadge('error', 'UNKNOWN');
+		}
+
+		try {
+			const [s2, r2] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', '/etc/init.d/banip enabled >/dev/null 2>&1 && echo ENABLED || echo DISABLED']
+			});
+			const enabled = s2 === 0 && String(r2?.stdout || '').trim() === 'ENABLED';
+			bootStatusEl.innerHTML = this.core.renderBadge(enabled ? 'success' : 'error', enabled ? 'ENABLED' : 'DISABLED');
+		} catch {
+			bootStatusEl.innerHTML = this.core.renderBadge('error', 'UNKNOWN');
+		}
+	}
+
+	async saveBanIPSettings() {
+		const enabled = String(document.getElementById('banip-enabled')?.value || '1') === '0' ? '0' : '1';
+		try {
+			await this.core.uciSet('banip', 'global', { ban_enabled: enabled });
+			await this.core.uciCommit('banip');
+			this.core.showToast('BanIP settings saved', 'success');
+			await this.loadBanIPServiceState();
+		} catch (err) {
+			console.error('Failed to save BanIP settings:', err);
+			this.core.showToast('Failed to save BanIP settings', 'error');
+		}
+	}
+
+	async runBanIPServiceAction(action) {
+		try {
+			const [status] = await this.core.ubusCall('file', 'exec', {
+				command: '/etc/init.d/banip',
+				params: [action]
+			});
+			if (status !== 0) throw new Error(`banip ${action} failed`);
+			this.core.showToast(`BanIP ${action} complete`, 'success');
+			setTimeout(() => this.loadBanIPServiceState(), 600);
+		} catch (err) {
+			console.error(`Failed to ${action} BanIP:`, err);
+			this.core.showToast(`Failed to ${action} BanIP`, 'error');
+		}
 	}
 
 	getDefaultAdblockClassicSources() {

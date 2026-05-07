@@ -11,9 +11,12 @@
 				"/proc/sys/net/netfilter/nf_conntrack_count": ["read"],
 				"/proc/sys/net/netfilter/nf_conntrack_max": ["read"],
 				"/etc/crontabs/root": ["read"],
-				"/etc/dropbear/authorized_keys": ["read"],
-				"/etc/hosts": ["read"],
-				"/tmp/moci-ping-monitor.txt": ["read"],
+					"/etc/dropbear/authorized_keys": ["read"],
+					"/etc/hosts": ["read"],
+					"/etc/banip/banip.feeds": ["read"],
+					"/etc/banip/banip.custom.feeds": ["read"],
+					"/etc/banip/banip.countries": ["read"],
+					"/tmp/moci-ping-monitor.txt": ["read"],
 				"/tmp/moci-dns-monitor.txt": ["read"],
 				"/tmp/moci-speedtest-monitor.txt": ["read"],
 				"/tmp/moci-netify.sqlite": ["read"],
@@ -31,18 +34,19 @@
 				"luci.bandix": ["getStatus", "getMetrics"],
 				"service": ["list"]
 			},
-			"uci": ["moci"]
-		},
+				"uci": ["moci", "banip"]
+			},
 		"write": {
 			"file": {
 				"/bin/sh": ["exec"],
 				"/bin/rm": ["exec"],
 				"/etc/init.d/netify-collector": ["exec"],
 				"/etc/init.d/connection-flows-collector": ["exec"],
-				"/etc/init.d/ping-monitor": ["exec"],
-				"/etc/init.d/dns-monitor": ["exec"],
-				"/etc/init.d/dnsmasq": ["exec"],
-				"/etc/init.d/firewall": ["exec"],
+					"/etc/init.d/ping-monitor": ["exec"],
+					"/etc/init.d/dns-monitor": ["exec"],
+					"/etc/init.d/dnsmasq": ["exec"],
+					"/etc/init.d/banip": ["exec"],
+					"/etc/init.d/firewall": ["exec"],
 				"/usr/bin/moci-netify-collector": ["exec"],
 				"/usr/bin/moci-connection-flow-collector": ["exec"],
 				"/usr/bin/moci-speedtest-monitor": ["exec"],
@@ -66,11 +70,12 @@
 				"wireless",
 				"firewall",
 				"dhcp",
-				"system",
-				"qos",
-				"ddns",
-				"moci"
-			]
+					"system",
+					"qos",
+					"ddns",
+					"banip",
+					"moci"
+				]
 		}
 	}
 }

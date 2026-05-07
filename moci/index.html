@@ -474,6 +474,7 @@
 							<button class="tab-btn" data-tab="firewall">FIREWALL</button>
 							<button class="tab-btn" data-tab="dhcp" data-feature="dhcp">DHCP</button>
 							<button class="tab-btn" data-tab="dns" data-feature="dns">DNS & HOSTS</button>
+							<button class="tab-btn" data-tab="banip" data-feature="banip">BANIP</button>
 							<button class="tab-btn" data-tab="adblock-classic" data-feature="adblock">ADBLOCK</button>
 							<button class="tab-btn" data-tab="adblock-fast" data-feature="adblock_fast">ADBLOCK-FAST</button>
 							<button class="tab-btn" data-tab="pbr" data-feature="pbr">PBR</button>
@@ -1839,6 +1840,85 @@ Endpoint = host:51820"
 										</tr>
 									</tbody>
 								</table>
+							</div>
+						</div>
+
+						<div class="tab-content hidden" id="tab-banip" data-feature="banip">
+							<div class="stat-card">
+								<div class="section-title">FEED PANEL</div>
+								<div
+									id="banip-install-hint"
+									class="hidden"
+									style="margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--glass-border); border-radius: 6px; color: var(--steel-muted); font-size: 12px"
+								>
+									BanIP package not found. Install <code>banip</code> (and optional LuCI package) first.
+								</div>
+
+								<div class="form-group">
+									<label class="form-label">EXTERNAL BLOCKLIST FEEDS</label>
+									<div id="banip-feed-list" class="form-input" style="min-height: 220px; max-height: 320px; overflow-y: auto; padding: 8px">
+										Loading...
+									</div>
+									<div id="banip-feed-selected" style="margin-top: 6px; color: var(--steel-muted); font-size: 11px; font-family: var(--font-mono)">
+										No feeds selected
+									</div>
+								</div>
+
+								<div class="form-group">
+									<label class="form-label">COUNTRY SELECTION</label>
+									<div id="banip-country-list" class="form-input" style="min-height: 180px; max-height: 300px; overflow-y: auto; padding: 8px">
+										Loading...
+									</div>
+									<div id="banip-country-selected" style="margin-top: 6px; color: var(--steel-muted); font-size: 11px; font-family: var(--font-mono)">
+										No countries selected
+									</div>
+								</div>
+
+								<div class="form-group">
+									<label class="form-label">ASN SELECTION</label>
+									<input type="text" id="banip-asn-input" class="form-input" placeholder="AS2906, AS40027 (comma or space separated)" />
+								</div>
+
+								<div class="quick-actions">
+									<button class="action-btn" id="save-banip-feed-btn">SAVE FEEDS</button>
+									<button class="action-btn" id="refresh-banip-feed-btn">REFRESH</button>
+								</div>
+							</div>
+
+							<div class="stat-card netify-collapsible-card" style="margin-top: 24px">
+								<div class="netify-collapsible-header">
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">
+										BANIP SETTINGS
+									</div>
+									<button class="netify-toggle-btn" id="banip-settings-toggle-btn" type="button" aria-expanded="false">
+										<span id="banip-settings-toggle-icon">▸</span>
+									</button>
+								</div>
+								<div id="banip-settings-body" style="margin-top: 16px; display: none">
+									<div class="form-group">
+										<label class="form-label">SERVICE STATUS</label>
+										<div id="banip-service-status">Loading...</div>
+									</div>
+									<div class="form-group">
+										<label class="form-label">BOOT STATUS</label>
+										<div id="banip-boot-status">Loading...</div>
+									</div>
+									<div class="form-group">
+										<label class="form-label">ENABLED</label>
+										<select id="banip-enabled" class="form-input">
+											<option value="1">Enabled</option>
+											<option value="0">Disabled</option>
+										</select>
+									</div>
+									<div class="quick-actions">
+										<button class="action-btn" id="save-banip-settings-btn">SAVE CONFIGURATION</button>
+										<button class="action-btn success" id="banip-start-btn">START</button>
+										<button class="action-btn danger" id="banip-stop-btn">STOP</button>
+										<button class="action-btn warning" id="banip-restart-btn">RESTART</button>
+										<button class="action-btn" id="banip-enable-btn">ENABLE BOOT</button>
+										<button class="action-btn" id="banip-disable-btn">DISABLE BOOT</button>
+									</div>
+								</div>
 							</div>
 						</div>
 

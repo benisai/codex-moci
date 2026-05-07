@@ -147,6 +147,7 @@ export class OpenWrtCore {
 			firewall: '1',
 			dhcp: '1',
 			dns: '1',
+			banip: '1',
 			adblock: '1',
 			adblock_fast: '1',
 			pbr: '1',

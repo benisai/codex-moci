@@ -270,6 +270,8 @@ for pkg in \
 	luci-app-vnstat2 \
 	nlbwmon \
 	luci-app-nlbwmon \
+	banip \
+	luci-app-banip \
 	qos-scripts \
 	luci-app-qos \
 	wireguard-tools \
@@ -342,6 +344,7 @@ uci commit uhttpd
 
 log "Applying MoCI runtime defaults"
 set_uci moci.features.qosify "1"
+set_uci moci.features.banip "1"
 set_uci moci.features.adblock "$INSTALL_ADBLOCK"
 set_uci moci.features.adblock_fast "$INSTALL_ADBLOCK"
 set_uci moci.features.pbr "$INSTALL_PBR"
