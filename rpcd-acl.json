@@ -14,6 +14,7 @@
 				"/etc/dropbear/authorized_keys": ["read"],
 				"/etc/hosts": ["read"],
 				"/tmp/moci-ping-monitor.txt": ["read"],
+				"/tmp/moci-dns-monitor.txt": ["read"],
 				"/tmp/moci-speedtest-monitor.txt": ["read"],
 				"/tmp/moci-netify.sqlite": ["read"],
 				"/tmp/connection-flows.sqlite": ["read"],
@@ -39,6 +40,7 @@
 				"/etc/init.d/netify-collector": ["exec"],
 				"/etc/init.d/connection-flows-collector": ["exec"],
 				"/etc/init.d/ping-monitor": ["exec"],
+				"/etc/init.d/dns-monitor": ["exec"],
 				"/etc/init.d/dnsmasq": ["exec"],
 				"/etc/init.d/firewall": ["exec"],
 				"/usr/bin/moci-netify-collector": ["exec"],
@@ -50,6 +52,7 @@
 				"/tmp/moci-netify.sqlite": ["write"],
 				"/tmp/connection-flows.sqlite": ["write"],
 				"/tmp/moci-ping-monitor.txt": ["write"],
+				"/tmp/moci-dns-monitor.txt": ["write"],
 				"/tmp/moci-speedtest-monitor.txt": ["write"]
 			},
 			"ubus": {
