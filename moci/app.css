@@ -838,6 +838,21 @@ body {
 	box-shadow: 0 0 8px rgba(144, 238, 144, 0.15);
 }
 
+#monthly-usage-settings-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 30px;
+	height: 30px;
+	padding: 0;
+}
+
+#monthly-usage-settings-btn .settings-icon-svg {
+	display: block;
+	width: 16px;
+	height: 16px;
+}
+
 .status-indicator-btn[disabled] {
 	pointer-events: none;
 	cursor: default;
