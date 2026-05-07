@@ -227,12 +227,14 @@ set_uci() {
 
 require_file "$REPO_DIR/files/moci-connection-flow-collector.sh"
 require_file "$REPO_DIR/files/moci-ping-monitor.sh"
+require_file "$REPO_DIR/files/moci-dns-monitor.sh"
 require_file "$REPO_DIR/files/moci-speedtest-monitor.sh"
 require_file "$REPO_DIR/files/moci-notifications-db.sh"
 require_file "$REPO_DIR/files/moci-state-sync.sh"
 require_file "$REPO_DIR/files/moci-device-quarantine.sh"
 require_file "$REPO_DIR/files/connection-flows-collector.init"
 require_file "$REPO_DIR/files/ping-monitor.init"
+require_file "$REPO_DIR/files/dns-monitor.init"
 require_file "$REPO_DIR/files/moci-state-sync.init"
 require_file "$REPO_DIR/files/device-quarantine.init"
 require_file "$REPO_DIR/files/moci.config"
@@ -313,12 +315,14 @@ install_file "$REPO_DIR/rpcd-acl.json" /usr/share/rpcd/acl.d/moci.json 0644
 log "Installing backend workers and init scripts"
 install_file "$REPO_DIR/files/moci-connection-flow-collector.sh" /usr/bin/moci-connection-flow-collector 0755
 install_file "$REPO_DIR/files/moci-ping-monitor.sh" /usr/bin/moci-ping-monitor 0755
+install_file "$REPO_DIR/files/moci-dns-monitor.sh" /usr/bin/moci-dns-monitor 0755
 install_file "$REPO_DIR/files/moci-speedtest-monitor.sh" /usr/bin/moci-speedtest-monitor 0755
 install_file "$REPO_DIR/files/moci-notifications-db.sh" /usr/bin/moci-notifications-db 0755
 install_file "$REPO_DIR/files/moci-state-sync.sh" /usr/bin/moci-state-sync 0755
 install_file "$REPO_DIR/files/moci-device-quarantine.sh" /usr/bin/moci-device-quarantine 0755
 install_file "$REPO_DIR/files/connection-flows-collector.init" /etc/init.d/connection-flows-collector 0755
 install_file "$REPO_DIR/files/ping-monitor.init" /etc/init.d/ping-monitor 0755
+install_file "$REPO_DIR/files/dns-monitor.init" /etc/init.d/dns-monitor 0755
 install_file "$REPO_DIR/files/moci-state-sync.init" /etc/init.d/moci-state-sync 0755
 install_file "$REPO_DIR/files/device-quarantine.init" /etc/init.d/moci-device-quarantine 0755
 if [ "$INSTALL_NETIFY" = "1" ]; then
@@ -364,6 +368,13 @@ set_uci moci.ping_monitor.threshold "100"
 set_uci moci.ping_monitor.timeout "2"
 set_uci moci.ping_monitor.output_file "/tmp/moci-ping-monitor.txt"
 set_uci moci.ping_monitor.max_lines "2000"
+set_uci moci.dns_monitor.enabled "1"
+set_uci moci.dns_monitor.target "openwrt.org"
+set_uci moci.dns_monitor.interval "60"
+set_uci moci.dns_monitor.threshold "1000"
+set_uci moci.dns_monitor.timeout "3"
+set_uci moci.dns_monitor.output_file "/tmp/moci-dns-monitor.txt"
+set_uci moci.dns_monitor.max_lines "2000"
 set_uci moci.speedtest_monitor.enabled "1"
 set_uci moci.speedtest_monitor.run_hour "3"
 set_uci moci.speedtest_monitor.run_minute "15"
@@ -411,6 +422,7 @@ if [ "$INSTALL_NETIFY" = "1" ] && [ -x /usr/bin/moci-netify-collector ]; then
 fi
 /usr/bin/moci-connection-flow-collector --init-db || true
 /usr/bin/moci-ping-monitor --once || true
+/usr/bin/moci-dns-monitor --once || true
 /usr/bin/moci-speedtest-monitor --init-file || true
 /usr/bin/moci-notifications-db --init-db || true
 /usr/bin/moci-state-sync restore || true
@@ -450,9 +462,9 @@ cp "$TMP_CRON" "$CRON_PATH"
 rm -f "$TMP_CRON"
 /bin/sh -c '/etc/init.d/cron reload 2>/dev/null || /etc/init.d/cron restart 2>/dev/null || /etc/init.d/crond reload 2>/dev/null || /etc/init.d/crond restart 2>/dev/null || killall -HUP crond 2>/dev/null || true'
 
-SERVICES="vnstat nlbwmon connection-flows-collector ping-monitor moci-state-sync moci-device-quarantine"
+SERVICES="vnstat nlbwmon connection-flows-collector ping-monitor dns-monitor moci-state-sync moci-device-quarantine"
 if [ "$INSTALL_NETIFY" = "1" ]; then
-	SERVICES="vnstat nlbwmon netifyd netify-collector connection-flows-collector ping-monitor moci-state-sync moci-device-quarantine"
+	SERVICES="vnstat nlbwmon netifyd netify-collector connection-flows-collector ping-monitor dns-monitor moci-state-sync moci-device-quarantine"
 fi
 if [ "$INSTALL_ADBLOCK" = "1" ]; then
 	SERVICES="$SERVICES adblock adblock-fast"

@@ -2631,6 +2631,7 @@ Endpoint = host:51820"
 								<h2>MONITORING</h2>
 							<div class="tab-buttons" style="margin-bottom: 24px">
 								<button class="tab-btn active" data-tab="ping">PING TEST</button>
+								<button class="tab-btn" data-tab="dns">DNS TEST</button>
 								<button class="tab-btn" data-tab="speedtest">SPEEDTEST</button>
 							</div>
 
@@ -2713,6 +2714,83 @@ Endpoint = host:51820"
 											<button class="action-btn" id="monitoring-toggle-btn">START SERVICE</button>
 											<button class="action-btn" id="monitoring-run-now-btn">RUN ONCE</button>
 											<button class="action-btn" id="monitoring-clear-btn">CLEAR HISTORY</button>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<div class="tab-content hidden" id="tab-dns">
+								<div class="stats-grid monitoring-metrics-grid">
+									<div class="stat-card">
+										<div class="stat-label">CURRENT RESOLUTION</div>
+										<div class="stat-value" id="monitoring-dns-latency">N/A</div>
+									</div>
+									<div class="stat-card">
+										<div class="stat-label">STATUS</div>
+										<div class="stat-value" id="monitoring-dns-status"></div>
+									</div>
+									<div class="stat-card">
+										<div class="stat-label">AVERAGE (LAST 12)</div>
+										<div class="stat-value" id="monitoring-dns-avg">0.0 ms</div>
+									</div>
+									<div class="stat-card">
+										<div class="stat-label">FAIL RATE (LAST 12)</div>
+										<div class="stat-value" id="monitoring-dns-loss">0%</div>
+									</div>
+								</div>
+
+								<div class="stat-card" style="margin-top: 24px">
+									<div class="section-title">DNS RESOLUTION TIMELINE</div>
+									<div class="monitoring-timeline-wrap">
+										<div class="monitoring-timeline-bars" id="monitoring-dns-timeline-bars"></div>
+										<div class="monitoring-timeline-labels" id="monitoring-dns-timeline-labels"></div>
+									</div>
+								</div>
+
+								<div class="stat-card" style="margin-top: 24px">
+									<div class="section-title">RECENT DNS SAMPLES</div>
+									<table class="data-table" id="monitoring-dns-recent-table">
+										<thead>
+											<tr>
+												<th>TIME</th>
+												<th>TARGET</th>
+												<th>LATENCY</th>
+												<th>STATUS</th>
+											</tr>
+										</thead>
+										<tbody>
+											<tr>
+												<td colspan="4" style="text-align: center; color: var(--steel-muted)">No dns samples yet</td>
+											</tr>
+										</tbody>
+									</table>
+								</div>
+
+								<div class="stat-card netify-collapsible-card" style="margin-top: 24px">
+									<div class="netify-collapsible-header">
+										<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">
+											DNS SETTINGS
+										</div>
+										<button class="netify-toggle-btn" id="monitoring-dns-settings-toggle-btn" type="button" aria-expanded="false">
+											<span id="monitoring-dns-settings-toggle-icon">▸</span>
+										</button>
+									</div>
+									<div id="monitoring-dns-settings-body" style="margin-top: 16px; display: none">
+										<div class="monitoring-controls">
+											<div class="form-group">
+												<label class="form-label">TARGET DOMAIN</label>
+												<input type="text" id="monitoring-dns-target" class="form-input" value="openwrt.org" />
+											</div>
+											<div class="form-group">
+												<label class="form-label">THRESHOLD (MS)</label>
+												<input type="number" id="monitoring-dns-threshold" class="form-input" min="1" max="10000" value="1000" />
+											</div>
+										</div>
+										<div class="quick-actions">
+											<button class="action-btn" id="monitoring-dns-apply-btn">APPLY</button>
+											<button class="action-btn" id="monitoring-dns-toggle-btn">START SERVICE</button>
+											<button class="action-btn" id="monitoring-dns-run-now-btn">RUN ONCE</button>
+											<button class="action-btn" id="monitoring-dns-clear-btn">CLEAR HISTORY</button>
 										</div>
 									</div>
 								</div>
