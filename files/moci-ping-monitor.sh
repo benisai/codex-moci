@@ -166,6 +166,8 @@ run_ping_once() {
 		if [ "$latency_int" -ge "$PING_THRESHOLD" ]; then
 			write_notification "Ping threshold exceeded: target=$PING_TARGET latency=${latency}ms threshold=${PING_THRESHOLD}ms"
 		fi
+	else
+		write_notification "Ping outage: target=$PING_TARGET result=outage reason=${message:-timeout}"
 	fi
 
 	prune_file
