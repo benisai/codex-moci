@@ -31,6 +31,7 @@ export default class DashboardModule {
 		this.bandwidthHistoryStorageKey = 'moci_dashboard_bandwidth_history_v1';
 		this.trafficProviderPreference = 'auto';
 		this.activeTrafficProvider = 'interface';
+		this.vnstatInterface = 'br-lan';
 		this.lastBandixTotals = null;
 		this.monthlyBandwidthGb = 500;
 		this.monthStartDay = 10;
@@ -203,6 +204,9 @@ export default class DashboardModule {
 		const monthStartDay = Number(sectionValues?.month_start_day ?? 10);
 		const roundedMonthStartDay = Number.isFinite(monthStartDay) ? Math.round(monthStartDay) : 10;
 		this.monthStartDay = Math.min(31, Math.max(1, roundedMonthStartDay));
+
+		const vnstatInterface = String(sectionValues?.vnstat_interface || 'br-lan').trim();
+		this.vnstatInterface = vnstatInterface || 'br-lan';
 	}
 
 	formatWindowLabel(seconds) {
@@ -357,20 +361,24 @@ export default class DashboardModule {
 
 		document.getElementById('monthly-usage-settings-btn')?.addEventListener('click', () => {
 			const limitInput = document.getElementById('monthly-usage-limit-gb-input');
+			const ifaceInput = document.getElementById('monthly-usage-vnstat-interface-input');
 			const dayInput = document.getElementById('monthly-usage-start-day-input');
 			if (limitInput) limitInput.value = String(this.monthlyBandwidthGb ?? 500);
+			if (ifaceInput) ifaceInput.value = String(this.vnstatInterface || 'br-lan');
 			if (dayInput) dayInput.value = String(this.monthStartDay ?? 10);
 		});
 	}
 
 	async saveMonthlyUsageSettings() {
 		const limitInput = document.getElementById('monthly-usage-limit-gb-input');
+		const ifaceInput = document.getElementById('monthly-usage-vnstat-interface-input');
 		const dayInput = document.getElementById('monthly-usage-start-day-input');
 		const saveBtn = document.getElementById('save-monthly-usage-settings-btn');
 		if (!limitInput || !dayInput || !saveBtn) return;
 
 		const rawLimit = Number(limitInput.value);
 		const rawDay = Number(dayInput.value);
+		const vnstatInterface = String(ifaceInput?.value || '').trim() || 'br-lan';
 		const limit = Number.isFinite(rawLimit) ? Math.max(0, Math.round(rawLimit)) : 500;
 		const day = Number.isFinite(rawDay) ? Math.min(31, Math.max(1, Math.round(rawDay))) : 10;
 
@@ -380,13 +388,17 @@ export default class DashboardModule {
 		try {
 			await this.core.uciSet('moci', 'dashboard', {
 				monthly_bandwidth_gb: String(limit),
-				month_start_day: String(day)
+				month_start_day: String(day),
+				vnstat_interface: vnstatInterface
 			});
 			await this.core.uciCommit('moci');
 
 			this.monthlyBandwidthGb = limit;
 			this.monthStartDay = day;
+			this.vnstatInterface = vnstatInterface;
 			this.lastMonthlyUsageRefresh = 0;
+			this.lastMonthlyRefresh = 0;
+			await this.updateTrafficChart(true);
 			await this.updateMonthlyUsagePanel(true);
 
 			this.core.closeModal('monthly-usage-settings-modal');
@@ -421,7 +433,7 @@ export default class DashboardModule {
 
 	computeMonthlyUsageSummary(payload) {
 		const interfaces = Array.isArray(payload?.interfaces) ? payload.interfaces : [];
-		const picked = interfaces.find(i => this.getVnstatPeriodRows(i?.traffic, 'daily').length > 0) || interfaces[0];
+		const picked = this.pickVnstatInterface(interfaces, 'daily');
 		const dailyRows = this.getVnstatPeriodRows(picked?.traffic, 'daily');
 
 		const range = this.getBillingRange();
@@ -1543,7 +1555,7 @@ SQL
 		}
 
 		const interfaces = Array.isArray(payload?.interfaces) ? payload.interfaces : [];
-		const picked = interfaces.find(i => this.getVnstatPeriodRows(i?.traffic, period).length > 0) || interfaces[0];
+		const picked = this.pickVnstatInterface(interfaces, period);
 		const interfaceName = picked?.name || '';
 		const rows = this.getVnstatPeriodRows(picked?.traffic, period);
 
@@ -1554,6 +1566,28 @@ SQL
 			.slice(-12);
 
 		return { interfaceName, points };
+	}
+
+	pickVnstatInterface(interfaces, period) {
+		if (!Array.isArray(interfaces) || interfaces.length === 0) return null;
+
+		const preferred = String(this.vnstatInterface || '').trim();
+		if (preferred) {
+			const exact = interfaces.find(
+				i => i?.name === preferred && this.getVnstatPeriodRows(i?.traffic, period).length > 0
+			);
+			if (exact) return exact;
+
+			const lower = preferred.toLowerCase();
+			const ci = interfaces.find(
+				i =>
+					String(i?.name || '').toLowerCase() === lower &&
+					this.getVnstatPeriodRows(i?.traffic, period).length > 0
+			);
+			if (ci) return ci;
+		}
+
+		return interfaces.find(i => this.getVnstatPeriodRows(i?.traffic, period).length > 0) || interfaces[0];
 	}
 
 	getVnstatPeriodRows(traffic, period) {
