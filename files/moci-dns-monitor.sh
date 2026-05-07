@@ -10,14 +10,12 @@ DEFAULT_INTERVAL="60"
 DEFAULT_TIMEOUT="3"
 DEFAULT_OUTPUT="/tmp/moci-dns-monitor.txt"
 DEFAULT_MAX_LINES="2000"
-DEFAULT_THRESHOLD="1000"
 
 DNS_TARGET="$DEFAULT_TARGET"
 DNS_INTERVAL="$DEFAULT_INTERVAL"
 DNS_TIMEOUT="$DEFAULT_TIMEOUT"
 DNS_OUTPUT="$DEFAULT_OUTPUT"
 DNS_MAX_LINES="$DEFAULT_MAX_LINES"
-DNS_THRESHOLD="$DEFAULT_THRESHOLD"
 
 load_config() {
 	if command -v uci >/dev/null 2>&1; then
@@ -34,8 +32,6 @@ load_config() {
 		value="$(uci -q get moci.dns_monitor.max_lines 2>/dev/null || true)"
 		[ -n "$value" ] && DNS_MAX_LINES="$value"
 
-		value="$(uci -q get moci.dns_monitor.threshold 2>/dev/null || true)"
-		[ -n "$value" ] && DNS_THRESHOLD="$value"
 	fi
 }
 
@@ -55,7 +51,6 @@ refresh_runtime_config() {
 	DNS_INTERVAL="$(sanitize_int "$DNS_INTERVAL" "$DEFAULT_INTERVAL")"
 	DNS_TIMEOUT="$(sanitize_int "$DNS_TIMEOUT" "$DEFAULT_TIMEOUT")"
 	DNS_MAX_LINES="$(sanitize_int "$DNS_MAX_LINES" "$DEFAULT_MAX_LINES")"
-	DNS_THRESHOLD="$(sanitize_int "$DNS_THRESHOLD" "$DEFAULT_THRESHOLD")"
 	ensure_output_file
 }
 
@@ -70,10 +65,10 @@ append_sample() {
 	local ts="$1"
 	local target="$2"
 	local status="$3"
-	local latency="$4"
+	local result="$4"
 	local msg="$5"
 
-	printf "%s|%s|%s|%s|%s\n" "$ts" "$target" "$status" "$latency" "$msg" >>"$DNS_OUTPUT"
+	printf "%s|%s|%s|%s|%s\n" "$ts" "$target" "$status" "$result" "$msg" >>"$DNS_OUTPUT"
 }
 
 prune_file() {
@@ -89,9 +84,8 @@ prune_file() {
 }
 
 run_dns_once() {
-	local now start_ms end_ms elapsed output status latency message
+	local now output status result message
 	now="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-	start_ms="$(date +%s%3N 2>/dev/null || echo 0)"
 
 	if command -v nslookup >/dev/null 2>&1; then
 		output="$(nslookup "$DNS_TARGET" 2>&1 || true)"
@@ -99,25 +93,18 @@ run_dns_once() {
 		output="nslookup not found"
 	fi
 
-	end_ms="$(date +%s%3N 2>/dev/null || echo 0)"
-	if [ "$start_ms" -gt 0 ] && [ "$end_ms" -ge "$start_ms" ]; then
-		elapsed=$((end_ms - start_ms))
-	else
-		elapsed=0
-	fi
-
 	if echo "$output" | grep -qE '(Address [0-9]+:|Address: [0-9a-fA-F:.]+)'; then
 		status="OK"
-		latency="$elapsed"
+		result="SUCCESS"
 		message="resolved"
 	else
 		status="ERROR"
-		latency="N/A"
+		result="FAIL"
 		message="$(echo "$output" | tail -n 1 | tr '|' ' ' | tr -s ' ')"
 		[ -z "$message" ] && message="resolve failed"
 	fi
 
-	append_sample "$now" "$DNS_TARGET" "$status" "$latency" "$message"
+	append_sample "$now" "$DNS_TARGET" "$status" "$result" "$message"
 	prune_file
 }
 

@@ -13,7 +13,6 @@ export default class MonitoringModule {
 		this.pingSection = 'ping_monitor';
 		this.dnsServiceRunning = false;
 		this.dnsTarget = 'openwrt.org';
-		this.dnsThresholdMs = 1000;
 		this.dnsOutputFile = '/tmp/moci-dns-monitor.txt';
 		this.dnsSamples = [];
 		this.dnsSection = 'dns_monitor';
@@ -64,11 +63,9 @@ export default class MonitoringModule {
 		const thresholdInput = document.getElementById('monitoring-threshold');
 		const speedtestTimeInput = document.getElementById('monitoring-speedtest-time');
 		const dnsTargetInput = document.getElementById('monitoring-dns-target');
-		const dnsThresholdInput = document.getElementById('monitoring-dns-threshold');
 		if (targetInput) targetInput.value = this.target;
 		if (thresholdInput) thresholdInput.value = String(this.thresholdMs);
 		if (dnsTargetInput) dnsTargetInput.value = this.dnsTarget;
-		if (dnsThresholdInput) dnsThresholdInput.value = String(this.dnsThresholdMs);
 		if (speedtestTimeInput) speedtestTimeInput.value = this.formatTimeValue(this.speedtestHour, this.speedtestMinute);
 
 		document.getElementById('monitoring-apply-btn')?.addEventListener('click', () => this.applySettings());
@@ -236,7 +233,6 @@ export default class MonitoringModule {
 				const c = result.values;
 				this.dnsSection = section;
 				this.dnsTarget = c.target || this.dnsTarget;
-				this.dnsThresholdMs = Number(c.threshold) || this.dnsThresholdMs;
 				this.dnsOutputFile = c.output_file || this.dnsOutputFile;
 			}
 		} catch {}
@@ -259,40 +255,30 @@ export default class MonitoringModule {
 		const thresholdInput = document.getElementById('monitoring-threshold');
 		const speedtestTimeInput = document.getElementById('monitoring-speedtest-time');
 		const dnsTargetInput = document.getElementById('monitoring-dns-target');
-		const dnsThresholdInput = document.getElementById('monitoring-dns-threshold');
 		if (targetInput) targetInput.value = this.target;
 		if (thresholdInput) thresholdInput.value = String(this.thresholdMs);
 		if (dnsTargetInput) dnsTargetInput.value = this.dnsTarget;
-		if (dnsThresholdInput) dnsThresholdInput.value = String(this.dnsThresholdMs);
 		if (speedtestTimeInput) speedtestTimeInput.value = this.formatTimeValue(this.speedtestHour, this.speedtestMinute);
 		this.updateSpeedtestToggleButtons();
 	}
 
 	async applyDnsSettings() {
 		const targetInput = document.getElementById('monitoring-dns-target');
-		const thresholdInput = document.getElementById('monitoring-dns-threshold');
 		const target = (targetInput?.value || '').trim() || 'openwrt.org';
 		const interval = 60;
-		const threshold = Number(thresholdInput?.value || this.dnsThresholdMs || 1000);
 		if (!/^[a-zA-Z0-9.\-]+$/.test(target)) {
 			this.core.showToast('Invalid DNS target domain', 'error');
-			return;
-		}
-		if (!Number.isFinite(threshold) || threshold < 1 || threshold > 10000) {
-			this.core.showToast('Threshold must be between 1 and 10000 ms', 'error');
 			return;
 		}
 		try {
 			const section = await this.resolveDnsSection(true);
 			await this.core.uciSet('moci', section, {
 				target,
-				interval: String(interval),
-				threshold: String(Math.round(threshold))
+				interval: String(interval)
 			});
 			await this.core.uciCommit('moci');
 			this.dnsSection = section;
 			this.dnsTarget = target;
-			this.dnsThresholdMs = Math.round(threshold);
 			try {
 				await this.exec('/etc/init.d/dns-monitor', ['restart']);
 			} catch {}
@@ -643,27 +629,18 @@ export default class MonitoringModule {
 			.split('\n')
 			.map(line => line.trim())
 			.filter(Boolean)
-			.map(line => {
-				const [ts, target, status, latency, message] = line.split('|');
-				const parsedTs = Date.parse(ts);
-				return {
-					ts: Number.isNaN(parsedTs) ? Date.now() : parsedTs,
-					target: target || this.dnsTarget,
-					status: status === 'OK' ? this.getDnsStatusFromLatency(latency) : 'error',
-					latency: latency && latency !== 'N/A' ? parseFloat(latency) : null,
-					message: message || ''
-				};
-			})
+				.map(line => {
+					const [ts, target, status, result, message] = line.split('|');
+					const parsedTs = Date.parse(ts);
+					return {
+						ts: Number.isNaN(parsedTs) ? Date.now() : parsedTs,
+						target: target || this.dnsTarget,
+						status: status === 'OK' ? 'ok' : 'error',
+						result: result || (status === 'OK' ? 'SUCCESS' : 'FAIL'),
+						message: message || ''
+					};
+				})
 			.slice(-2000);
-	}
-
-	getDnsStatusFromLatency(latency) {
-		const value = parseFloat(latency);
-		if (Number.isNaN(value)) return 'error';
-		if (value >= this.dnsThresholdMs) return 'critical';
-		if (value >= Math.max(1, this.dnsThresholdMs * 0.7)) return 'warn';
-		if (value >= 120) return 'good';
-		return 'ok';
 	}
 
 	getStatusFromLatency(latency) {
@@ -810,10 +787,12 @@ export default class MonitoringModule {
 			btn.style.opacity = '0.55';
 		}
 		try {
+			await this.readDnsFile();
+			const beforeTs = this.getLatestDnsSampleTs();
 			await this.exec('/bin/sh', ['-c', '/usr/bin/moci-dns-monitor --once >/tmp/moci-dns-monitor.last.log 2>&1 &']);
-			await new Promise(resolve => setTimeout(resolve, 1200));
+			const completed = await this.waitForNewDnsSample(beforeTs, 10, 1200);
 			await this.refresh();
-			this.core.showToast('One DNS sample captured', 'success');
+			this.core.showToast(completed ? 'One DNS sample captured' : 'DNS started; sample will appear shortly', completed ? 'success' : 'warning');
 		} catch (err) {
 			console.error('Failed to run dns once:', err);
 			this.core.showToast('Failed to run DNS once', 'error');
@@ -824,6 +803,23 @@ export default class MonitoringModule {
 				btn.style.opacity = '';
 			}
 		}
+	}
+
+	getLatestDnsSampleTs() {
+		const samples = Array.isArray(this.dnsSamples) ? this.dnsSamples : [];
+		if (samples.length === 0) return 0;
+		return Math.max(...samples.map(s => Number(s?.ts) || 0));
+	}
+
+	async waitForNewDnsSample(previousTs, attempts = 10, delayMs = 1200) {
+		for (let i = 0; i < attempts; i += 1) {
+			await new Promise(resolve => setTimeout(resolve, delayMs));
+			await this.readDnsFile();
+			if (this.getLatestDnsSampleTs() > Number(previousTs || 0)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	async clearDnsHistory() {
@@ -983,11 +979,50 @@ export default class MonitoringModule {
 		this.renderStatusCard(aggregated);
 		this.renderTimeline(aggregated);
 		this.renderRecentTable(aggregated);
-		const dnsAggregated = this.aggregateFiveMinuteSamples(this.dnsSamples);
+		const dnsAggregated = this.aggregateDnsSamples(this.dnsSamples);
 		this.renderDnsStatusCard(dnsAggregated);
 		this.renderDnsTimeline(dnsAggregated);
 		this.renderDnsRecentTable(dnsAggregated);
 		this.renderSpeedtestPanel();
+	}
+
+	aggregateDnsSamples(samples) {
+		const bucketMs = 5 * 60 * 1000;
+		const buckets = new Map();
+		for (const sample of samples || []) {
+			const ts = Number(sample?.ts) || Date.now();
+			const bucketStart = Math.floor(ts / bucketMs) * bucketMs;
+			let b = buckets.get(bucketStart);
+			if (!b) {
+				b = { start: bucketStart, lastTs: ts, target: sample?.target || this.dnsTarget, total: 0, success: 0, fail: 0, result: 'FAIL' };
+				buckets.set(bucketStart, b);
+			}
+			b.total += 1;
+			if (sample?.status === 'ok') {
+				b.success += 1;
+				b.result = 'SUCCESS';
+			} else {
+				b.fail += 1;
+				b.result = 'FAIL';
+			}
+			if (ts > b.lastTs) {
+				b.lastTs = ts;
+				b.target = sample?.target || b.target;
+				b.result = sample?.status === 'ok' ? 'SUCCESS' : 'FAIL';
+			}
+		}
+		return Array.from(buckets.values())
+			.sort((a, b) => a.start - b.start)
+			.map(b => ({
+				ts: b.lastTs,
+				target: b.target || this.dnsTarget,
+				status: b.fail > 0 ? 'error' : 'ok',
+				result: b.result,
+				totalChecks: b.total,
+				successChecks: b.success,
+				failChecks: b.fail,
+				failPct: b.total > 0 ? (b.fail / b.total) * 100 : 0
+			}));
 	}
 
 	renderDnsStatusCard(displaySamples = []) {
@@ -998,16 +1033,16 @@ export default class MonitoringModule {
 		const statusEl = document.getElementById('monitoring-dns-status');
 		const avgEl = document.getElementById('monitoring-dns-avg');
 		const lossEl = document.getElementById('monitoring-dns-loss');
-		if (latencyEl) latencyEl.textContent = latest?.latency != null ? `${latest.latency.toFixed(1)} ms` : 'N/A';
+		if (latencyEl) latencyEl.textContent = latest?.result || 'N/A';
 		if (statusEl) statusEl.innerHTML = this.getStatusBadge(latest?.status || 'error');
 		const windowSamples = displaySamples.slice(-12);
-		const valid = windowSamples.filter(s => s.latency != null);
-		const avg = valid.length > 0 ? valid.reduce((sum, s) => sum + s.latency, 0) / valid.length : 0;
-		const totalPings = windowSamples.reduce((sum, s) => sum + (Number(s.totalPings) || 0), 0);
-		const totalValid = windowSamples.reduce((sum, s) => sum + (Number(s.validPings) || 0), 0);
-		const loss = totalPings > 0 ? ((totalPings - totalValid) / totalPings) * 100 : 0;
-		if (avgEl) avgEl.textContent = `${avg.toFixed(1)} ms`;
-		if (lossEl) lossEl.textContent = `${loss.toFixed(0)}%`;
+		const total = windowSamples.reduce((sum, s) => sum + (Number(s.totalChecks) || 0), 0);
+		const success = windowSamples.reduce((sum, s) => sum + (Number(s.successChecks) || 0), 0);
+		const fail = windowSamples.reduce((sum, s) => sum + (Number(s.failChecks) || 0), 0);
+		const successPct = total > 0 ? (success / total) * 100 : 0;
+		const failPct = total > 0 ? (fail / total) * 100 : 0;
+		if (avgEl) avgEl.textContent = `${successPct.toFixed(0)}%`;
+		if (lossEl) lossEl.textContent = `${failPct.toFixed(0)}%`;
 	}
 
 	renderDnsTimeline(displaySamples = []) {
@@ -1032,11 +1067,8 @@ export default class MonitoringModule {
 								: sample.status === 'critical'
 									? 'critical'
 									: 'error';
-				const title =
-					sample.latency != null
-						? `${sample.latency.toFixed(1)} ms`
-						: `DNS failure (${Math.round(sample.lossPct || 100)}% loss)`;
-				return `<div class="monitoring-segment ${cls}" title="${this.core.escapeHtml(title)}"></div>`;
+					const title = `${sample.result || 'FAIL'} (${Math.round(sample.failPct || 0)}% fail)`;
+					return `<div class="monitoring-segment ${cls}" title="${this.core.escapeHtml(title)}"></div>`;
 			})
 			.join('');
 		labels.innerHTML = segments
@@ -1054,13 +1086,12 @@ export default class MonitoringModule {
 		}
 		tbody.innerHTML = rows
 			.map(row => {
-				const latency = row.latency != null ? `${row.latency.toFixed(1)} ms` : 'N/A';
-				return `<tr>
-						<td>${this.core.escapeHtml(this.formatMonthDayTime(row.ts))}</td>
-						<td>${this.core.escapeHtml(row.target || this.dnsTarget)}</td>
-						<td>${this.core.escapeHtml(latency)}</td>
-						<td>${this.getStatusBadge(row.status)}</td>
-					</tr>`;
+					return `<tr>
+							<td>${this.core.escapeHtml(this.formatMonthDayTime(row.ts))}</td>
+							<td>${this.core.escapeHtml(row.target || this.dnsTarget)}</td>
+							<td>${this.core.escapeHtml(row.result || (row.status === 'ok' ? 'SUCCESS' : 'FAIL'))}</td>
+							<td>${this.getStatusBadge(row.status)}</td>
+						</tr>`;
 			})
 			.join('');
 	}
