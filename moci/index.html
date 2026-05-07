@@ -1117,26 +1117,35 @@
 							</div>
 
 							<div class="stat-card" style="margin-top: 24px">
-								<div class="section-title">HOSTS FILE ENTRIES</div>
-								<button class="action-btn" id="add-host-entry-btn" style="margin-bottom: 16px">
-									ADD HOST ENTRY
-								</button>
-								<table class="data-table" id="hosts-table">
-									<thead>
-										<tr>
-											<th>IP ADDRESS</th>
-											<th>HOSTNAMES</th>
-											<th>ACTIONS</th>
-										</tr>
-									</thead>
-									<tbody>
-										<tr>
-											<td colspan="3" style="text-align: center; color: var(--steel-muted)">
-												Loading...
-											</td>
-										</tr>
-									</tbody>
-								</table>
+								<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">
+										HOSTS FILE ENTRIES
+									</div>
+									<button class="netify-toggle-btn" id="dns-hosts-toggle-btn" type="button" aria-expanded="false">
+										<span id="dns-hosts-toggle-icon">▸</span>
+									</button>
+								</div>
+								<div id="dns-hosts-body" style="display: none; margin-top: 12px">
+									<button class="action-btn" id="add-host-entry-btn" style="margin-bottom: 16px">
+										ADD HOST ENTRY
+									</button>
+									<table class="data-table" id="hosts-table">
+										<thead>
+											<tr>
+												<th>IP ADDRESS</th>
+												<th>HOSTNAMES</th>
+												<th>ACTIONS</th>
+											</tr>
+										</thead>
+										<tbody>
+											<tr>
+												<td colspan="3" style="text-align: center; color: var(--steel-muted)">
+													Loading...
+												</td>
+											</tr>
+										</tbody>
+									</table>
+								</div>
 							</div>
 						</div>
 

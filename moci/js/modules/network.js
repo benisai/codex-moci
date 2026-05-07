@@ -369,6 +369,9 @@ export default class NetworkModule {
 		document.getElementById('network-connections-dns-toggle-btn')?.addEventListener('click', () =>
 			this.toggleConnectionsDnsLookup()
 		);
+		document.getElementById('dns-hosts-toggle-btn')?.addEventListener('click', () =>
+			this.toggleDnsHostsPanel()
+		);
 		document.getElementById('quarantine-enable-btn')?.addEventListener('click', () => this.saveQuarantineSettings(true));
 		document.getElementById('quarantine-disable-btn')?.addEventListener('click', () => this.saveQuarantineSettings(false));
 		document.getElementById('quarantine-save-btn')?.addEventListener('click', () => this.saveQuarantineInterval());
@@ -400,6 +403,7 @@ export default class NetworkModule {
 		this.syncPbrSettingsPanel();
 		this.syncAllPbrSectionPanels();
 		this.syncQuarantineSettingsPanel();
+		this.syncDnsHostsPanel();
 
 		const adblockCleanup = this.core.delegateActions('adblock-targets-table', {
 			toggle: id => this.toggleAdblockTargetList(id),
@@ -664,6 +668,45 @@ export default class NetworkModule {
 		if (!body || !icon || !btn) return;
 
 		const expanded = localStorage.getItem('quarantine_settings_expanded') === '1';
+		if (expanded) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+		}
+	}
+
+	toggleDnsHostsPanel() {
+		const body = document.getElementById('dns-hosts-body');
+		const icon = document.getElementById('dns-hosts-toggle-icon');
+		const btn = document.getElementById('dns-hosts-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const isHidden = body.style.display === 'none' || body.style.display === '';
+		if (isHidden) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+			localStorage.setItem('dns_hosts_expanded', '1');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+			localStorage.setItem('dns_hosts_expanded', '0');
+		}
+	}
+
+	syncDnsHostsPanel() {
+		const body = document.getElementById('dns-hosts-body');
+		const icon = document.getElementById('dns-hosts-toggle-icon');
+		const btn = document.getElementById('dns-hosts-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const stored = localStorage.getItem('dns_hosts_expanded');
+		const expanded = stored === '1';
 		if (expanded) {
 			body.style.display = 'block';
 			icon.textContent = '▾';
