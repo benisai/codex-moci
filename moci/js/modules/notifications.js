@@ -21,6 +21,7 @@ export default class NotificationsModule {
 
 	bindHandlers() {
 		document.getElementById('notifications-refresh-btn')?.addEventListener('click', () => this.loadRows(true));
+		document.getElementById('notifications-archive-all-btn')?.addEventListener('click', () => this.archiveAll());
 		document
 			.getElementById('notifications-toggle-archived-btn')
 			?.addEventListener('click', () => this.toggleArchivedFilter());
@@ -161,6 +162,18 @@ SQLITE_BIN="$(command -v sqlite3 || command -v sqlite3-cli || true)"
 		} catch (err) {
 			console.error('Archive failed:', err);
 			this.core.showToast('Failed to archive notification', 'error');
+		}
+	}
+
+	async archiveAll() {
+		try {
+			await this.execSql('UPDATE notifications SET archived = 1 WHERE "delete" = 0 AND archived = 0;');
+			this.core.showToast('All notifications archived', 'success');
+			await this.loadRows(false);
+			this.core.refreshNotificationBell?.();
+		} catch (err) {
+			console.error('Archive all failed:', err);
+			this.core.showToast('Failed to archive all notifications', 'error');
 		}
 	}
 
