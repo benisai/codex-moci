@@ -15,6 +15,7 @@ export default class SystemModule {
 		this.isRefreshingProcesses = false;
 		this.processesPaused = false;
 		this.processesSort = 'cpu';
+		this.featurePackageAvailability = null;
 
 		this.core.registerRoute('/system', (path, subPaths) => {
 			const pageElement = document.getElementById('system-page');
@@ -176,6 +177,56 @@ export default class SystemModule {
 			.toUpperCase();
 	}
 
+	async getFeaturePackageAvailability() {
+		if (this.featurePackageAvailability) return this.featurePackageAvailability;
+
+		const defaults = {
+			adblock: true,
+			adblock_fast: true,
+			banip: true,
+			netify: true,
+			pbr: true
+		};
+
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: [
+					'-c',
+					[
+						'[ -x /etc/init.d/adblock ] && echo "adblock=1" || echo "adblock=0"',
+						'[ -x /etc/init.d/adblock-fast ] && echo "adblock_fast=1" || echo "adblock_fast=0"',
+						'[ -x /etc/init.d/banip ] && echo "banip=1" || echo "banip=0"',
+						'([ -x /etc/init.d/netify-collector ] || [ -x /etc/init.d/netifyd ] || command -v netifyd >/dev/null 2>&1) && echo "netify=1" || echo "netify=0"',
+						'[ -x /etc/init.d/pbr ] && echo "pbr=1" || echo "pbr=0"'
+					].join('; ')
+				]
+			});
+			if (status === 0 && result?.stdout) {
+				const availability = { ...defaults };
+				String(result.stdout || '')
+					.split('\n')
+					.map(line => line.trim())
+					.filter(Boolean)
+					.forEach(line => {
+						const [rawKey, rawValue] = line.split('=');
+						const key = String(rawKey || '').trim();
+						const value = String(rawValue || '').trim();
+						if (Object.prototype.hasOwnProperty.call(availability, key)) {
+							availability[key] = value === '1';
+						}
+					});
+				this.featurePackageAvailability = availability;
+				return availability;
+			}
+		} catch (err) {
+			console.error('Failed to detect optional package availability:', err);
+		}
+
+		this.featurePackageAvailability = defaults;
+		return defaults;
+	}
+
 	async loadMociConfig() {
 		const grid = document.getElementById('moci-features-grid');
 		if (!grid) return;
@@ -191,11 +242,16 @@ export default class SystemModule {
 
 			const defaults = this.core.getDefaultFeatures ? this.core.getDefaultFeatures() : {};
 			const featureKeys = this.getMociFeatureKeys();
-			if (featureKeys.length === 0) {
+			const packageAvailability = await this.getFeaturePackageAvailability();
+			const filteredFeatureKeys = featureKeys.filter(key => {
+				if (!Object.prototype.hasOwnProperty.call(packageAvailability, key)) return true;
+				return Boolean(packageAvailability[key]);
+			});
+			if (filteredFeatureKeys.length === 0) {
 				grid.innerHTML = '<div style="color: var(--steel-muted)">No MoCI features available.</div>';
 				return;
 			}
-			grid.innerHTML = featureKeys
+			grid.innerHTML = filteredFeatureKeys
 				.map(key => {
 					const value = String(values[key] ?? defaults[key] ?? '0') === '1';
 					return `<label style="display:flex; align-items:center; gap:10px; padding:10px; border:1px solid var(--glass-border); border-radius:6px; background: rgba(255,255,255,0.02);">
