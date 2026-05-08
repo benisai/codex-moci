@@ -107,6 +107,15 @@ export default class NetifyModule {
 		document
 			.getElementById('close-netify-flow-action-modal')
 			?.addEventListener('click', () => this.core.closeModal('netify-flow-action-modal'));
+		document
+			.getElementById('close-netify-flow-details-modal')
+			?.addEventListener('click', () => this.core.closeModal('netify-flow-details-modal'));
+		document
+			.getElementById('close-netify-flow-details-btn')
+			?.addEventListener('click', () => this.core.closeModal('netify-flow-details-modal'));
+		document
+			.getElementById('open-netify-flow-action-from-details-btn')
+			?.addEventListener('click', () => this.openFlowActionFromDetails());
 		document.querySelector('#netify-flows-table tbody')?.addEventListener('click', event => this.handleFlowRowClick(event));
 		this.syncCollectorPanel();
 		this.updateAutoRefreshToggleUi();
@@ -604,6 +613,7 @@ pgrep -fa moci-netify-collector || true
 					proto,
 					destIp,
 					destPort,
+					iface: parsed.interface || flow.interface || '-',
 					bytes
 				};
 			})
@@ -870,6 +880,40 @@ pgrep -fa moci-netify-collector || true
 		if (!tr) return;
 		const idx = Number(tr.getAttribute('data-flow-index'));
 		if (!Number.isInteger(idx) || idx < 0 || idx >= this.visibleFlows.length) return;
+		this.openFlowDetailsModal(idx);
+	}
+
+	openFlowDetailsModal(index) {
+		const flow = this.visibleFlows[index];
+		if (!flow) return;
+
+		const set = (id, value) => {
+			const el = document.getElementById(id);
+			if (el) el.value = String(value ?? '');
+		};
+		const mac = this.normalizeMac(flow.device) || '-';
+		const deviceName = this.resolveDeviceLabel(flow) || '-';
+
+		set('netify-details-flow-index', String(index));
+		set('netify-details-device-name', deviceName);
+		set('netify-details-device-mac', mac);
+		set('netify-details-device-ip', flow.localIp || '-');
+		set('netify-details-dest-fqdn', flow.fqdn || '-');
+		set('netify-details-dest-ip', flow.destIp || '-');
+		set('netify-details-dest-port', String(flow.destPort || 0));
+		set('netify-details-timestamp', flow.timeLabel || '-');
+		set('netify-details-interface', flow.iface || '-');
+
+		this.core.openModal('netify-flow-details-modal');
+	}
+
+	openFlowActionFromDetails() {
+		const idx = Number(document.getElementById('netify-details-flow-index')?.value || -1);
+		if (!Number.isInteger(idx) || idx < 0 || idx >= this.visibleFlows.length) {
+			this.core.showToast('Flow not found', 'error');
+			return;
+		}
+		this.core.closeModal('netify-flow-details-modal');
 		this.openFlowActionModal(idx);
 	}
 

@@ -3348,6 +3348,68 @@ Endpoint = host:51820"
 								</div>
 							</div>
 
+							<div class="modal hidden" id="netify-flow-details-modal">
+								<div class="modal-backdrop"></div>
+								<div class="modal-content">
+									<div class="modal-header">
+										<h3 class="modal-title">FLOW DETAILS</h3>
+										<button class="modal-close" id="close-netify-flow-details-modal">&times;</button>
+									</div>
+									<div class="modal-body">
+										<input type="hidden" id="netify-details-flow-index" />
+
+										<div class="section-title" style="margin-top: 0">DEVICE</div>
+										<div class="form-group">
+											<label class="form-label">DEVICE NAME</label>
+											<input type="text" id="netify-details-device-name" class="form-input" readonly />
+										</div>
+										<div class="form-group">
+											<label class="form-label">MAC ADDRESS</label>
+											<input type="text" id="netify-details-device-mac" class="form-input" readonly />
+										</div>
+										<div class="form-group">
+											<label class="form-label">IP ADDRESS</label>
+											<input type="text" id="netify-details-device-ip" class="form-input" readonly />
+										</div>
+
+										<div class="section-title">DESTINATION</div>
+										<div class="form-group">
+											<label class="form-label">FQDN</label>
+											<input type="text" id="netify-details-dest-fqdn" class="form-input" readonly />
+										</div>
+										<div class="form-group">
+											<label class="form-label">IP</label>
+											<input type="text" id="netify-details-dest-ip" class="form-input" readonly />
+										</div>
+										<div class="form-group">
+											<label class="form-label">PORT</label>
+											<input type="text" id="netify-details-dest-port" class="form-input" readonly />
+										</div>
+
+										<div class="section-title">FLOW DETAILS</div>
+										<div class="form-group">
+											<label class="form-label">TIMESTAMP</label>
+											<input type="text" id="netify-details-timestamp" class="form-input" readonly />
+										</div>
+										<div class="form-group">
+											<label class="form-label">INTERFACE</label>
+											<input type="text" id="netify-details-interface" class="form-input" readonly />
+										</div>
+
+										<div class="section-title">FLOW ACTION</div>
+										<div style="color: var(--steel-muted); font-size: 12px; margin-bottom: 10px">
+											Open actions to block by domain or destination IP.
+										</div>
+										<div class="quick-actions" style="margin-top: 0">
+											<button class="action-btn danger" id="open-netify-flow-action-from-details-btn">OPEN FLOW ACTIONS</button>
+										</div>
+									</div>
+									<div class="modal-footer">
+										<button class="action-btn" id="close-netify-flow-details-btn">CLOSE</button>
+									</div>
+								</div>
+							</div>
+
 							<div class="stat-card netify-collapsible-card" style="margin-top: 24px">
 								<div class="netify-collapsible-header">
 									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">COLLECTOR STATUS</div>
