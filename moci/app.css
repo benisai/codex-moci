@@ -265,6 +265,10 @@ body {
 }
 
 @media (max-width: 960px) {
+	.content {
+		padding: 24px 16px;
+	}
+
 	#tab-software #packages-table thead {
 		display: none;
 	}
@@ -379,6 +383,10 @@ body {
 }
 
 @media (max-width: 640px) {
+	.content {
+		padding: 16px 10px;
+	}
+
 	#tab-software #packages-table td {
 		gap: 8px;
 		padding: 8px;
