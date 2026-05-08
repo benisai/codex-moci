@@ -130,6 +130,54 @@ export class OpenWrtCore {
 			console.error('Feature config not found, using defaults:', err);
 			this.features = defaults;
 		}
+
+		await this.applyOptionalFeatureAvailability();
+	}
+
+	async applyOptionalFeatureAvailability() {
+		const current = { ...(this.features || {}) };
+		const checkMap = {
+			adblock: '[ -x /etc/init.d/adblock ]',
+			adblock_fast: '[ -x /etc/init.d/adblock-fast ]',
+			banip: '[ -x /etc/init.d/banip ]',
+			pbr: '[ -x /etc/init.d/pbr ]',
+			netify: '([ -x /etc/init.d/netify-collector ] || [ -x /etc/init.d/netifyd ] || command -v netifyd >/dev/null 2>&1)'
+		};
+
+		const commands = Object.entries(checkMap).map(
+			([feature, check]) => `${check} && echo "${feature}=1" || echo "${feature}=0"`
+		);
+
+		try {
+			const [status, result] = await this.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', commands.join('; ')]
+			});
+			if (status !== 0 || !result?.stdout) return;
+
+			const availability = {};
+			String(result.stdout || '')
+				.split('\n')
+				.map(line => line.trim())
+				.filter(Boolean)
+				.forEach(line => {
+					const [rawKey, rawValue] = line.split('=');
+					const key = String(rawKey || '').trim();
+					const value = String(rawValue || '').trim();
+					if (Object.prototype.hasOwnProperty.call(checkMap, key)) {
+						availability[key] = value === '1';
+					}
+				});
+
+			for (const feature of Object.keys(checkMap)) {
+				if (current[feature] === '1' && availability[feature] === false) {
+					current[feature] = '0';
+				}
+			}
+			this.features = current;
+		} catch (err) {
+			console.error('Optional feature availability detection failed:', err);
+		}
 	}
 
 	getDefaultFeatures() {
