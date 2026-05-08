@@ -1238,14 +1238,6 @@
 									SQM package not found. Install <code>sqm-scripts</code> and <code>luci-app-sqm</code> first.
 								</div>
 								<div class="form-group">
-									<label class="form-label">SERVICE STATUS</label>
-									<div id="sqm-service-status">Loading...</div>
-								</div>
-								<div class="form-group">
-									<label class="form-label">BOOT STATUS</label>
-									<div id="sqm-boot-status">Loading...</div>
-								</div>
-								<div class="form-group">
 									<label class="form-label">ENABLE THIS SQM INSTANCE</label>
 									<select id="sqm-enabled" class="form-input">
 										<option value="0">Disabled</option>
@@ -1283,11 +1275,6 @@
 								</div>
 								<div class="quick-actions">
 									<button class="action-btn" id="save-sqm-config-btn">SAVE CONFIGURATION</button>
-									<button class="action-btn success" id="sqm-start-btn">START</button>
-									<button class="action-btn danger" id="sqm-stop-btn">STOP</button>
-									<button class="action-btn warning" id="sqm-restart-btn">RESTART</button>
-									<button class="action-btn" id="sqm-enable-btn">ENABLE BOOT</button>
-									<button class="action-btn" id="sqm-disable-btn">DISABLE BOOT</button>
 								</div>
 							</div>
 							<div class="stat-card" style="margin-top: 24px">
@@ -1314,6 +1301,31 @@
 										<option value="0">Disabled</option>
 										<option value="1">Enabled</option>
 									</select>
+								</div>
+							</div>
+							<div class="stat-card netify-collapsible-card" style="margin-top: 24px">
+								<div class="netify-collapsible-header">
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">SQM SETTINGS</div>
+									<button class="netify-toggle-btn" id="sqm-settings-toggle-btn" type="button" aria-expanded="false">
+										<span id="sqm-settings-toggle-icon">▸</span>
+									</button>
+								</div>
+								<div id="sqm-settings-body" style="display: none">
+									<div class="form-group">
+										<label class="form-label">SERVICE STATUS</label>
+										<div id="sqm-service-status">Loading...</div>
+									</div>
+									<div class="form-group">
+										<label class="form-label">BOOT STATUS</label>
+										<div id="sqm-boot-status">Loading...</div>
+									</div>
+									<div class="quick-actions">
+										<button class="action-btn success" id="sqm-start-btn">START</button>
+										<button class="action-btn danger" id="sqm-stop-btn">STOP</button>
+										<button class="action-btn warning" id="sqm-restart-btn">RESTART</button>
+										<button class="action-btn" id="sqm-enable-btn">ENABLE BOOT</button>
+										<button class="action-btn" id="sqm-disable-btn">DISABLE BOOT</button>
+									</div>
 								</div>
 							</div>
 						</div>

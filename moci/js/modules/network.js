@@ -362,6 +362,9 @@ export default class NetworkModule {
 		document.getElementById('banip-settings-toggle-btn')?.addEventListener('click', () =>
 			this.toggleBanIPSettingsPanel()
 		);
+		document.getElementById('sqm-settings-toggle-btn')?.addEventListener('click', () =>
+			this.toggleSqmSettingsPanel()
+		);
 		document.getElementById('adblock-classic-settings-toggle-btn')?.addEventListener('click', () =>
 			this.toggleAdblockClassicSettingsPanel()
 		);
@@ -584,6 +587,44 @@ export default class NetworkModule {
 		if (!body || !icon || !btn) return;
 
 		const expanded = localStorage.getItem('banip_settings_expanded') === '1';
+		if (expanded) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+		}
+	}
+
+	toggleSqmSettingsPanel() {
+		const body = document.getElementById('sqm-settings-body');
+		const icon = document.getElementById('sqm-settings-toggle-icon');
+		const btn = document.getElementById('sqm-settings-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const isHidden = body.style.display === 'none' || body.style.display === '';
+		if (isHidden) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+			localStorage.setItem('sqm_settings_expanded', '1');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+			localStorage.setItem('sqm_settings_expanded', '0');
+		}
+	}
+
+	syncSqmSettingsPanel() {
+		const body = document.getElementById('sqm-settings-body');
+		const icon = document.getElementById('sqm-settings-toggle-icon');
+		const btn = document.getElementById('sqm-settings-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const expanded = localStorage.getItem('sqm_settings_expanded') === '1';
 		if (expanded) {
 			body.style.display = 'block';
 			icon.textContent = '▾';
@@ -5079,6 +5120,7 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 	async loadSQM() {
 		await this.refreshSqmAvailability();
 		if (!this.canShowSqmTab()) return;
+		this.syncSqmSettingsPanel();
 
 		const installHintEl = document.getElementById('sqm-install-hint');
 		const enabledEl = document.getElementById('sqm-enabled');
