@@ -553,7 +553,7 @@ export default class DashboardModule {
 
 		try {
 			const dbPath = await this.getNotificationsDbPath();
-			const message = `CPU reached 100% on dashboard sample (${usage.toFixed(1)}%)`;
+			const message = 'CPU reached 100%';
 			const sql = `INSERT INTO notifications (app, msg, archived, "delete") VALUES ('dashboard', '${this.escapeSql(message)}', 0, 0);`;
 			const cmd = `
 SQLITE_BIN="$(command -v sqlite3 || command -v sqlite3-cli || true)"
