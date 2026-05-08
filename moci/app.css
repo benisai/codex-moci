@@ -2021,6 +2021,10 @@ select.form-input {
 	vertical-align: bottom;
 }
 
+.netify-time-short {
+	display: none;
+}
+
 .software-root-space-fill {
 	background: linear-gradient(90deg, rgba(90, 180, 255, 0.95), rgba(120, 215, 255, 0.88));
 }
@@ -2309,6 +2313,14 @@ select.form-input {
 	#netify-page .traffic-header-row {
 		flex-wrap: wrap;
 		gap: 8px;
+	}
+
+	#netify-flows-table .netify-time-full {
+		display: none;
+	}
+
+	#netify-flows-table .netify-time-short {
+		display: inline;
 	}
 
 	#netify-page .netify-flow-filters {

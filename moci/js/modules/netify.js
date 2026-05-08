@@ -832,7 +832,10 @@ pgrep -fa moci-netify-collector || true
 		tbody.innerHTML = pageRows
 			.map(
 				(row, idx) => `<tr class="netify-flow-row" data-flow-index="${idx}" style="cursor: pointer" title="Click for actions">
-				<td>${this.core.escapeHtml(row.timeLabel)}</td>
+				<td>
+					<span class="netify-time-full">${this.core.escapeHtml(row.timeLabel)}</span>
+					<span class="netify-time-short">${this.core.escapeHtml(this.formatTimeOnly(row.ts))}</span>
+				</td>
 				<td>${this.core.escapeHtml(this.resolveDeviceLabel(row))}</td>
 				<td>
 					<span class="netify-localip-ellipsis" title="${this.core.escapeHtml(row.localIp || '-')}">
@@ -1141,6 +1144,15 @@ pgrep -fa moci-netify-collector || true
 			year: 'numeric',
 			month: '2-digit',
 			day: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		});
+	}
+
+	formatTimeOnly(ts) {
+		const d = new Date(ts);
+		return d.toLocaleTimeString([], {
 			hour: '2-digit',
 			minute: '2-digit',
 			second: '2-digit'
