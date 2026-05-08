@@ -2316,11 +2316,13 @@ select.form-input {
 	}
 
 	/* Recent Flows on mobile/tablet: keep only Time, Device, FQDN */
+	#netify-flows-table th:nth-child(2),
 	#netify-flows-table th:nth-child(3),
 	#netify-flows-table th:nth-child(5),
 	#netify-flows-table th:nth-child(6),
 	#netify-flows-table th:nth-child(7),
 	#netify-flows-table th:nth-child(8),
+	#netify-flows-table td:nth-child(2),
 	#netify-flows-table td:nth-child(3),
 	#netify-flows-table td:nth-child(5),
 	#netify-flows-table td:nth-child(6),
