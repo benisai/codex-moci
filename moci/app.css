@@ -2324,6 +2324,18 @@ select.form-input {
 		margin-bottom: 6px;
 	}
 
+	/* AdBlock-Fast: keep long URL values inside mobile cards */
+	#adblock-targets-table td[data-label='URL' i] {
+		display: block;
+		overflow-wrap: anywhere;
+		word-break: break-word;
+	}
+
+	#adblock-targets-table td[data-label='URL' i]::before {
+		display: block;
+		margin-bottom: 6px;
+	}
+
 	#network-active-connections-table td[data-label='Source' i],
 	#network-active-connections-table td[data-label='Destination' i] {
 		display: block;
