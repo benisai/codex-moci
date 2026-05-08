@@ -2051,6 +2051,14 @@ select.form-input {
 }
 
 @media (max-width: 960px) {
+	.content {
+		padding: 24px 14px;
+	}
+
+	.stat-card {
+		padding: 18px;
+	}
+
 	#devices-table thead {
 		display: none;
 	}
@@ -2382,6 +2390,14 @@ select.form-input {
 }
 
 @media (max-width: 640px) {
+	.content {
+		padding: 14px 8px;
+	}
+
+	.stat-card {
+		padding: 14px;
+	}
+
 	#devices-table td {
 		gap: 8px;
 		padding: 8px;
