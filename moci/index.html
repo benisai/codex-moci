@@ -480,6 +480,7 @@
 							<button class="tab-btn" data-tab="pbr" data-feature="pbr">PBR</button>
 							<button class="tab-btn" data-tab="ddns" data-feature="ddns">DDNS</button>
 							<button class="tab-btn" data-tab="qos" data-feature="qos">QOS</button>
+							<button class="tab-btn" data-tab="sqm" data-feature="sqm">SQM</button>
 							<button class="tab-btn" data-tab="qosify" data-feature="qosify">QOSIFY</button>
 							<button class="tab-btn" data-tab="vpn" data-feature="wireguard">VPN</button>
 							<button class="tab-btn" data-tab="connections">CONNECTIONS</button>
@@ -1223,6 +1224,97 @@
 										</tr>
 									</tbody>
 								</table>
+							</div>
+						</div>
+
+						<div class="tab-content hidden" id="tab-sqm" data-feature="sqm">
+							<div class="stat-card">
+								<div class="section-title">SQM BASIC SETTINGS</div>
+								<div
+									id="sqm-install-hint"
+									class="hidden"
+									style="margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--glass-border); border-radius: 6px; color: var(--steel-muted); font-size: 12px"
+								>
+									SQM package not found. Install <code>sqm-scripts</code> and <code>luci-app-sqm</code> first.
+								</div>
+								<div class="form-group">
+									<label class="form-label">SERVICE STATUS</label>
+									<div id="sqm-service-status">Loading...</div>
+								</div>
+								<div class="form-group">
+									<label class="form-label">BOOT STATUS</label>
+									<div id="sqm-boot-status">Loading...</div>
+								</div>
+								<div class="form-group">
+									<label class="form-label">ENABLE THIS SQM INSTANCE</label>
+									<select id="sqm-enabled" class="form-input">
+										<option value="0">Disabled</option>
+										<option value="1">Enabled</option>
+									</select>
+								</div>
+								<div class="form-group">
+									<label class="form-label">INTERFACE NAME</label>
+									<input type="text" id="sqm-interface" class="form-input" placeholder="eth1 / pppoe-wan / wan" />
+								</div>
+								<div class="form-group">
+									<label class="form-label">DOWNLOAD SPEED (INGRESS, Kbit/s)</label>
+									<input type="number" id="sqm-download" class="form-input" placeholder="85000" />
+								</div>
+								<div class="form-group">
+									<label class="form-label">UPLOAD SPEED (EGRESS, Kbit/s)</label>
+									<input type="number" id="sqm-upload" class="form-input" placeholder="10000" />
+								</div>
+								<div class="form-group">
+									<label class="form-label">ENABLE DEBUG LOGGING</label>
+									<select id="sqm-debug-logging" class="form-input">
+										<option value="0">Disabled</option>
+										<option value="1">Enabled</option>
+									</select>
+								</div>
+								<div class="form-group">
+									<label class="form-label">LOG VERBOSITY</label>
+									<select id="sqm-verbosity" class="form-input">
+										<option value="0">silent</option>
+										<option value="1">error</option>
+										<option value="2">warn</option>
+										<option value="5">info (default)</option>
+										<option value="8">debug</option>
+									</select>
+								</div>
+								<div class="quick-actions">
+									<button class="action-btn" id="save-sqm-config-btn">SAVE CONFIGURATION</button>
+									<button class="action-btn success" id="sqm-start-btn">START</button>
+									<button class="action-btn danger" id="sqm-stop-btn">STOP</button>
+									<button class="action-btn warning" id="sqm-restart-btn">RESTART</button>
+									<button class="action-btn" id="sqm-enable-btn">ENABLE BOOT</button>
+									<button class="action-btn" id="sqm-disable-btn">DISABLE BOOT</button>
+								</div>
+							</div>
+							<div class="stat-card" style="margin-top: 24px">
+								<div class="section-title">SQM QUEUE DISCIPLINE</div>
+								<div class="form-group">
+									<label class="form-label">QUEUEING DISCIPLINE</label>
+									<select id="sqm-qdisc" class="form-input"></select>
+								</div>
+								<div class="form-group">
+									<label class="form-label">QUEUE SETUP SCRIPT</label>
+									<select id="sqm-script" class="form-input"></select>
+								</div>
+								<div class="form-group">
+									<label class="form-label">LINK LAYER ADAPTATION</label>
+									<select id="sqm-linklayer" class="form-input">
+										<option value="none">none</option>
+										<option value="ethernet">ethernet</option>
+										<option value="atm">atm</option>
+									</select>
+								</div>
+								<div class="form-group">
+									<label class="form-label">ADVANCED CONFIGURATION</label>
+									<select id="sqm-advanced" class="form-input">
+										<option value="0">Disabled</option>
+										<option value="1">Enabled</option>
+									</select>
+								</div>
 							</div>
 						</div>
 

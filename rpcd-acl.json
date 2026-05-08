@@ -34,7 +34,7 @@
 				"luci.bandix": ["getStatus", "getMetrics"],
 				"service": ["list"]
 			},
-				"uci": ["moci", "banip"]
+				"uci": ["moci", "banip", "sqm"]
 			},
 		"write": {
 			"file": {
@@ -46,6 +46,7 @@
 					"/etc/init.d/dns-monitor": ["exec"],
 					"/etc/init.d/dnsmasq": ["exec"],
 					"/etc/init.d/banip": ["exec"],
+					"/etc/init.d/sqm": ["exec"],
 					"/etc/init.d/firewall": ["exec"],
 				"/usr/bin/moci-netify-collector": ["exec"],
 				"/usr/bin/moci-connection-flow-collector": ["exec"],
@@ -72,6 +73,7 @@
 				"dhcp",
 					"system",
 					"qos",
+					"sqm",
 					"ddns",
 					"banip",
 					"moci"

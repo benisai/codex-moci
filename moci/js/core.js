@@ -141,6 +141,7 @@ export class OpenWrtCore {
 			adblock_fast: '[ -x /etc/init.d/adblock-fast ]',
 			banip: '[ -x /etc/init.d/banip ]',
 			ddns: '[ -x /etc/init.d/ddns ]',
+			sqm: '[ -x /etc/init.d/sqm ]',
 			pbr: '[ -x /etc/init.d/pbr ]',
 			netify: '([ -x /etc/init.d/netify-collector ] || [ -x /etc/init.d/netifyd ] || command -v netifyd >/dev/null 2>&1)'
 		};
@@ -202,6 +203,7 @@ export class OpenWrtCore {
 			pbr: '1',
 			wireguard: '1',
 			qos: '1',
+			sqm: '1',
 			qosify: '1',
 			ddns: '1',
 			diagnostics: '1',

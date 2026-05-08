@@ -274,6 +274,8 @@ for pkg in \
 	luci-app-banip \
 	qos-scripts \
 	luci-app-qos \
+	sqm-scripts \
+	luci-app-sqm \
 	wireguard-tools \
 	kmod-wireguard \
 	luci-proto-wireguard \
@@ -344,6 +346,7 @@ uci commit uhttpd
 
 log "Applying MoCI runtime defaults"
 set_uci moci.features.qosify "1"
+set_uci moci.features.sqm "1"
 set_uci moci.features.banip "1"
 set_uci moci.features.adblock "$INSTALL_ADBLOCK"
 set_uci moci.features.adblock_fast "$INSTALL_ADBLOCK"

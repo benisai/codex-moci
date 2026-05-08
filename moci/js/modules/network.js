@@ -15,6 +15,7 @@ export default class NetworkModule {
 		this.adblockClassicReportMaxResults = 50;
 		this.adblockClassicDebugLog = [];
 		this.adblockClassicDebugLimit = 160;
+		this.sqmInstalled = null;
 		this.qosifyInstalled = null;
 		this.wirelessBySection = new Map();
 		this.wirelessWwanScanRows = [];
@@ -37,6 +38,7 @@ export default class NetworkModule {
 					pbr: () => this.loadPBR(),
 					ddns: () => this.loadDDNS(),
 					qos: () => this.loadQoS(),
+					sqm: () => this.loadSQM(),
 					qosify: () => this.loadQoSify(),
 					vpn: () => this.loadVPN(),
 					connections: () => this.loadConnections(),
@@ -48,10 +50,14 @@ export default class NetworkModule {
 				this.setupDiagnostics();
 			}
 
+			await this.refreshSqmAvailability();
 			await this.refreshQosifyAvailability();
 
 			const tabRaw = subPaths[0] || 'interfaces';
 			let tab = tabRaw === 'adblock' ? 'adblock-classic' : tabRaw;
+			if (tab === 'sqm' && !this.canShowSqmTab()) {
+				tab = 'interfaces';
+			}
 			if (tab === 'qosify' && !this.canShowQosifyTab()) {
 				tab = 'interfaces';
 			}
@@ -275,6 +281,12 @@ export default class NetworkModule {
 		document.getElementById('save-qos-config-btn')?.addEventListener('click', () => this.saveQoSConfig());
 		document.getElementById('wireless-wwan-scan-btn')?.addEventListener('click', () => this.scanWirelessWwan());
 		document.getElementById('save-qosify-config-btn')?.addEventListener('click', () => this.saveQoSifyConfig());
+		document.getElementById('save-sqm-config-btn')?.addEventListener('click', () => this.saveSQMConfig());
+		document.getElementById('sqm-start-btn')?.addEventListener('click', () => this.runSQMServiceAction('start'));
+		document.getElementById('sqm-stop-btn')?.addEventListener('click', () => this.runSQMServiceAction('stop'));
+		document.getElementById('sqm-restart-btn')?.addEventListener('click', () => this.runSQMServiceAction('restart'));
+		document.getElementById('sqm-enable-btn')?.addEventListener('click', () => this.runSQMServiceAction('enable'));
+		document.getElementById('sqm-disable-btn')?.addEventListener('click', () => this.runSQMServiceAction('disable'));
 		document.getElementById('qosify-start-btn')?.addEventListener('click', () => this.runQoSifyServiceAction('start'));
 		document.getElementById('qosify-stop-btn')?.addEventListener('click', () => this.runQoSifyServiceAction('stop'));
 		document.getElementById('qosify-restart-btn')?.addEventListener('click', () => this.runQoSifyServiceAction('restart'));
@@ -4887,6 +4899,279 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 			this.loadQoS();
 		} catch {
 			this.core.showToast('Failed to delete QoS rule', 'error');
+		}
+	}
+
+	canShowSqmTab() {
+		return this.core.isFeatureEnabled('sqm') && this.sqmInstalled === true;
+	}
+
+	applySqmTabVisibility() {
+		const btn = document.querySelector('#network-page .tab-btn[data-tab="sqm"]');
+		const content = document.getElementById('tab-sqm');
+		const visible = this.canShowSqmTab();
+		if (btn) btn.classList.toggle('hidden', !visible);
+		if (content) content.classList.toggle('hidden', !visible);
+	}
+
+	async refreshSqmAvailability() {
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', '[ -x /etc/init.d/sqm ] && echo INSTALLED || echo MISSING']
+			});
+			if (status === 0) {
+				this.sqmInstalled = String(result?.stdout || '').trim() === 'INSTALLED';
+			} else {
+				this.sqmInstalled = false;
+			}
+		} catch {
+			this.sqmInstalled = false;
+		}
+		this.applySqmTabVisibility();
+	}
+
+	setSqmStatusBadges(serviceState, bootState) {
+		const serviceEl = document.getElementById('sqm-service-status');
+		const bootEl = document.getElementById('sqm-boot-status');
+		if (serviceEl) {
+			serviceEl.innerHTML =
+				serviceState === 'RUNNING'
+					? this.core.renderBadge('success', 'RUNNING')
+					: serviceState === 'STOPPED'
+						? this.core.renderBadge('error', 'STOPPED')
+						: this.core.renderBadge('warning', serviceState || 'UNKNOWN');
+		}
+		if (bootEl) {
+			bootEl.innerHTML =
+				bootState === 'ENABLED'
+					? this.core.renderBadge('success', 'ENABLED')
+					: bootState === 'DISABLED'
+						? this.core.renderBadge('error', 'DISABLED')
+						: this.core.renderBadge('warning', bootState || 'UNKNOWN');
+		}
+	}
+
+	async refreshSQMServiceStatus() {
+		const [status, result] = await this.core.ubusCall('file', 'exec', {
+			command: '/bin/sh',
+			params: [
+				'-c',
+				`if [ ! -x /etc/init.d/sqm ]; then echo "SERVICE=MISSING"; echo "BOOT=MISSING"; exit 0; fi
+/etc/init.d/sqm status >/dev/null 2>&1 && echo "SERVICE=RUNNING" || echo "SERVICE=STOPPED"
+/etc/init.d/sqm enabled >/dev/null 2>&1 && echo "BOOT=ENABLED" || echo "BOOT=DISABLED"`
+			]
+		});
+
+		if (status !== 0) {
+			this.setSqmStatusBadges('UNKNOWN', 'UNKNOWN');
+			return;
+		}
+		const out = String(result?.stdout || '');
+		const serviceState = out.match(/SERVICE=([A-Z]+)/)?.[1] || 'UNKNOWN';
+		const bootState = out.match(/BOOT=([A-Z]+)/)?.[1] || 'UNKNOWN';
+		this.setSqmStatusBadges(serviceState, bootState);
+	}
+
+	async ensureSQMConfigSection() {
+		const [status, result] = await this.core.uciGet('sqm');
+		if (status === 0 && result?.values) {
+			for (const [section, cfg] of Object.entries(result.values)) {
+				if (String(cfg?.['.type'] || '') === 'queue') return section;
+			}
+			const firstSection = Object.keys(result.values)[0];
+			if (firstSection) return firstSection;
+		}
+		const [addStatus, addResult] = await this.core.uciAdd('sqm', 'queue', 'wan');
+		if (addStatus !== 0 || !addResult?.section) throw new Error('Unable to create sqm queue section');
+		return addResult.section;
+	}
+
+	async readSQMConfig() {
+		const [status, result] = await this.core.uciGet('sqm');
+		if (status !== 0 || !result?.values) return null;
+		let queueSection = null;
+		let queueConfig = null;
+		for (const [section, cfg] of Object.entries(result.values)) {
+			if (String(cfg?.['.type'] || '') === 'queue') {
+				queueSection = section;
+				queueConfig = cfg;
+				break;
+			}
+		}
+		if (!queueSection) {
+			const first = Object.entries(result.values)[0];
+			if (first) {
+				queueSection = first[0];
+				queueConfig = first[1];
+			}
+		}
+		return { section: queueSection, config: queueConfig || {} };
+	}
+
+	async loadSqmInterfaceOptions(selectedValue = '') {
+		const input = document.getElementById('sqm-interface');
+		if (!input) return;
+		let selected = String(selectedValue || '').trim();
+		if (!selected) selected = input.value.trim();
+		if (selected) {
+			input.value = selected;
+			return;
+		}
+		try {
+			const [status, result] = await this.core.ubusCall('network.interface', 'dump', {});
+			if (status !== 0 || !Array.isArray(result?.interface)) return;
+			const preferred = result.interface
+				.map(i => String(i?.l3_device || i?.device || i?.interface || '').trim())
+				.find(Boolean);
+			if (preferred) input.value = preferred;
+		} catch {}
+	}
+
+	async loadSqmQdiscOptions(selectedValue = '') {
+		const select = document.getElementById('sqm-qdisc');
+		if (!select) return;
+		let choices = [];
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', 'tc qdisc help 2>&1 | sed -n "s/.*\\<\\([a-z0-9_]*\\)\\>.*$/\\1/p" | sort -u | head -n 100']
+			});
+			if (status === 0) {
+				choices = String(result?.stdout || '')
+					.split('\n')
+					.map(v => v.trim())
+					.filter(v => /^[a-z0-9_]+$/i.test(v));
+			}
+		} catch {}
+		const defaults = ['cake', 'fq_codel', 'fq_codel_fast', 'pfifo', 'sfq'];
+		const merged = Array.from(new Set([...choices, ...defaults])).sort((a, b) => a.localeCompare(b));
+		select.innerHTML = merged.map(name => `<option value="${this.core.escapeHtml(name)}">${this.core.escapeHtml(name)}</option>`).join('');
+		select.value = merged.includes(selectedValue) ? selectedValue : merged.includes('cake') ? 'cake' : merged[0] || '';
+	}
+
+	async loadSqmScriptOptions(selectedValue = '') {
+		const select = document.getElementById('sqm-script');
+		if (!select) return;
+		let scripts = [];
+		try {
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', 'ls -1 /usr/lib/sqm/*.qos 2>/dev/null | sed "s#.*/##"']
+			});
+			if (status === 0) {
+				scripts = String(result?.stdout || '')
+					.split('\n')
+					.map(v => v.trim())
+					.filter(Boolean);
+			}
+		} catch {}
+		const defaults = ['piece_of_cake.qos', 'simple.qos', 'layer_cake.qos'];
+		const merged = Array.from(new Set([...scripts, ...defaults])).sort((a, b) => a.localeCompare(b));
+		select.innerHTML = merged.map(name => `<option value="${this.core.escapeHtml(name)}">${this.core.escapeHtml(name)}</option>`).join('');
+		select.value = merged.includes(selectedValue)
+			? selectedValue
+			: merged.includes('piece_of_cake.qos')
+				? 'piece_of_cake.qos'
+				: merged[0] || '';
+	}
+
+	async loadSQM() {
+		await this.refreshSqmAvailability();
+		if (!this.canShowSqmTab()) return;
+
+		const installHintEl = document.getElementById('sqm-install-hint');
+		const enabledEl = document.getElementById('sqm-enabled');
+		const ifaceEl = document.getElementById('sqm-interface');
+		const downloadEl = document.getElementById('sqm-download');
+		const uploadEl = document.getElementById('sqm-upload');
+		const debugEl = document.getElementById('sqm-debug-logging');
+		const verbosityEl = document.getElementById('sqm-verbosity');
+		const advancedEl = document.getElementById('sqm-advanced');
+		const linklayerEl = document.getElementById('sqm-linklayer');
+		if (!enabledEl || !ifaceEl || !downloadEl || !uploadEl || !debugEl || !verbosityEl || !advancedEl || !linklayerEl) return;
+
+		try {
+			const data = await this.readSQMConfig();
+			const cfg = data?.config || {};
+
+			enabledEl.value = this.isEnabledValue(cfg.enabled ?? '0') ? '1' : '0';
+			ifaceEl.value = String(cfg.interface || '');
+			downloadEl.value = String(cfg.download || '');
+			uploadEl.value = String(cfg.upload || '');
+			debugEl.value = this.isEnabledValue(cfg.debug_logging ?? '0') ? '1' : '0';
+			verbosityEl.value = String(cfg.verbosity ?? '5') || '5';
+			advancedEl.value = this.isEnabledValue(cfg.iqdisc_opts || cfg.eqdisc_opts || cfg.linklayer || '0') ? '1' : '0';
+			linklayerEl.value = String(cfg.linklayer || 'none');
+
+			await this.loadSqmQdiscOptions(String(cfg.qdisc || 'cake'));
+			await this.loadSqmScriptOptions(String(cfg.script || 'piece_of_cake.qos'));
+			await this.loadSqmInterfaceOptions(String(cfg.interface || ''));
+			if (installHintEl) installHintEl.classList.add('hidden');
+		} catch {
+			enabledEl.value = '0';
+			downloadEl.value = '';
+			uploadEl.value = '';
+			debugEl.value = '0';
+			verbosityEl.value = '5';
+			advancedEl.value = '0';
+			linklayerEl.value = 'none';
+			await this.loadSqmQdiscOptions('cake');
+			await this.loadSqmScriptOptions('piece_of_cake.qos');
+			await this.loadSqmInterfaceOptions('');
+			if (installHintEl) installHintEl.classList.remove('hidden');
+		}
+
+		await this.refreshSQMServiceStatus();
+	}
+
+	async saveSQMConfig() {
+		const enabled = String(document.getElementById('sqm-enabled')?.value || '0') === '1' ? '1' : '0';
+		const iface = String(document.getElementById('sqm-interface')?.value || '').trim();
+		const download = String(document.getElementById('sqm-download')?.value || '').trim();
+		const upload = String(document.getElementById('sqm-upload')?.value || '').trim();
+		const debugLogging = String(document.getElementById('sqm-debug-logging')?.value || '0') === '1' ? '1' : '0';
+		const verbosity = String(document.getElementById('sqm-verbosity')?.value || '5').trim() || '5';
+		const qdisc = String(document.getElementById('sqm-qdisc')?.value || 'cake').trim() || 'cake';
+		const script = String(document.getElementById('sqm-script')?.value || 'piece_of_cake.qos').trim() || 'piece_of_cake.qos';
+		const linklayer = String(document.getElementById('sqm-linklayer')?.value || 'none').trim() || 'none';
+		const advanced = String(document.getElementById('sqm-advanced')?.value || '0') === '1' ? '1' : '0';
+
+		try {
+			const section = await this.ensureSQMConfigSection();
+			await this.core.uciSet('sqm', section, {
+				enabled,
+				interface: iface,
+				download,
+				upload,
+				debug_logging: debugLogging,
+				verbosity,
+				qdisc,
+				script,
+				linklayer,
+				iqdisc_opts: advanced === '1' ? 'nat dual-dsthost ingress' : '',
+				eqdisc_opts: advanced === '1' ? 'nat dual-srchost' : ''
+			});
+			await this.core.uciCommit('sqm');
+			this.core.showToast('SQM configuration saved', 'success');
+			await this.loadSQM();
+		} catch {
+			this.core.showToast('Failed to save SQM configuration', 'error');
+		}
+	}
+
+	async runSQMServiceAction(action) {
+		if (!action) return;
+		try {
+			const [status] = await this.core.ubusCall('file', 'exec', {
+				command: '/etc/init.d/sqm',
+				params: [String(action)]
+			});
+			if (status !== 0) throw new Error('service action failed');
+			this.core.showToast(`SQM ${action} completed`, 'success');
+			await this.refreshSQMServiceStatus();
+		} catch {
+			this.core.showToast(`Failed to ${action} SQM service`, 'error');
 		}
 	}
 
