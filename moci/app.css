@@ -2055,6 +2055,33 @@ select.form-input {
 }
 
 @media (max-width: 960px) {
+	#monitoring-page .tabs {
+		flex-wrap: nowrap;
+		overflow-x: auto;
+		overflow-y: hidden;
+		white-space: nowrap;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: none;
+		padding-bottom: 4px;
+	}
+
+	#monitoring-page .tabs::-webkit-scrollbar {
+		display: none;
+	}
+
+	#monitoring-page .tabs .tab-btn {
+		flex: 0 0 auto;
+	}
+
+	#monitoring-dns-recent-table td:nth-child(2) {
+		overflow-wrap: anywhere;
+		word-break: break-word;
+	}
+
+	#tab-dns .quick-actions {
+		flex-wrap: wrap;
+	}
+
 	.content {
 		padding: 24px 14px;
 	}
@@ -2404,6 +2431,10 @@ select.form-input {
 }
 
 @media (max-width: 640px) {
+	#tab-dns .monitoring-metrics-grid {
+		grid-template-columns: 1fr;
+	}
+
 	.content {
 		padding: 14px 8px;
 	}
