@@ -184,6 +184,7 @@ export default class SystemModule {
 			adblock: true,
 			adblock_fast: true,
 			banip: true,
+			ddns: true,
 			netify: true,
 			pbr: true
 		};
@@ -197,6 +198,7 @@ export default class SystemModule {
 						'[ -x /etc/init.d/adblock ] && echo "adblock=1" || echo "adblock=0"',
 						'[ -x /etc/init.d/adblock-fast ] && echo "adblock_fast=1" || echo "adblock_fast=0"',
 						'[ -x /etc/init.d/banip ] && echo "banip=1" || echo "banip=0"',
+						'[ -x /etc/init.d/ddns ] && echo "ddns=1" || echo "ddns=0"',
 						'([ -x /etc/init.d/netify-collector ] || [ -x /etc/init.d/netifyd ] || command -v netifyd >/dev/null 2>&1) && echo "netify=1" || echo "netify=0"',
 						'[ -x /etc/init.d/pbr ] && echo "pbr=1" || echo "pbr=0"'
 					].join('; ')

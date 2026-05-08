@@ -140,6 +140,7 @@ export class OpenWrtCore {
 			adblock: '[ -x /etc/init.d/adblock ]',
 			adblock_fast: '[ -x /etc/init.d/adblock-fast ]',
 			banip: '[ -x /etc/init.d/banip ]',
+			ddns: '[ -x /etc/init.d/ddns ]',
 			pbr: '[ -x /etc/init.d/pbr ]',
 			netify: '([ -x /etc/init.d/netify-collector ] || [ -x /etc/init.d/netifyd ] || command -v netifyd >/dev/null 2>&1)'
 		};
