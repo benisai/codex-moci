@@ -49,13 +49,13 @@ export default class DevicesModule {
 			saveHandler: () => this.savePinnedIp()
 		});
 		document.getElementById('devices-pin-static')?.addEventListener('change', () => this.syncStaticIpField());
-		document.getElementById('devices-parental-toggle-btn')?.addEventListener('click', () => this.toggleParentalControl());
-		document.getElementById('devices-parental-dns-btn')?.addEventListener('click', () => this.applyParentalDnsProfile());
 		document.getElementById('devices-release-quarantine-btn')?.addEventListener('click', () => this.releaseQuarantineFromDialog());
 		document.getElementById('delete-devices-pin-btn')?.addEventListener('click', () => this.deleteFromDialog());
 
 		this.core.delegateActions('devices-table', {
-			pin: mac => this.openPinDialog(mac)
+			pin: mac => this.openPinDialog(mac),
+			parental_toggle: mac => this.toggleParentalControlForMac(mac),
+			parental_dns: mac => this.applyParentalDnsProfileForMac(mac)
 		});
 		this.setupSortHeaders();
 	}
@@ -783,7 +783,7 @@ rm -f "$tmp"
 				if (!isExpanded) return mainRow;
 				return `${mainRow}
 				<tr class="devices-netify-detail-row">
-					<td colspan="7">${this.renderNetifyDetail(row.mac)}</td>
+					<td colspan="7">${this.renderExpandedDetail(row.mac)}</td>
 				</tr>`;
 			})
 			.join('');
@@ -842,114 +842,25 @@ rm -f "$tmp"
 		}
 
 		this.expandedMac = normalizedMac;
-		if (this.netifyFeatureEnabled && !this.netifyByMac.has(normalizedMac)) {
-			this.netifyByMac.set(normalizedMac, { loading: true });
-		}
 		this.renderRows(this.sortRows(this.deviceRows));
-
-		if (this.netifyFeatureEnabled) {
-			await this.loadNetifyDetails(normalizedMac);
-			if (this.expandedMac === normalizedMac) this.renderRows(this.sortRows(this.deviceRows));
-		}
 	}
 
-	renderNetifyDetail(mac) {
+	renderExpandedDetail(mac) {
 		const row = this.rowsByMac.get(mac);
-		const nlbwApps = Array.isArray(row?.nlbwTopApps) ? row.nlbwTopApps : [];
 		const hasDnsHijack13 = String(row?.dnsHijackDest || '').trim() === '1.1.1.3' && Boolean(row?.dnsHijackEnabled);
-		const dnsHijackNotice = hasDnsHijack13
-			? `<div style="margin-bottom:10px; font-size:11px; color:var(--steel-light); font-family:var(--font-mono)">Device Using DNS Hijack 1.1.1.3</div>`
-			: '';
-		const nlbwRows =
-			nlbwApps.length > 0
-				? nlbwApps
-						.map(
-							item => `<tr>
-					<td>${this.core.escapeHtml(item.name)}</td>
-					<td>${this.core.escapeHtml(this.core.formatBytes(item.bytes || 0))}</td>
-				</tr>`
-						)
-						.join('')
-				: `<tr><td colspan="2" style="text-align:center;color:var(--steel-muted)">No nlbw Layer7 data for this device</td></tr>`;
-
-		const nlbwSection = `<div style="margin-bottom: 14px;">
-			<div style="display:flex; flex-wrap:wrap; gap:14px; margin-bottom:10px; font-size:11px; font-family:var(--font-mono); color:var(--steel-light)">
-				<span>NLBW UPLOAD: ${this.core.escapeHtml(row?.tx == null ? 'N/A' : this.core.formatBytes(row.tx || 0))}</span>
-				<span>NLBW DOWNLOAD: ${this.core.escapeHtml(row?.rx == null ? 'N/A' : this.core.formatBytes(row.rx || 0))}</span>
-			</div>
-			${dnsHijackNotice}
-			<div style="margin-bottom:10px; font-size:11px; color:var(--steel-muted); font-family:var(--font-mono)">NLBW TOP APPLICATIONS (10)</div>
-			<table class="data-table" style="margin-top:0">
-				<thead>
-					<tr>
-						<th>APPLICATION</th>
-						<th>TOTAL BYTES</th>
-					</tr>
-				</thead>
-				<tbody>${nlbwRows}</tbody>
-			</table>
-		</div>`;
-
-		if (!this.netifyFeatureEnabled) {
-			return `<div style="padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 6px;">
-				${nlbwSection}
-				<div style="font-size: 12px; color: var(--steel-muted); font-family: var(--font-mono)">Netify details are disabled (moci.features.netify=0).</div>
-			</div>`;
-		}
-
-		const state = this.netifyByMac.get(mac);
-		if (!state || state.loading) {
-			return `<div style="padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 6px;">
-				${nlbwSection}
-				<div style="color: var(--steel-muted); font-size: 12px">Loading additional data...</div>
-			</div>`;
-		}
-		if (state.error) {
-			return `<div style="padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 6px;">
-				${nlbwSection}
-				<div style="color: var(--steel-muted); font-size: 12px">Netify data unavailable: ${this.core.escapeHtml(state.error)}</div>
-			</div>`;
-		}
-
-		const summary = state.summary || {
-			flows: 0,
-			apps: 0,
-			bytes: 0,
-			lastSeen: 'N/A',
-			topApps: [],
-			recent: []
-		};
-
-		const appRows =
-			summary.topApps.length > 0
-				? summary.topApps
-						.map(
-							item => `<tr>
-					<td>${this.core.escapeHtml(item.name)}</td>
-					<td>${this.core.escapeHtml(String(item.count))}</td>
-				</tr>`
-						)
-						.join('')
-				: `<tr><td colspan="2" style="text-align:center;color:var(--steel-muted)">No application data for this device</td></tr>`;
-
 		return `<div style="padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 6px;">
-			${nlbwSection}
 			<div style="display:flex; flex-wrap:wrap; gap:14px; margin-bottom:10px; font-size:11px; font-family:var(--font-mono); color:var(--steel-light)">
-				<span>FLOWS: ${this.core.escapeHtml(String(summary.flows))}</span>
-				<span>APPLICATIONS: ${this.core.escapeHtml(String(summary.apps))}</span>
-				<span>TOTAL BYTES: ${this.core.escapeHtml(this.core.formatBytes(summary.bytes || 0))}</span>
-				<span>LAST SEEN: ${this.core.escapeHtml(summary.lastSeen)}</span>
+				<span>PARENTAL STATUS: ${this.core.escapeHtml(row?.parentalBlocked ? 'INTERNET BLOCKED' : 'INTERNET ALLOWED')}</span>
+				${hasDnsHijack13 ? '<span>DNS PROFILE: 1.1.1.3 ACTIVE</span>' : '<span>DNS PROFILE: OFF</span>'}
 			</div>
-			<div style="margin-bottom:10px; font-size:11px; color:var(--steel-muted); font-family:var(--font-mono)">TOP APPLICATIONS (10)</div>
-			<table class="data-table" style="margin-top:0">
-				<thead>
-					<tr>
-						<th>APPLICATION</th>
-						<th>FLOWS</th>
-					</tr>
-				</thead>
-				<tbody>${appRows}</tbody>
-			</table>
+			<div class="action-buttons" style="display:flex; flex-wrap:wrap; gap:8px;">
+				<button class="action-btn-sm ${row?.parentalBlocked ? 'success' : 'danger'}" data-action="parental_toggle" data-id="${this.core.escapeHtml(mac)}">
+					${row?.parentalBlocked ? 'UNBLOCK INTERNET' : 'BLOCK INTERNET'}
+				</button>
+				<button class="action-btn-sm ${hasDnsHijack13 ? 'danger' : 'warning'}" data-action="parental_dns" data-id="${this.core.escapeHtml(mac)}">
+					${hasDnsHijack13 ? 'REMOVE DNS 1.1.1.3' : 'ADD DNS 1.1.1.3'}
+				</button>
+			</div>
 		</div>`;
 	}
 
@@ -1129,8 +1040,6 @@ rm -f "$tmp"
 		document.getElementById('devices-parental-rule-section').value = row.parentalSection || '';
 		document.getElementById('devices-quarantine-rule-base').value = row.quarantineBase || '';
 		this.syncStaticIpField();
-		this.syncParentalControlUi(row);
-		this.syncParentalDnsUi(row);
 		this.syncQuarantineActionUi(row);
 		this.core.openModal('devices-pin-modal');
 	}
@@ -1400,17 +1309,21 @@ rm -f "$tmp"
 
 	async toggleParentalControl() {
 		const mac = this.normalizeMac(document.getElementById('devices-pin-mac')?.value || '');
-		if (!mac) {
+		await this.toggleParentalControlForMac(mac, true);
+	}
+
+	async toggleParentalControlForMac(mac, fromModal = false) {
+		const normalizedMac = this.normalizeMac(mac);
+		if (!normalizedMac) {
 			this.core.showToast('Invalid MAC address', 'error');
 			return;
 		}
 
-		const row = this.rowsByMac.get(mac);
-		const sectionInput = document.getElementById('devices-parental-rule-section');
-		const existingSection = String(sectionInput?.value || row?.parentalSection || '').trim();
+		const row = this.rowsByMac.get(normalizedMac);
+		const existingSection = String(row?.parentalSection || '').trim();
 		const currentlyBlocked = Boolean(row?.parentalBlocked);
 		const targetEnabled = currentlyBlocked ? '0' : '1';
-		const ruleName = this.buildParentalRuleName(row, mac);
+		const ruleName = this.buildParentalRuleName(row, normalizedMac);
 		const sourceIp = this.resolveParentalSourceIp(row);
 
 		try {
@@ -1419,7 +1332,7 @@ rm -f "$tmp"
 					name: ruleName,
 					src: 'lan',
 					dest: 'wan',
-					src_mac: mac,
+					src_mac: normalizedMac,
 					proto: 'all',
 					target: 'REJECT',
 					family: 'any',
@@ -1439,7 +1352,7 @@ rm -f "$tmp"
 					name: ruleName,
 					src: 'lan',
 					dest: 'wan',
-					src_mac: mac,
+					src_mac: normalizedMac,
 					proto: 'all',
 					target: 'REJECT',
 					family: 'any',
@@ -1457,14 +1370,9 @@ rm -f "$tmp"
 
 				this.core.showToast(currentlyBlocked ? 'Internet unblocked for device' : 'Internet blocked for device', 'success');
 				await this.loadDevices();
-				const refreshed = this.rowsByMac.get(mac);
-				if (refreshed) {
-					document.getElementById('devices-parental-rule-section').value = refreshed.parentalSection || '';
-					this.syncParentalControlUi(refreshed);
-					this.syncParentalDnsUi(refreshed);
-					this.syncQuarantineActionUi(refreshed);
-				}
-				this.core.closeModal('devices-pin-modal');
+				const refreshed = this.rowsByMac.get(normalizedMac);
+				if (refreshed && fromModal) this.syncQuarantineActionUi(refreshed);
+				if (fromModal) this.core.closeModal('devices-pin-modal');
 			} catch (err) {
 				console.error('Failed to toggle parental control:', err);
 				this.core.showToast('Failed to update parental control rule', 'error');
@@ -1472,24 +1380,27 @@ rm -f "$tmp"
 		}
 
 	async applyParentalDnsProfile() {
-		const btn = document.getElementById('devices-parental-dns-btn');
-		if (btn?.disabled) return;
-		this.setParentalDnsBusy(true);
 		const mac = this.normalizeMac(document.getElementById('devices-pin-mac')?.value || '');
-		if (!mac) {
+		await this.applyParentalDnsProfileForMac(mac, true);
+	}
+
+	async applyParentalDnsProfileForMac(mac, fromModal = false) {
+		const normalizedMac = this.normalizeMac(mac);
+		if (!normalizedMac) {
 			this.core.showToast('Invalid MAC address', 'error');
-			this.setParentalDnsBusy(false);
 			return;
 		}
 
-		const row = this.rowsByMac.get(mac);
+		if (fromModal) this.setParentalDnsBusy(true);
+
+		const row = this.rowsByMac.get(normalizedMac);
 		const currentlyActive = String(row?.dnsHijackDest || '').trim() === '1.1.1.3' && Boolean(row?.dnsHijackEnabled);
 		const hostname = String(row?.hostname || 'device')
 			.trim()
 			.replace(/\s+/g, '_')
 			.replace(/[^A-Za-z0-9_.-]/g, '')
 			.slice(0, 28);
-		const fallback = mac.replace(/:/g, '');
+		const fallback = normalizedMac.replace(/:/g, '');
 		const nameSuffix = hostname && hostname.toLowerCase() !== 'unknown' ? hostname : fallback;
 		const name = `${this.dnsHijackRulePrefix}${nameSuffix}`;
 		const existingSection = String(row?.dnsHijackSection || '').trim();
@@ -1503,7 +1414,7 @@ rm -f "$tmp"
 				for (const [section, cfg] of Object.entries(result.values)) {
 					if (String(cfg?.['.type'] || '') !== 'redirect') continue;
 					const ruleMac = this.normalizeMac(cfg?.src_mac || cfg?.src_mac_address || '');
-					if (!ruleMac || ruleMac !== mac) continue;
+					if (!ruleMac || ruleMac !== normalizedMac) continue;
 					const srcDport = String(cfg?.src_dport || '').trim();
 					const destPort = String(cfg?.dest_port || '').trim();
 					const target = String(cfg?.target || '').trim().toUpperCase();
@@ -1528,7 +1439,7 @@ rm -f "$tmp"
 				await this.core.uciSet('firewall', section, {
 					name,
 					src: 'lan',
-					src_mac: mac,
+					src_mac: normalizedMac,
 					proto: 'tcp udp',
 					src_dport: '53',
 					dest_ip: '1.1.1.3',
@@ -1545,17 +1456,15 @@ rm -f "$tmp"
 
 			this.core.showToast(currentlyActive ? 'Removed DNS hijack 1.1.1.3' : 'Applied DNS hijack to 1.1.1.3', 'success');
 			await this.loadDevices();
-			const refreshed = this.rowsByMac.get(mac);
-			if (refreshed) {
-				this.syncParentalControlUi(refreshed);
-				this.syncParentalDnsUi(refreshed);
-				this.syncQuarantineActionUi(refreshed);
-			}
-			this.core.closeModal('devices-pin-modal');
+			const refreshed = this.rowsByMac.get(normalizedMac);
+			if (refreshed && fromModal) this.syncQuarantineActionUi(refreshed);
+			if (fromModal) this.core.closeModal('devices-pin-modal');
 		} catch (err) {
 			console.error('Failed to apply DNS hijack profile:', err);
 			this.core.showToast('Failed to apply DNS hijack profile', 'error');
-			this.setParentalDnsBusy(false);
+			if (fromModal) this.setParentalDnsBusy(false);
+		} finally {
+			if (fromModal) this.setParentalDnsBusy(false);
 		}
 	}
 
