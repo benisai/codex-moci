@@ -869,6 +869,10 @@ body {
 	margin-right: 0;
 }
 
+.devices-mobile-only {
+	display: none;
+}
+
 .process-controls {
 	display: flex;
 	align-items: center;
@@ -2149,6 +2153,10 @@ select.form-input {
 
 	#devices-table .devices-action-btn {
 		margin-left: auto;
+	}
+
+	.devices-mobile-only {
+		display: block;
 	}
 
 	#interfaces-table thead {

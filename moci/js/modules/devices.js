@@ -873,6 +873,9 @@ rm -f "$tmp"
 					${hasDnsHijack13 ? 'REMOVE DNS 1.1.1.3' : 'ADD DNS 1.1.1.3'}
 				</button>
 			</div>
+			<div class="devices-mobile-only" style="margin-top: 10px; font-size: 11px; font-family: var(--font-mono); color: var(--steel-light);">
+				<span style="color: var(--steel-muted)">MAC ADDRESS:</span> ${this.core.escapeHtml(row?.mac || mac)}
+			</div>
 			<div style="margin: 10px 0; border-top: 2px dashed var(--glass-border);"></div>
 			<div style="display:flex; flex-wrap:wrap; gap:14px; margin-bottom:10px; font-size:11px; font-family:var(--font-mono); color:var(--steel-light)">
 				<span>NLBW UPLOAD: ${this.core.escapeHtml(row?.tx == null ? 'N/A' : this.core.formatBytes(row.tx || 0))}</span>
