@@ -22,6 +22,7 @@ export default class NotificationsModule {
 	bindHandlers() {
 		document.getElementById('notifications-refresh-btn')?.addEventListener('click', () => this.loadRows(true));
 		document.getElementById('notifications-archive-all-btn')?.addEventListener('click', () => this.archiveAll());
+		document.getElementById('notifications-delete-all-btn')?.addEventListener('click', () => this.deleteAll());
 		document
 			.getElementById('notifications-toggle-archived-btn')
 			?.addEventListener('click', () => this.toggleArchivedFilter());
@@ -174,6 +175,19 @@ SQLITE_BIN="$(command -v sqlite3 || command -v sqlite3-cli || true)"
 		} catch (err) {
 			console.error('Archive all failed:', err);
 			this.core.showToast('Failed to archive all notifications', 'error');
+		}
+	}
+
+	async deleteAll() {
+		if (!confirm('Delete all notifications?')) return;
+		try {
+			await this.execSql('UPDATE notifications SET "delete" = 1 WHERE "delete" = 0;');
+			this.core.showToast('All notifications deleted', 'success');
+			await this.loadRows(false);
+			this.core.refreshNotificationBell?.();
+		} catch (err) {
+			console.error('Delete all failed:', err);
+			this.core.showToast('Failed to delete all notifications', 'error');
 		}
 	}
 
