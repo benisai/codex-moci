@@ -1897,7 +1897,9 @@ done`;
 					const firstNonMociIndex = rules.findIndex(r => !String(r.name || r.section || '').toLowerCase().startsWith('moci'));
 					rulesTbody.innerHTML = rules
 						.map((r, idx) => {
-							const ruleRow = `<tr>
+							const isMociRule = String(r.name || r.section || '').toLowerCase().startsWith('moci');
+							const rowStyle = isMociRule ? ' style="background: rgba(255, 96, 128, 0.045);"' : '';
+							const ruleRow = `<tr${rowStyle}>
 						<td data-label="Name">${this.core.escapeHtml(r.name || r.section)}</td>
 						<td data-label="Source">${this.core.escapeHtml(r.src || 'Any')}</td>
 						<td data-label="Source IP">${this.core.escapeHtml(r.src_ip || 'Any')}</td>
