@@ -1894,9 +1894,10 @@ done`;
 				if (rules.length === 0) {
 					this.core.renderEmptyTable(rulesTbody, 8, 'No firewall rules');
 				} else {
+					const firstNonMociIndex = rules.findIndex(r => !String(r.name || r.section || '').toLowerCase().startsWith('moci'));
 					rulesTbody.innerHTML = rules
-						.map(
-							r => `<tr>
+						.map((r, idx) => {
+							const ruleRow = `<tr>
 						<td data-label="Name">${this.core.escapeHtml(r.name || r.section)}</td>
 						<td data-label="Source">${this.core.escapeHtml(r.src || 'Any')}</td>
 						<td data-label="Source IP">${this.core.escapeHtml(r.src_ip || 'Any')}</td>
@@ -1905,8 +1906,16 @@ done`;
 						<td data-label="Port">${this.core.escapeHtml(r.dest_port || 'Any')}</td>
 						<td data-label="Action">${this.renderFirewallTargetBadge(r.target)}</td>
 						<td data-label="Actions">${this.core.renderActionButtons(r.section)}</td>
-					</tr>`
-						)
+					</tr>`;
+							if (idx === firstNonMociIndex && firstNonMociIndex > 0) {
+								return `<tr aria-hidden="true">
+						<td colspan="8" style="padding: 0;">
+							<div style="margin: 8px 0; border-top: 2px dashed var(--glass-border);"></div>
+						</td>
+					</tr>${ruleRow}`;
+							}
+							return ruleRow;
+						})
 						.join('');
 				}
 			}
