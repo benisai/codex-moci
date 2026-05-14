@@ -102,11 +102,11 @@ export default class NotificationsModule {
 							: `<button class="action-btn-sm" data-action="archive" data-id="${row.id}">ARCHIVE</button>`;
 
 					return `<tr>
-						<td>${this.core.escapeHtml(this.formatTimestamp(row.timestamp))}</td>
-						<td>${this.core.escapeHtml(row.app || '-')}</td>
-						<td>${this.core.escapeHtml(row.msg || '-')}</td>
-						<td>${statusPill}</td>
-						<td>
+						<td data-label="TIME">${this.core.escapeHtml(this.formatTimestamp(row.timestamp))}</td>
+						<td data-label="APP">${this.core.escapeHtml(row.app || '-')}</td>
+						<td data-label="MESSAGE">${this.core.escapeHtml(row.msg || '-')}</td>
+						<td data-label="STATUS">${statusPill}</td>
+						<td data-label="ACTIONS">
 							<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
 								${archiveBtn}
 								<button class="action-btn-sm danger" data-action="delete" data-id="${row.id}">DELETE</button>

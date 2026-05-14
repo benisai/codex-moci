@@ -2365,6 +2365,69 @@ select.form-input {
 		margin-bottom: 6px;
 	}
 
+	/* Notifications: mobile/tablet card layout */
+	#notifications-page .data-table thead {
+		display: none;
+	}
+
+	#notifications-page .data-table,
+	#notifications-page .data-table tbody,
+	#notifications-page .data-table tr,
+	#notifications-page .data-table td {
+		display: block;
+		width: 100%;
+	}
+
+	#notifications-page .data-table tr {
+		border: 1px solid var(--glass-border);
+		border-radius: 8px;
+		background: rgba(255, 255, 255, 0.015);
+		margin-bottom: 12px;
+	}
+
+	#notifications-page .data-table td {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 8px 10px;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+	}
+
+	#notifications-page .data-table td:last-child {
+		border-bottom: none;
+	}
+
+	#notifications-page .data-table td::before {
+		content: attr(data-label);
+		font-family: var(--font-mono);
+		font-size: 10px;
+		letter-spacing: 0.08em;
+		color: var(--steel-muted);
+		text-transform: uppercase;
+		flex: 0 0 108px;
+	}
+
+	#notifications-page .data-table td[data-label='MESSAGE' i] {
+		display: block;
+		overflow-wrap: anywhere;
+		word-break: break-word;
+	}
+
+	#notifications-page .data-table td[data-label='MESSAGE' i]::before {
+		display: block;
+		margin-bottom: 6px;
+	}
+
+	#notifications-page .data-table td[data-label='ACTIONS' i] {
+		display: block;
+	}
+
+	#notifications-page .data-table td[data-label='ACTIONS' i]::before {
+		display: block;
+		margin-bottom: 6px;
+	}
+
 	#netify-page .traffic-header-row {
 		flex-wrap: wrap;
 		gap: 8px;
