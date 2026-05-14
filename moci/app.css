@@ -2137,6 +2137,7 @@ select.form-input {
 	}
 
 	/* Devices on mobile/tablet: hide lower-priority columns */
+	#devices-table td[data-label='IP ADDRESS'],
 	#devices-table td[data-label='MAC ADDRESS'],
 	#devices-table td[data-label='UPLOAD'],
 	#devices-table td[data-label='DOWNLOAD'] {
