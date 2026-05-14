@@ -1859,6 +1859,14 @@ done`;
 			const rules = Object.entries(config)
 				.filter(([, v]) => v['.type'] === 'rule')
 				.map(([k, v]) => ({ section: k, ...v }));
+			rules.sort((a, b) => {
+				const aName = String(a.name || a.section || '').toLowerCase();
+				const bName = String(b.name || b.section || '').toLowerCase();
+				const aIsMoci = aName.startsWith('moci');
+				const bIsMoci = bName.startsWith('moci');
+				if (aIsMoci !== bIsMoci) return aIsMoci ? -1 : 1;
+				return aName.localeCompare(bName);
+			});
 
 			const fwTbody = document.querySelector('#firewall-table tbody');
 			if (fwTbody) {
