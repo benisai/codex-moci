@@ -2132,6 +2132,13 @@ select.form-input {
 		flex: 0 0 108px;
 	}
 
+	/* Devices on mobile/tablet: hide lower-priority columns */
+	#devices-table td[data-label='MAC ADDRESS'],
+	#devices-table td[data-label='UPLOAD'],
+	#devices-table td[data-label='DOWNLOAD'] {
+		display: none;
+	}
+
 	#devices-table tr.devices-netify-detail-row td {
 		display: block;
 	}
