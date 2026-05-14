@@ -848,6 +848,18 @@ rm -f "$tmp"
 	renderExpandedDetail(mac) {
 		const row = this.rowsByMac.get(mac);
 		const hasDnsHijack13 = String(row?.dnsHijackDest || '').trim() === '1.1.1.3' && Boolean(row?.dnsHijackEnabled);
+		const nlbwApps = Array.isArray(row?.nlbwTopApps) ? row.nlbwTopApps : [];
+		const nlbwRows =
+			nlbwApps.length > 0
+				? nlbwApps
+						.map(
+							item => `<tr>
+					<td>${this.core.escapeHtml(item.name)}</td>
+					<td>${this.core.escapeHtml(this.core.formatBytes(item.bytes || 0))}</td>
+				</tr>`
+						)
+						.join('')
+				: `<tr><td colspan="2" style="text-align:center;color:var(--steel-muted)">No NLBW data for this device</td></tr>`;
 		return `<div style="padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 6px;">
 			<div style="display:flex; flex-wrap:wrap; gap:14px; margin-bottom:10px; font-size:11px; font-family:var(--font-mono); color:var(--steel-light)">
 				<span>PARENTAL STATUS: ${this.core.escapeHtml(row?.parentalBlocked ? 'INTERNET BLOCKED' : 'INTERNET ALLOWED')}</span>
@@ -861,6 +873,21 @@ rm -f "$tmp"
 					${hasDnsHijack13 ? 'REMOVE DNS 1.1.1.3' : 'ADD DNS 1.1.1.3'}
 				</button>
 			</div>
+			<div style="margin: 10px 0; border-top: 2px dashed var(--glass-border);"></div>
+			<div style="display:flex; flex-wrap:wrap; gap:14px; margin-bottom:10px; font-size:11px; font-family:var(--font-mono); color:var(--steel-light)">
+				<span>NLBW UPLOAD: ${this.core.escapeHtml(row?.tx == null ? 'N/A' : this.core.formatBytes(row.tx || 0))}</span>
+				<span>NLBW DOWNLOAD: ${this.core.escapeHtml(row?.rx == null ? 'N/A' : this.core.formatBytes(row.rx || 0))}</span>
+			</div>
+			<div style="margin-bottom:10px; font-size:11px; color:var(--steel-muted); font-family:var(--font-mono)">NLBW TOP APPLICATIONS</div>
+			<table class="data-table" style="margin-top:0">
+				<thead>
+					<tr>
+						<th>APPLICATION</th>
+						<th>TOTAL BYTES</th>
+					</tr>
+				</thead>
+				<tbody>${nlbwRows}</tbody>
+			</table>
 		</div>`;
 	}
 
