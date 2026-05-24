@@ -904,7 +904,7 @@ body {
 	text-transform: uppercase;
 }
 
-.traffic-history-title-button {
+.usage-title-button {
 	padding: 0;
 	background: transparent;
 	border: 0;
@@ -915,8 +915,8 @@ body {
 	cursor: pointer;
 }
 
-.traffic-history-title-button:hover,
-.traffic-history-title-button:focus-visible {
+.usage-title-button:hover,
+.usage-title-button:focus-visible {
 	color: var(--starship-steel);
 	text-decoration: underline;
 	text-underline-offset: 3px;
