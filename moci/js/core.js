@@ -7,6 +7,7 @@ export class OpenWrtCore {
 		this.currentRoute = null;
 		this.dashboardQuickActionsBound = false;
 		this.notificationPollInterval = null;
+		this.notificationSeenStorageKey = 'moci_notifications_seen_id';
 	}
 
 	registerRoute(path, handler) {
@@ -332,7 +333,8 @@ export class OpenWrtCore {
 
 		try {
 			const dbPath = await this.getNotificationsDbPath();
-			const sql = 'SELECT COUNT(*) FROM notifications WHERE archived = 0 AND "delete" = 0;';
+			const seenId = this.getLastSeenNotificationId();
+			const sql = `SELECT COUNT(CASE WHEN archived = 0 AND "delete" = 0 AND id > ${seenId} THEN 1 END) FROM notifications;`;
 			const cmd = `
 SQLITE_BIN="$(command -v sqlite3 || command -v sqlite3-cli || true)"
 [ -n "$SQLITE_BIN" ] || exit 0
@@ -355,6 +357,45 @@ SQLITE_BIN="$(command -v sqlite3 || command -v sqlite3-cli || true)"
 		} catch {
 			bell.classList.remove('has-alert');
 		}
+	}
+
+	async markNotificationsSeen() {
+		try {
+			const dbPath = await this.getNotificationsDbPath();
+			const sql = 'SELECT COALESCE(MAX(id), 0) FROM notifications WHERE "delete" = 0;';
+			const cmd = `
+SQLITE_BIN="$(command -v sqlite3 || command -v sqlite3-cli || true)"
+[ -n "$SQLITE_BIN" ] || exit 0
+[ -f ${this.shellQuote(dbPath)} ] || exit 0
+"$SQLITE_BIN" -noheader ${this.shellQuote(dbPath)} ${this.shellQuote(sql)}
+`;
+			const [status, result] = await this.ubusCall(
+				'file',
+				'exec',
+				{ command: '/bin/sh', params: ['-c', cmd] },
+				{ timeout: 7000 }
+			);
+			if (status !== 0 || Number(result?.code || 0) !== 0) return;
+
+			const maxId = Number(String(result?.stdout || '').trim() || 0);
+			if (Number.isFinite(maxId)) {
+				this.setLastSeenNotificationId(maxId);
+				document.getElementById('notifications-bell')?.classList.remove('has-alert');
+			}
+		} catch (err) {
+			console.error('Failed to mark notifications seen:', err);
+		}
+	}
+
+	getLastSeenNotificationId() {
+		const raw = localStorage.getItem(this.notificationSeenStorageKey);
+		const value = Number(raw || 0);
+		return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+	}
+
+	setLastSeenNotificationId(id) {
+		const value = Number(id || 0);
+		localStorage.setItem(this.notificationSeenStorageKey, String(Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0));
 	}
 
 	async getNotificationsDbPath() {

@@ -46,6 +46,7 @@ export default class NotificationsModule {
 		this.updateArchivedToggleLabel();
 		this.startPolling();
 		await this.loadRows(false);
+		await this.core.markNotificationsSeen?.();
 	}
 
 	toggleArchivedFilter() {
