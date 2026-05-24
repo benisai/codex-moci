@@ -207,6 +207,7 @@ export default class DashboardModule {
 
 		const vnstatInterface = String(sectionValues?.vnstat_interface || 'br-lan').trim();
 		this.vnstatInterface = vnstatInterface || 'br-lan';
+		this.updateTrafficHistoryTitle();
 	}
 
 	formatWindowLabel(seconds) {
@@ -219,6 +220,13 @@ export default class DashboardModule {
 		const titleEl = document.getElementById('network-activity-title');
 		if (!titleEl) return;
 		titleEl.textContent = `NETWORK ACTIVITY (${this.formatWindowLabel(this.bandwidthWindowSeconds)})`;
+	}
+
+	updateTrafficHistoryTitle() {
+		const titleEl = document.getElementById('traffic-history-title');
+		if (!titleEl) return;
+		const iface = String(this.vnstatInterface || '').trim() || 'br-lan';
+		titleEl.textContent = `TRAFFIC HISTORY (VNSTAT - ${iface})`;
 	}
 
 	async load() {
@@ -396,6 +404,7 @@ export default class DashboardModule {
 			this.monthlyBandwidthGb = limit;
 			this.monthStartDay = day;
 			this.vnstatInterface = vnstatInterface;
+			this.updateTrafficHistoryTitle();
 			this.lastMonthlyUsageRefresh = 0;
 			this.lastMonthlyRefresh = 0;
 			await this.updateTrafficChart(true);
