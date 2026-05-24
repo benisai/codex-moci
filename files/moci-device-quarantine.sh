@@ -5,6 +5,8 @@
 
 set -u
 
+PATH="/usr/sbin:/usr/bin:/sbin:/bin"
+
 DEFAULT_INTERVAL=15
 DEFAULT_LEASES_FILE="/tmp/dhcp.leases"
 DEFAULT_STATE_FILE="/tmp/moci-quarantine-known.txt"
@@ -202,15 +204,12 @@ find_sqlite_bin() {
 	return 1
 }
 
-write_notification() {
-	local message="$1"
-	local sqlite_bin esc_msg
-	sqlite_bin="$(find_sqlite_bin 2>/dev/null || true)"
-	[ -n "$sqlite_bin" ] || return 0
+notification_db_ready() {
+	local sqlite_bin="$1"
 
+	[ -n "$sqlite_bin" ] || return 1
 	mkdir -p "$(dirname "$NOTIFICATIONS_DB")" 2>/dev/null || true
-	esc_msg="$(sql_escape "$message")"
-	"$sqlite_bin" "$NOTIFICATIONS_DB" <<SQL >/dev/null 2>&1 || true
+	"$sqlite_bin" "$NOTIFICATIONS_DB" <<'SQL' >/dev/null 2>&1
 CREATE TABLE IF NOT EXISTS notifications (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	timestamp INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER)),
@@ -219,8 +218,30 @@ CREATE TABLE IF NOT EXISTS notifications (
 	archived INTEGER NOT NULL DEFAULT 0,
 	"delete" INTEGER NOT NULL DEFAULT 0
 );
-INSERT INTO notifications (app, msg, archived, "delete") VALUES ('device-quarantine', '$esc_msg', 0, 0);
+CREATE INDEX IF NOT EXISTS idx_notifications_timestamp ON notifications(timestamp);
+CREATE INDEX IF NOT EXISTS idx_notifications_archived ON notifications(archived);
 SQL
+}
+
+write_notification() {
+	local message="$1"
+	local sqlite_bin esc_msg
+	sqlite_bin="$(find_sqlite_bin 2>/dev/null || true)"
+	if [ -z "$sqlite_bin" ]; then
+		log "notification skipped: sqlite3/sqlite3-cli not found"
+		return 0
+	fi
+	if ! notification_db_ready "$sqlite_bin"; then
+		log "notification skipped: unable to initialize $NOTIFICATIONS_DB"
+		return 0
+	fi
+
+	esc_msg="$(sql_escape "$message")"
+	if "$sqlite_bin" "$NOTIFICATIONS_DB" "INSERT INTO notifications (app, msg, archived, \"delete\") VALUES ('device-quarantine', '$esc_msg', 0, 0);" >/dev/null 2>&1; then
+		log "notification written: $message"
+	else
+		log "notification failed: unable to insert into $NOTIFICATIONS_DB"
+	fi
 }
 
 add_fw_rule() {
