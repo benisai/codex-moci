@@ -416,6 +416,8 @@ export default class NetworkModule {
 		document.getElementById('quarantine-save-btn')?.addEventListener('click', () => this.saveQuarantineInterval());
 		document.getElementById('quarantine-refresh-btn')?.addEventListener('click', () => this.loadQuarantine());
 		document.getElementById('quarantine-discover-btn')?.addEventListener('click', () => this.runQuarantineDiscovery());
+		document.getElementById('quarantine-log-refresh-btn')?.addEventListener('click', () => this.loadQuarantineLog(true));
+		document.getElementById('quarantine-log-clear-btn')?.addEventListener('click', () => this.clearQuarantineLog());
 		document.getElementById('quarantine-settings-toggle-btn')?.addEventListener('click', () =>
 			this.toggleQuarantineSettingsPanel()
 		);
@@ -2433,12 +2435,14 @@ done`;
 				bootEl.innerHTML = this.core.renderBadge('error', 'UNKNOWN');
 			}
 
-				const rows = await this.readQuarantineRules();
-				const activeRows = rows.filter(row => Boolean(row?.enabled));
-				if (activeRows.length === 0) {
-					this.core.renderEmptyTable(tbody, 6, 'No quarantined devices');
-					return;
-				}
+			await this.loadQuarantineLog(false);
+
+			const rows = await this.readQuarantineRules();
+			const activeRows = rows.filter(row => Boolean(row?.enabled));
+			if (activeRows.length === 0) {
+				this.core.renderEmptyTable(tbody, 6, 'No quarantined devices');
+				return;
+			}
 
 			tbody.innerHTML = activeRows
 				.map(row => {
@@ -2457,6 +2461,41 @@ done`;
 					})
 				.join('');
 		});
+	}
+
+	async loadQuarantineLog(showToast = false) {
+		const el = document.getElementById('quarantine-debug-log');
+		if (!el) return;
+
+		try {
+			const path = '/tmp/moci-device-quarantine.log';
+			const cmd = `[ -f ${this.shellQuote(path)} ] && tail -n 120 ${this.shellQuote(path)} || true`;
+			const [status, result] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', cmd]
+			});
+			const text = status === 0 ? String(result?.stdout || '').trimEnd() : '';
+			el.textContent = text || 'No quarantine log yet.';
+			el.scrollTop = el.scrollHeight;
+			if (showToast) this.core.showToast('Quarantine log refreshed', 'success');
+		} catch {
+			el.textContent = 'Failed to load quarantine log.';
+			if (showToast) this.core.showToast('Failed to load quarantine log', 'error');
+		}
+	}
+
+	async clearQuarantineLog() {
+		try {
+			const path = '/tmp/moci-device-quarantine.log';
+			await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', `: > ${this.shellQuote(path)}`]
+			});
+			await this.loadQuarantineLog(false);
+			this.core.showToast('Quarantine log cleared', 'success');
+		} catch {
+			this.core.showToast('Failed to clear quarantine log', 'error');
+		}
 	}
 
 	async readQuarantineRules() {

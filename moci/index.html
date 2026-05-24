@@ -2544,6 +2544,17 @@ Endpoint = host:51820"
 										<button class="action-btn success" id="quarantine-enable-btn">ENABLE</button>
 										<button class="action-btn danger" id="quarantine-disable-btn">DISABLE</button>
 									</div>
+									<div style="margin-top: 12px">
+										<div class="stat-label">QUARANTINE LOG</div>
+										<pre
+											id="quarantine-debug-log"
+											style="margin-top: 8px; max-height: 180px; overflow: auto; white-space: pre-wrap; font-family: var(--font-mono); font-size: 11px; color: var(--steel-light); background: rgba(0, 0, 0, 0.28); border: 1px solid var(--glass-border); border-radius: 4px; padding: 10px"
+										>Loading...</pre>
+										<div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px">
+											<button class="action-btn-sm" id="quarantine-log-refresh-btn" type="button">REFRESH LOG</button>
+											<button class="action-btn-sm" id="quarantine-log-clear-btn" type="button">CLEAR LOG</button>
+										</div>
+									</div>
 								</div>
 							</div>
 						</div>
