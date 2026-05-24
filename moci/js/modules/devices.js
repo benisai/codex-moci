@@ -23,6 +23,7 @@ export default class DevicesModule {
 		this.quarantineRulePrefix = 'moci_quarantine_';
 		this.sortKey = 'online';
 		this.sortDir = 'desc';
+		this.seenDevicesStorageKey = 'moci_devices_seen_macs_v1';
 
 		this.core.registerRoute('/devices', async () => {
 			const pageElement = document.getElementById('devices-page');
@@ -146,6 +147,7 @@ export default class DevicesModule {
 			if (fromAuto && this.expandedMac) return;
 			this.deviceRows = rows;
 			this.renderRows(this.sortRows(rows));
+			this.notifyNewDevices(rows).catch(err => console.error('Failed to notify new devices:', err));
 		} catch (err) {
 			console.error('Failed to load devices page:', err);
 			this.core.renderEmptyTable(tbody, 7, 'Failed to load device data');
@@ -685,6 +687,86 @@ rm -f "$tmp"
 		}
 
 		return merged;
+	}
+
+	async notifyNewDevices(rows) {
+		const currentMacs = new Set(
+			(Array.isArray(rows) ? rows : [])
+				.map(row => this.normalizeMac(row?.mac || ''))
+				.filter(Boolean)
+		);
+		if (currentMacs.size === 0) return;
+
+		const stored = this.getSeenDeviceMacs();
+		if (!stored) {
+			this.setSeenDeviceMacs(currentMacs);
+			return;
+		}
+
+		const newRows = (Array.isArray(rows) ? rows : []).filter(row => {
+			const mac = this.normalizeMac(row?.mac || '');
+			return mac && !stored.has(mac);
+		});
+		if (newRows.length === 0) {
+			this.setSeenDeviceMacs(new Set([...stored, ...currentMacs]));
+			return;
+		}
+
+		this.setSeenDeviceMacs(new Set([...stored, ...currentMacs]));
+		await this.writeDeviceNotifications(newRows);
+		await this.core.refreshNotificationBell?.();
+	}
+
+	getSeenDeviceMacs() {
+		try {
+			const raw = localStorage.getItem(this.seenDevicesStorageKey);
+			if (!raw) return null;
+			const values = JSON.parse(raw);
+			if (!Array.isArray(values)) return null;
+			return new Set(values.map(value => this.normalizeMac(value)).filter(Boolean));
+		} catch {
+			return null;
+		}
+	}
+
+	setSeenDeviceMacs(macs) {
+		const list = Array.from(macs || [])
+			.map(value => this.normalizeMac(value))
+			.filter(Boolean)
+			.sort();
+		localStorage.setItem(this.seenDevicesStorageKey, JSON.stringify(list));
+	}
+
+	async writeDeviceNotifications(rows) {
+		const dbPath = await this.core.getNotificationsDbPath();
+		const values = rows
+			.map(row => {
+				const mac = this.normalizeMac(row?.mac || '');
+				if (!mac) return '';
+				const hostname = String(row?.hostname || '').trim();
+				const ip = String(row?.ip || row?.leaseIp || '').trim();
+				const isUnknown = !hostname || hostname.toLowerCase() === 'unknown';
+				const label = isUnknown ? 'New unknown device found' : `New device found: ${hostname}`;
+				const details = [label, `mac=${mac}`];
+				if (ip && ip !== 'N/A') details.push(`ip=${ip}`);
+				const msg = details.join(' ');
+				return `('devices', '${this.sqlEscape(msg)}', 0, 0)`;
+			})
+			.filter(Boolean);
+		if (values.length === 0) return;
+
+		const sql = `CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT,timestamp INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER)),app TEXT NOT NULL DEFAULT '',msg TEXT NOT NULL DEFAULT '',archived INTEGER NOT NULL DEFAULT 0,"delete" INTEGER NOT NULL DEFAULT 0); INSERT INTO notifications (app, msg, archived, "delete") VALUES ${values.join(', ')};`;
+		const cmd = `
+SQLITE_BIN="$(command -v sqlite3 || command -v sqlite3-cli || true)"
+[ -n "$SQLITE_BIN" ] || exit 0
+mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
+"$SQLITE_BIN" ${this.core.shellQuote(dbPath)} ${this.core.shellQuote(sql)}
+`;
+		await this.exec('/bin/sh', ['-c', cmd], { timeout: 10000 });
+	}
+
+	sqlEscape(value) {
+		return String(value || '').replace(/'/g, "''");
 	}
 
 	sortRows(rows) {

@@ -11,6 +11,7 @@ DEFAULT_STATE_FILE="/tmp/moci-quarantine-known.txt"
 DEFAULT_RULE_PREFIX="moci_quarantine_"
 DEFAULT_LAN_NETWORK="lan"
 DEFAULT_LAN_DEVICE="br-lan"
+DEFAULT_NOTIFICATIONS_DB="/tmp/moci-notifications.sqlite"
 LOG_FILE="/tmp/moci-device-quarantine.log"
 
 log() {
@@ -71,6 +72,10 @@ load_config() {
 	if [ -z "$v" ]; then v="$(uci_get network.lan.ifname)"; fi
 	if [ -z "$v" ]; then v="$DEFAULT_LAN_DEVICE"; fi
 	LAN_DEVICE="$v"
+
+	v="$(uci_get moci.notifications.db_path)"
+	if [ -z "$v" ]; then v="$DEFAULT_NOTIFICATIONS_DB"; fi
+	NOTIFICATIONS_DB="$v"
 }
 
 service_enabled() {
@@ -181,6 +186,43 @@ rule_exists_by_name() {
 	uci -q show firewall | grep -q "name='$name'"
 }
 
+sql_escape() {
+	printf "%s" "$1" | sed "s/'/''/g"
+}
+
+find_sqlite_bin() {
+	if command -v sqlite3 >/dev/null 2>&1; then
+		printf "%s" "$(command -v sqlite3)"
+		return 0
+	fi
+	if command -v sqlite3-cli >/dev/null 2>&1; then
+		printf "%s" "$(command -v sqlite3-cli)"
+		return 0
+	fi
+	return 1
+}
+
+write_notification() {
+	local message="$1"
+	local sqlite_bin esc_msg
+	sqlite_bin="$(find_sqlite_bin 2>/dev/null || true)"
+	[ -n "$sqlite_bin" ] || return 0
+
+	mkdir -p "$(dirname "$NOTIFICATIONS_DB")" 2>/dev/null || true
+	esc_msg="$(sql_escape "$message")"
+	"$sqlite_bin" "$NOTIFICATIONS_DB" <<SQL >/dev/null 2>&1 || true
+CREATE TABLE IF NOT EXISTS notifications (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	timestamp INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER)),
+	app TEXT NOT NULL DEFAULT '',
+	msg TEXT NOT NULL DEFAULT '',
+	archived INTEGER NOT NULL DEFAULT 0,
+	"delete" INTEGER NOT NULL DEFAULT 0
+);
+INSERT INTO notifications (app, msg, archived, "delete") VALUES ('device-quarantine', '$esc_msg', 0, 0);
+SQL
+}
+
 add_fw_rule() {
 	local name="$1"
 	local mac="$2"
@@ -216,6 +258,7 @@ quarantine_new_device() {
 	fi
 
 	log "quarantined new device mac=$mac ip=$ip host=$host rules=[$lan,$wan]"
+	write_notification "New device quarantined mac=$mac ip=${ip:-unknown} host=${host:-unknown}"
 }
 
 ensure_state_file() {
