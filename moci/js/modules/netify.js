@@ -892,16 +892,10 @@ pgrep -fa moci-netify-collector || true
 
 		const set = (id, value) => {
 			const el = document.getElementById(id);
-			if (!el) return;
-			const text = String(value ?? '');
-			if ('value' in el && el.tagName === 'INPUT') el.value = text;
-			else el.textContent = text;
+			if (el) el.value = String(value ?? '');
 		};
 		const mac = this.normalizeMac(flow.device) || '-';
 		const deviceName = this.resolveDeviceLabel(flow) || '-';
-		const app = flow.app || flow.fqdn || flow.destIp || '-';
-		const proto = String(flow.proto || 'N/A').toUpperCase();
-		const destPort = flow.destPort ? String(flow.destPort) : '-';
 
 		set('netify-details-flow-index', String(index));
 		set('netify-details-device-name', deviceName);
@@ -909,12 +903,9 @@ pgrep -fa moci-netify-collector || true
 		set('netify-details-device-ip', flow.localIp || '-');
 		set('netify-details-dest-fqdn', flow.fqdn || '-');
 		set('netify-details-dest-ip', flow.destIp || '-');
-		set('netify-details-dest-port', destPort);
-		set('netify-details-dest-protocol', proto === 'N/A' ? 'Protocol unavailable' : `${proto} traffic`);
+		set('netify-details-dest-port', String(flow.destPort || 0));
 		set('netify-details-timestamp', flow.timeLabel || '-');
 		set('netify-details-interface', flow.iface || '-');
-		set('netify-details-app', app);
-		set('netify-details-bytes', this.core.formatBytes(Number(flow.bytes || 0)));
 
 		this.core.openModal('netify-flow-details-modal');
 	}
