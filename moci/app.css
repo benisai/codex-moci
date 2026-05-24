@@ -1322,6 +1322,29 @@ body {
 	justify-content: flex-end;
 }
 
+#netify-flow-details-modal .modal-content {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+#netify-flow-details-modal .modal-body {
+	overflow: auto;
+}
+
+.netify-flow-details-footer {
+	flex-shrink: 0;
+	position: sticky;
+	bottom: 0;
+	background: var(--glass-bg);
+	backdrop-filter: blur(16px);
+	justify-content: space-between;
+}
+
+.netify-flow-details-footer .action-btn {
+	min-width: 120px;
+}
+
 .form-input[type='text'],
 .form-input[type='password'],
 select.form-input {
