@@ -1322,6 +1322,117 @@ body {
 	justify-content: flex-end;
 }
 
+#netify-flow-details-modal {
+	align-items: stretch;
+	justify-content: center;
+	padding: 24px 16px;
+}
+
+#netify-flow-details-modal .modal-backdrop {
+	background: rgba(0, 0, 0, 0.86);
+	backdrop-filter: blur(8px);
+}
+
+.netify-details-modal-content {
+	width: min(760px, 94vw);
+	max-width: 760px;
+	max-height: calc(100vh - 48px);
+	display: flex;
+	flex-direction: column;
+	background: rgba(8, 8, 10, 0.94);
+	border-color: rgba(255, 255, 255, 0.12);
+	box-shadow: 0 24px 80px rgba(0, 0, 0, 0.65);
+}
+
+.netify-details-header {
+	padding: 18px 24px;
+	border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.netify-details-body {
+	padding: 20px 24px 28px;
+	overflow: auto;
+}
+
+.netify-detail-section + .netify-detail-section {
+	margin-top: 28px;
+}
+
+.netify-detail-section-title {
+	margin: 0 0 9px;
+	padding-left: 1px;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	color: var(--steel-muted);
+	text-transform: uppercase;
+}
+
+.netify-detail-card {
+	overflow: hidden;
+	background: rgba(255, 255, 255, 0.055);
+	border: 1px solid rgba(255, 255, 255, 0.075);
+	border-radius: 8px;
+}
+
+.netify-detail-row {
+	min-height: 58px;
+	display: grid;
+	grid-template-columns: minmax(130px, 0.9fr) minmax(0, 1.35fr);
+	align-items: center;
+	gap: 18px;
+	padding: 13px 18px;
+}
+
+.netify-detail-row + .netify-detail-row {
+	border-top: 1px solid rgba(255, 255, 255, 0.085);
+}
+
+.netify-detail-label {
+	color: var(--starship-steel);
+	font-size: 17px;
+	font-weight: 650;
+	line-height: 1.25;
+}
+
+.netify-detail-value {
+	min-width: 0;
+	color: #f3f3f5;
+	font-size: 17px;
+	font-weight: 650;
+	line-height: 1.3;
+	text-align: right;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+.netify-detail-note {
+	margin: 0 18px 14px;
+	padding: 11px 12px;
+	background: rgba(0, 0, 0, 0.24);
+	border-top: 1px solid rgba(255, 255, 255, 0.06);
+	color: var(--steel-muted);
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+}
+
+.netify-details-footer {
+	position: sticky;
+	bottom: 0;
+	padding: 16px 24px;
+	background: rgba(18, 18, 20, 0.94);
+	backdrop-filter: blur(12px);
+	border-top-color: rgba(255, 255, 255, 0.1);
+	justify-content: space-between;
+}
+
+.netify-details-footer .action-btn {
+	min-width: 130px;
+}
+
 .form-input[type='text'],
 .form-input[type='password'],
 select.form-input {
@@ -2602,6 +2713,55 @@ select.form-input {
 
 	#netify-flows-table td:nth-child(4) .netify-fqdn-ellipsis {
 		max-width: none;
+	}
+
+	#netify-flow-details-modal {
+		padding: 10px 8px;
+	}
+
+	.netify-details-modal-content {
+		width: 100%;
+		max-height: calc(100vh - 20px);
+	}
+
+	.netify-details-header,
+	.netify-details-body,
+	.netify-details-footer {
+		padding-left: 14px;
+		padding-right: 14px;
+	}
+
+	.netify-detail-row {
+		grid-template-columns: 1fr;
+		gap: 6px;
+		min-height: 0;
+		padding: 12px 14px;
+	}
+
+	.netify-detail-label,
+	.netify-detail-value {
+		font-size: 15px;
+	}
+
+	.netify-detail-value {
+		text-align: left;
+		color: var(--secondary-accent);
+	}
+
+	.netify-detail-note {
+		margin-right: 14px;
+		margin-left: 14px;
+	}
+
+	.netify-details-footer {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 8px;
+	}
+
+	.netify-details-footer .action-btn {
+		width: 100%;
+		min-width: 0;
 	}
 
 	.monitoring-metrics-grid {
