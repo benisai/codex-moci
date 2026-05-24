@@ -50,7 +50,6 @@ export default class DevicesModule {
 			saveHandler: () => this.savePinnedIp()
 		});
 		document.getElementById('devices-pin-static')?.addEventListener('change', () => this.syncStaticIpField());
-		document.getElementById('devices-release-quarantine-btn')?.addEventListener('click', () => this.releaseQuarantineFromDialog());
 		document.getElementById('delete-devices-pin-btn')?.addEventListener('click', () => this.deleteFromDialog());
 
 		this.core.delegateActions('devices-table', {
@@ -1160,9 +1159,7 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 		if (staticCheckbox) staticCheckbox.checked = Boolean(row.pinned);
 		document.getElementById('devices-pin-ip').value = row.ip && row.ip !== 'N/A' ? row.ip : '';
 		document.getElementById('devices-parental-rule-section').value = row.parentalSection || '';
-		document.getElementById('devices-quarantine-rule-base').value = row.quarantineBase || '';
 		this.syncStaticIpField();
-		this.syncQuarantineActionUi(row);
 		this.core.openModal('devices-pin-modal');
 	}
 
@@ -1204,17 +1201,6 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 			btn.disabled = false;
 			btn.style.opacity = '';
 			btn.style.cursor = '';
-		}
-	}
-
-	syncQuarantineActionUi(row) {
-		const btn = document.getElementById('devices-release-quarantine-btn');
-		if (!btn) return;
-		const quarantined = Boolean(row?.quarantined);
-		btn.classList.toggle('hidden', !quarantined);
-		if (quarantined) {
-			btn.textContent = 'UNQUARANTINE';
-			btn.title = 'Release this device from quarantine';
 		}
 	}
 
@@ -1391,23 +1377,14 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 		await this.loadDevices();
 	}
 
-	async releaseQuarantineFromDialog() {
-		const mac = this.normalizeMac(document.getElementById('devices-pin-mac')?.value || '');
-		if (!mac) {
-			this.core.showToast('Device MAC not available', 'error');
-			return;
-		}
-		await this.releaseQuarantineForMac(mac, true);
-	}
-
-	async releaseQuarantineForMac(mac, fromModal = false) {
+	async releaseQuarantineForMac(mac) {
 		const normalizedMac = this.normalizeMac(mac);
 		if (!normalizedMac) {
 			this.core.showToast('Invalid MAC address', 'error');
 			return;
 		}
 		const row = this.rowsByMac.get(normalizedMac);
-		const base = String(row?.quarantineBase || document.getElementById('devices-quarantine-rule-base')?.value || '').trim();
+		const base = String(row?.quarantineBase || '').trim();
 		if (!base) {
 			this.core.showToast('Device is not quarantined', 'warning');
 			return;
@@ -1430,7 +1407,6 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 				'-c',
 				'/etc/init.d/firewall reload 2>/dev/null || /etc/init.d/firewall restart 2>/dev/null || true'
 			]);
-			if (fromModal) this.core.closeModal('devices-pin-modal');
 			await this.loadDevices();
 			this.core.showToast('Device released from quarantine', 'success');
 		} catch (err) {
@@ -1502,8 +1478,6 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 
 				this.core.showToast(currentlyBlocked ? 'Internet unblocked for device' : 'Internet blocked for device', 'success');
 				await this.loadDevices();
-				const refreshed = this.rowsByMac.get(normalizedMac);
-				if (refreshed && fromModal) this.syncQuarantineActionUi(refreshed);
 				if (fromModal) this.core.closeModal('devices-pin-modal');
 			} catch (err) {
 				console.error('Failed to toggle parental control:', err);
@@ -1588,8 +1562,6 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 
 			this.core.showToast(currentlyActive ? 'Removed DNS hijack 1.1.1.3' : 'Applied DNS hijack to 1.1.1.3', 'success');
 			await this.loadDevices();
-			const refreshed = this.rowsByMac.get(normalizedMac);
-			if (refreshed && fromModal) this.syncQuarantineActionUi(refreshed);
 			if (fromModal) this.core.closeModal('devices-pin-modal');
 		} catch (err) {
 			console.error('Failed to apply DNS hijack profile:', err);
