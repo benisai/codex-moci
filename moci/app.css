@@ -904,6 +904,24 @@ body {
 	text-transform: uppercase;
 }
 
+.traffic-history-title-button {
+	padding: 0;
+	background: transparent;
+	border: 0;
+	color: inherit;
+	font: inherit;
+	letter-spacing: inherit;
+	text-transform: inherit;
+	cursor: pointer;
+}
+
+.traffic-history-title-button:hover,
+.traffic-history-title-button:focus-visible {
+	color: var(--starship-steel);
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+
 .log-viewer {
 	background: rgba(0, 0, 0, 0.5);
 	border: 1px solid var(--glass-border);

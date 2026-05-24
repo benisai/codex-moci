@@ -223,10 +223,10 @@ export default class DashboardModule {
 	}
 
 	updateTrafficHistoryTitle() {
-		const titleEl = document.getElementById('traffic-history-title');
-		if (!titleEl) return;
+		const labelEl = document.getElementById('traffic-history-vnstat-label');
+		if (!labelEl) return;
 		const iface = String(this.vnstatInterface || '').trim() || 'br-lan';
-		titleEl.textContent = `TRAFFIC HISTORY (VNSTAT - ${iface})`;
+		labelEl.textContent = `(VNSTAT - ${iface})`;
 	}
 
 	async load() {
@@ -368,13 +368,22 @@ export default class DashboardModule {
 		});
 
 		document.getElementById('monthly-usage-settings-btn')?.addEventListener('click', () => {
+			this.populateMonthlyUsageSettings();
+		});
+
+		document.getElementById('traffic-history-settings-btn')?.addEventListener('click', () => {
+			this.populateMonthlyUsageSettings();
+			this.core.openModal('monthly-usage-settings-modal');
+		});
+	}
+
+	populateMonthlyUsageSettings() {
 			const limitInput = document.getElementById('monthly-usage-limit-gb-input');
 			const ifaceInput = document.getElementById('monthly-usage-vnstat-interface-input');
 			const dayInput = document.getElementById('monthly-usage-start-day-input');
 			if (limitInput) limitInput.value = String(this.monthlyBandwidthGb ?? 500);
 			if (ifaceInput) ifaceInput.value = String(this.vnstatInterface || 'br-lan');
 			if (dayInput) dayInput.value = String(this.monthStartDay ?? 10);
-		});
 	}
 
 	async saveMonthlyUsageSettings() {
