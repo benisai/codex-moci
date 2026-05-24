@@ -932,6 +932,8 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 	renderExpandedDetail(mac) {
 		const row = this.rowsByMac.get(mac);
 		const hasDnsHijack13 = String(row?.dnsHijackDest || '').trim() === '1.1.1.3' && Boolean(row?.dnsHijackEnabled);
+		const quarantined = Boolean(row?.quarantined);
+		const escapedMac = this.core.escapeHtml(mac);
 		const nlbwApps = Array.isArray(row?.nlbwTopApps) ? row.nlbwTopApps : [];
 		const nlbwRows =
 			nlbwApps.length > 0
@@ -950,12 +952,17 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 				${hasDnsHijack13 ? '<span>DNS PROFILE: 1.1.1.3 ACTIVE</span>' : '<span>DNS PROFILE: OFF</span>'}
 			</div>
 			<div class="action-buttons" style="display:flex; flex-wrap:wrap; gap:8px;">
-				<button class="action-btn-sm ${row?.parentalBlocked ? 'success' : 'danger'}" data-action="parental_toggle" data-id="${this.core.escapeHtml(mac)}">
+				<button class="action-btn-sm ${row?.parentalBlocked ? 'success' : 'danger'}" data-action="parental_toggle" data-id="${escapedMac}">
 					${row?.parentalBlocked ? 'UNBLOCK INTERNET' : 'BLOCK INTERNET'}
 				</button>
-				<button class="action-btn-sm ${hasDnsHijack13 ? 'danger' : 'warning'}" data-action="parental_dns" data-id="${this.core.escapeHtml(mac)}">
+				<button class="action-btn-sm ${hasDnsHijack13 ? 'danger' : 'warning'}" data-action="parental_dns" data-id="${escapedMac}">
 					${hasDnsHijack13 ? 'REMOVE DNS 1.1.1.3' : 'ADD DNS 1.1.1.3'}
 				</button>
+				${
+					quarantined
+						? `<button class="action-btn-sm danger" data-action="release_quarantine" data-id="${escapedMac}" title="Release device from quarantine">QUARANTINED</button>`
+						: ''
+				}
 			</div>
 			<div class="devices-mobile-only" style="margin-top: 10px; font-size: 11px; font-family: var(--font-mono); color: var(--steel-light);">
 				<div><span style="color: var(--steel-muted)">IP ADDRESS:</span> ${this.core.escapeHtml(row?.ip || 'N/A')}</div>
