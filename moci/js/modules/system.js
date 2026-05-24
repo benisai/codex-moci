@@ -80,6 +80,7 @@ export default class SystemModule {
 			.getElementById('restart-firewall-btn')
 			?.addEventListener('click', () => this.core.serviceReload('firewall'));
 
+		this.ensureModalIsTopLevel('cron-modal');
 		this.core.setupModal({
 			modalId: 'cron-modal',
 			closeBtnId: 'close-cron-modal',
@@ -134,6 +135,13 @@ export default class SystemModule {
 			const grid = document.getElementById('moci-features-grid');
 			if (grid) grid.innerHTML = '<div style="color: var(--steel-muted)">Failed to load MoCI config.</div>';
 		});
+	}
+
+	ensureModalIsTopLevel(modalId) {
+		const modal = document.getElementById(modalId);
+		if (modal && modal.parentElement !== document.body) {
+			document.body.appendChild(modal);
+		}
 	}
 
 	cleanup() {
