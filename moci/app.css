@@ -915,6 +915,14 @@ body {
 	cursor: pointer;
 }
 
+.section-title.usage-title-button {
+	font-family: var(--font-mono);
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.15em;
+	text-transform: uppercase;
+}
+
 .usage-title-button:hover,
 .usage-title-button:focus-visible {
 	color: var(--starship-steel);
