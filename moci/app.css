@@ -624,6 +624,22 @@ body {
 	padding: 3px 7px;
 }
 
+.devices-status-action {
+	appearance: none;
+	cursor: pointer;
+	margin: 0;
+	line-height: 1.2;
+}
+
+.devices-status-action:hover {
+	filter: brightness(1.25);
+}
+
+.devices-status-action:focus-visible {
+	outline: 2px solid rgba(226, 226, 229, 0.55);
+	outline-offset: 2px;
+}
+
 .badge-fw-target-accept {
 	background: rgba(255, 255, 255, 0.02);
 	color: #ffffff;

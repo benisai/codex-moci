@@ -55,6 +55,7 @@ export default class DevicesModule {
 
 		this.core.delegateActions('devices-table', {
 			pin: mac => this.openPinDialog(mac),
+			release_quarantine: mac => this.releaseQuarantineForMac(mac),
 			parental_toggle: mac => this.toggleParentalControlForMac(mac),
 			parental_dns: mac => this.applyParentalDnsProfileForMac(mac)
 		});
@@ -876,11 +877,12 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 	}
 
 	renderDeviceStatusBadge(row) {
+		const mac = this.core.escapeHtml(row?.mac || '');
 		if (row?.quarantined) {
-			return this.core.renderBadge('error', 'QUARANTINED');
+			return `<button class="badge badge-error devices-status-action" data-action="release_quarantine" data-id="${mac}" title="Release device from quarantine" type="button">QUARANTINED</button>`;
 		}
 		if (row?.parentalBlocked) {
-			return '<span class="badge badge-adblock-disabled-soft">BLOCKED</span>';
+			return `<button class="badge badge-adblock-disabled-soft devices-status-action" data-action="parental_toggle" data-id="${mac}" title="Unblock internet for this device" type="button">BLOCKED</button>`;
 		}
 		return row?.online ? '<span class="badge badge-online-soft">ONLINE</span>' : '<span class="badge badge-offline-soft">OFFLINE</span>';
 	}
@@ -1388,7 +1390,17 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 			this.core.showToast('Device MAC not available', 'error');
 			return;
 		}
-		const base = String(document.getElementById('devices-quarantine-rule-base')?.value || '').trim();
+		await this.releaseQuarantineForMac(mac, true);
+	}
+
+	async releaseQuarantineForMac(mac, fromModal = false) {
+		const normalizedMac = this.normalizeMac(mac);
+		if (!normalizedMac) {
+			this.core.showToast('Invalid MAC address', 'error');
+			return;
+		}
+		const row = this.rowsByMac.get(normalizedMac);
+		const base = String(row?.quarantineBase || document.getElementById('devices-quarantine-rule-base')?.value || '').trim();
 		if (!base) {
 			this.core.showToast('Device is not quarantined', 'warning');
 			return;
@@ -1411,7 +1423,7 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 				'-c',
 				'/etc/init.d/firewall reload 2>/dev/null || /etc/init.d/firewall restart 2>/dev/null || true'
 			]);
-			this.core.closeModal('devices-pin-modal');
+			if (fromModal) this.core.closeModal('devices-pin-modal');
 			await this.loadDevices();
 			this.core.showToast('Device released from quarantine', 'success');
 		} catch (err) {
