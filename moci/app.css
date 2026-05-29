@@ -514,8 +514,8 @@ body {
 
 .progress-bar {
 	height: 8px;
-	background: rgba(178, 178, 184, 0.18);
-	border: 1px solid rgba(178, 178, 184, 0.22);
+	background: rgba(152, 152, 160, 0.18);
+	border: 1px solid rgba(152, 152, 160, 0.24);
 	border-radius: 4px;
 	overflow: hidden;
 	margin-top: 8px;
