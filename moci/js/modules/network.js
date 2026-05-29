@@ -15,6 +15,8 @@ export default class NetworkModule {
 		this.adblockClassicReportMaxResults = 50;
 		this.adblockClassicDebugLog = [];
 		this.adblockClassicDebugLimit = 160;
+		this.adblockClassicReportPollTimer = null;
+		this.adblockClassicReportPollMs = 8000;
 		this.sqmInstalled = null;
 		this.qosifyInstalled = null;
 		this.wirelessBySection = new Map();
@@ -887,6 +889,10 @@ export default class NetworkModule {
 
 	cleanup() {
 		this.stopConnectionsAutoRefresh();
+		if (this.adblockClassicReportPollTimer) {
+			clearInterval(this.adblockClassicReportPollTimer);
+			this.adblockClassicReportPollTimer = null;
+		}
 		if (this.subTabs) {
 			this.subTabs.cleanup();
 			this.subTabs = null;
@@ -3351,6 +3357,7 @@ done`;
 				}
 			}
 			await this.loadAdblockClassicReport(false);
+			this.startAdblockClassicReportPolling();
 		} catch (err) {
 			console.error('Failed to load classic AdBlock config:', err);
 			this.logAdblockClassicDebug(`Error loading classic config: ${err?.message || err}`);
@@ -3361,6 +3368,16 @@ done`;
 		} finally {
 			this.core.hideSkeleton('adblock-classic-config-card');
 		}
+	}
+
+	startAdblockClassicReportPolling() {
+		if (this.adblockClassicReportPollTimer) return;
+		this.adblockClassicReportPollTimer = setInterval(() => {
+			const routeOk = this.core.currentRoute?.startsWith('/network');
+			const tabActive = document.getElementById('tab-adblock-classic') && !document.getElementById('tab-adblock-classic').classList.contains('hidden');
+			if (!routeOk || !tabActive) return;
+			this.loadAdblockClassicReport(false);
+		}, this.adblockClassicReportPollMs);
 	}
 
 	splitAdblockReportColumns(line) {
@@ -3690,6 +3707,26 @@ done`;
 		}
 
 		try {
+			const live = await this.readAdblockClassicLiveReportJson();
+			if (live) {
+				const parsed = this.parseAdblockClassicJsonReport(live);
+				const dnsRows = Array.isArray(parsed.dnsRows) ? parsed.dnsRows : [];
+				this.renderAdblockClassicTopStats(parsed.topClients, parsed.topDomains, parsed.topBlocked);
+				this.renderAdblockClassicLatestDns(dnsRows);
+				this.logAdblockClassicDebug(
+					`Live report rows: clients=${parsed.topClients?.length || 0}, domains=${parsed.topDomains?.length || 0}, blocked=${parsed.topBlocked?.length || 0}, dns=${dnsRows?.length || 0}`
+				);
+				if (statusEl) {
+					const totalTopRows =
+						(parsed.topClients?.length || 0) + (parsed.topDomains?.length || 0) + (parsed.topBlocked?.length || 0);
+					statusEl.innerHTML = this.core.renderBadge(
+						'success',
+						`LIVE PCAP · ${totalTopRows} top rows · ${dnsRows.length} dns rows`
+					);
+				}
+				return;
+			}
+
 			const report = await this.readAdblockClassicReportFile();
 			const reportRaw = String(report?.raw || '');
 			this.logAdblockClassicDebug(`Report source: ${report?.path || 'none'}`);
@@ -3724,6 +3761,35 @@ done`;
 			if (statusEl) statusEl.innerHTML = this.core.renderBadge('error', 'FAILED TO LOAD REPORT');
 			this.renderAdblockClassicTopStats([], [], []);
 			this.renderAdblockClassicLatestDns([]);
+		}
+	}
+
+	async readAdblockClassicLiveReportJson() {
+		const maxTop = Math.min(Math.max(Number(this.adblockClassicReportMaxTop) || 10, 1), 500);
+		const maxResults = Math.min(Math.max(Number(this.adblockClassicReportMaxResults) || 50, 1), 5000);
+		try {
+			const [status, result] = await this.core.ubusCall(
+				'file',
+				'exec',
+				{
+					command: '/bin/sh',
+					params: ['-c', `/etc/init.d/adblock report json ${maxTop} ${maxResults} + 2>/dev/null || true`]
+				},
+				{ timeout: 25000 }
+			);
+			if (status !== 0) return '';
+			const raw = String(result?.stdout || '').trim();
+			if (!raw) return '';
+			try {
+				const parsed = JSON.parse(raw);
+				if (Array.isArray(parsed) && parsed[0] && typeof parsed[0] === 'object') {
+					return JSON.stringify(parsed[0]);
+				}
+				if (parsed && typeof parsed === 'object') return JSON.stringify(parsed);
+			} catch {}
+			return '';
+		} catch {
+			return '';
 		}
 	}
 
