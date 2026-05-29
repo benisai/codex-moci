@@ -27,9 +27,9 @@ ensure_nft_counters() {
 	nft add chain "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" '{ type filter hook forward priority -200; policy accept; }' 2>/dev/null || true
 
 	nft list chain "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" 2>/dev/null | grep -q "update @$TX_MAP_NAME" || \
-		nft add rule "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" "update @$TX_MAP_NAME { ip saddr counter }" 2>/dev/null || true
+		nft add rule "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" "update @$TX_MAP_NAME { ip saddr : counter }" 2>/dev/null || true
 	nft list chain "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" 2>/dev/null | grep -q "update @$RX_MAP_NAME" || \
-		nft add rule "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" "update @$RX_MAP_NAME { ip daddr counter }" 2>/dev/null || true
+		nft add rule "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" "update @$RX_MAP_NAME { ip daddr : counter }" 2>/dev/null || true
 }
 
 collect_ip_mac_map() {
