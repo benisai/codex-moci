@@ -3285,8 +3285,6 @@ done`;
 		const serviceStatusEl = document.getElementById('adblock-classic-service-status');
 		const configStatusEl = document.getElementById('adblock-classic-config-status');
 		const installHintEl = document.getElementById('adblock-classic-install-hint');
-		const dnsEl = document.getElementById('adblock-classic-dns');
-		const triggerEl = document.getElementById('adblock-classic-trigger');
 
 		if (!this.core.isFeatureEnabled('adblock')) {
 			if (serviceStatusEl) serviceStatusEl.innerHTML = this.core.renderBadge('warning', 'DISABLED');
@@ -3343,8 +3341,6 @@ done`;
 					this.isEnabledValue(sectionCfg.adb_safesearch ?? '0') ? '1' : '0',
 					{ syncOnly: true }
 				);
-				if (dnsEl) dnsEl.value = String(sectionCfg.adb_dns || '');
-				if (triggerEl) triggerEl.value = String(sectionCfg.adb_trigger || '');
 				const feeds = Array.isArray(sectionCfg.adb_feed)
 					? sectionCfg.adb_feed
 					: String(sectionCfg.adb_feed || '')
@@ -3357,8 +3353,6 @@ done`;
 			} else {
 				this.setAdblockClassicSettingValue('enabled', '0', { syncOnly: true });
 				this.setAdblockClassicSettingValue('safesearch', '0', { syncOnly: true });
-				if (dnsEl) dnsEl.value = '';
-				if (triggerEl) triggerEl.value = '';
 				await this.loadAdblockClassicSourceOptions([]);
 				if (configStatusEl) {
 					configStatusEl.innerHTML = this.core.renderBadge('error', 'CONFIG MISSING');
@@ -3899,8 +3893,6 @@ done`;
 	async saveAdblockClassicSettings() {
 		const enabled = String(document.getElementById('adblock-classic-enabled')?.value || '0') === '1' ? '1' : '0';
 		const safesearch = String(document.getElementById('adblock-classic-safesearch')?.value || '0') === '1' ? '1' : '0';
-		const dns = String(document.getElementById('adblock-classic-dns')?.value || '').trim();
-		const trigger = String(document.getElementById('adblock-classic-trigger')?.value || '').trim();
 		const feeds = Array.from(new Set(this.getAdblockClassicSelectedFeeds()));
 
 		try {
@@ -3916,15 +3908,9 @@ done`;
 			const values = {
 				adb_enabled: enabled,
 				adb_safesearch: safesearch,
-				adb_dns: dns || '',
 				adb_feed: feeds
 			};
 			await this.core.uciSet('adblock', section, values);
-			if (trigger) {
-				await this.core.uciSet('adblock', section, { adb_trigger: trigger });
-			} else {
-				await this.core.uciDelete('adblock', section, 'adb_trigger').catch(() => {});
-			}
 
 			await this.core.uciCommit('adblock');
 			await this.runAdblockClassicServiceAction('restart');
