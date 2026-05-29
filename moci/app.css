@@ -2178,14 +2178,14 @@ select.form-input {
 .adblock-classic-status-grid,
 .adblock-classic-toggle-grid {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
+	grid-template-columns: 280px auto;
 	align-items: center;
 	column-gap: 16px;
 	row-gap: 10px;
 }
 
 .adblock-classic-toggle-grid .action-buttons {
-	justify-self: end;
+	justify-self: start;
 }
 
 .adblock-classic-actions {
