@@ -39,10 +39,6 @@ sanitize_name() {
 
 load_config() {
 	local v
-	v="$(uci_get moci.features.quarantine)"
-	if [ -z "$v" ]; then v="1"; fi
-	FEATURE_ENABLED="$v"
-
 	v="$(uci_get moci.quarantine.enabled)"
 	if [ -z "$v" ]; then v="0"; fi
 	QUARANTINE_ENABLED="$v"
@@ -81,7 +77,7 @@ load_config() {
 }
 
 service_enabled() {
-	is_enabled_flag "$FEATURE_ENABLED" && is_enabled_flag "$QUARANTINE_ENABLED"
+	is_enabled_flag "$QUARANTINE_ENABLED"
 }
 
 collect_leases() {
@@ -293,7 +289,7 @@ discover_once() {
 	local changed tmp lease mac ip host
 	load_config
 	if ! service_enabled; then
-		log "quarantine disabled (feature=$FEATURE_ENABLED enabled=$QUARANTINE_ENABLED); skipping scan"
+		log "quarantine disabled (enabled=$QUARANTINE_ENABLED); skipping scan"
 		return 0
 	fi
 

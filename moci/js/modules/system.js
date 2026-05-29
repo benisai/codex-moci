@@ -185,6 +185,17 @@ export default class SystemModule {
 			.toUpperCase();
 	}
 
+	getMociServiceControls() {
+		return [
+			{ key: 'netify_collector', label: 'NETIFY COLLECTOR', section: 'collector', init: 'netify-collector' },
+			{ key: 'flow_collector', label: 'FLOW COLLECTOR', section: 'connection_flows', init: 'connection-flows-collector' },
+			{ key: 'ping_monitor', label: 'PING MONITOR', section: 'ping_monitor', init: 'ping-monitor' },
+			{ key: 'dns_monitor', label: 'DNS MONITOR', section: 'dns_monitor', init: 'dns-monitor' },
+			{ key: 'speedtest_monitor', label: 'SPEEDTEST CRON', section: 'speedtest_monitor', init: '' },
+			{ key: 'device_quarantine', label: 'DEVICE QUARANTINE', section: 'quarantine', init: 'moci-device-quarantine' }
+		];
+	}
+
 	async getFeaturePackageAvailability() {
 		if (this.featurePackageAvailability) return this.featurePackageAvailability;
 
@@ -241,6 +252,7 @@ export default class SystemModule {
 
 	async loadMociConfig() {
 		const grid = document.getElementById('moci-features-grid');
+		const servicesGrid = document.getElementById('moci-services-grid');
 		if (!grid) return;
 
 		try {
@@ -261,20 +273,48 @@ export default class SystemModule {
 			});
 			if (filteredFeatureKeys.length === 0) {
 				grid.innerHTML = '<div style="color: var(--steel-muted)">No MoCI features available.</div>';
-				return;
-			}
-			grid.innerHTML = filteredFeatureKeys
-				.map(key => {
-					const value = String(values[key] ?? defaults[key] ?? '0') === '1';
-					return `<label style="display:flex; align-items:center; gap:10px; padding:10px; border:1px solid var(--glass-border); border-radius:6px; background: rgba(255,255,255,0.02);">
+			} else {
+				grid.innerHTML = filteredFeatureKeys
+					.map(key => {
+						const value = String(values[key] ?? defaults[key] ?? '0') === '1';
+						return `<label style="display:flex; align-items:center; gap:10px; padding:10px; border:1px solid var(--glass-border); border-radius:6px; background: rgba(255,255,255,0.02);">
 						<input type="checkbox" class="moci-feature-toggle" data-feature-key="${this.core.escapeHtml(key)}" ${value ? 'checked' : ''} />
 						<span style="font-family: var(--font-mono); font-size: 11px; color: var(--starship-steel); letter-spacing: 0.08em;">${this.core.escapeHtml(this.formatMociFeatureLabel(key))}</span>
 					</label>`;
-				})
-				.join('');
+					})
+					.join('');
+			}
+
+			if (servicesGrid) {
+				await this.loadMociServiceControls(servicesGrid);
+			}
 		} catch {
 			grid.innerHTML = '<div style="color: var(--steel-muted)">Failed to load MoCI config.</div>';
+			if (servicesGrid) servicesGrid.innerHTML = '<div style="color: var(--steel-muted)">Failed to load service config.</div>';
 		}
+	}
+
+	async loadMociServiceControls(grid) {
+		const services = this.getMociServiceControls();
+		const rows = await Promise.all(
+			services.map(async service => {
+				let enabled = service.section === 'quarantine' ? false : true;
+				try {
+					const [status, result] = await this.core.uciGet('moci', service.section);
+					if (status === 0 && result?.values) {
+						enabled = String(result.values.enabled ?? (enabled ? '1' : '0')) === '1';
+					}
+				} catch {}
+				return { ...service, enabled };
+			})
+		);
+
+		grid.innerHTML = rows
+			.map(service => `<label style="display:flex; align-items:center; gap:10px; padding:10px; border:1px solid var(--glass-border); border-radius:6px; background: rgba(255,255,255,0.02);">
+				<input type="checkbox" class="moci-service-toggle" data-service-key="${this.core.escapeHtml(service.key)}" ${service.enabled ? 'checked' : ''} />
+				<span style="font-family: var(--font-mono); font-size: 11px; color: var(--starship-steel); letter-spacing: 0.08em;">${this.core.escapeHtml(service.label)}</span>
+			</label>`)
+			.join('');
 	}
 
 	async saveMociConfig() {
@@ -290,11 +330,13 @@ export default class SystemModule {
 			if (!key) continue;
 			values[key] = toggle.checked ? '1' : '0';
 		}
+		const serviceValues = this.collectMociServiceValues();
 
 		try {
 			await this.core.uciSet('moci', 'features', values);
+			await this.saveMociServiceValues(serviceValues);
 			await this.core.uciCommit('moci');
-			await this.syncManagedFeatureServices(values);
+			await this.syncManagedServiceState(serviceValues);
 			await this.core.ubusCall('file', 'exec', {
 				command: '/etc/init.d/uhttpd',
 				params: ['restart']
@@ -307,83 +349,65 @@ export default class SystemModule {
 		}
 	}
 
-	async syncManagedFeatureServices(values) {
-		const netifyEnabled = String(values.netify ?? '1') === '1';
-		const monitoringEnabled = String(values.monitoring ?? '1') === '1';
-		const quarantineEnabled = String(values.quarantine ?? '1') === '1';
-
-		try {
-			if (!netifyEnabled) {
-				await this.core.uciSet('moci', 'collector', { enabled: '0' });
-			}
-			if (!monitoringEnabled) {
-				await this.core.uciSet('moci', 'ping_monitor', { enabled: '0' });
-				await this.core.uciSet('moci', 'speedtest_monitor', { enabled: '0' });
-			}
-			if (!quarantineEnabled) {
-				await this.core.uciSet('moci', 'quarantine', { enabled: '0' });
-			}
-			if (!netifyEnabled || !monitoringEnabled || !quarantineEnabled) {
-				await this.core.uciCommit('moci');
-			}
-		} catch (err) {
-			console.error('Failed to apply managed feature UCI state:', err);
+	collectMociServiceValues() {
+		const values = {};
+		const serviceMap = new Map(this.getMociServiceControls().map(service => [service.key, service]));
+		const toggles = Array.from(document.querySelectorAll('#moci-services-grid .moci-service-toggle'));
+		for (const toggle of toggles) {
+			const key = String(toggle.getAttribute('data-service-key') || '').trim();
+			if (!key || !serviceMap.has(key)) continue;
+			values[key] = toggle.checked ? '1' : '0';
 		}
+		return values;
+	}
 
-		try {
-			if (netifyEnabled) {
-				await this.core.ubusCall('file', 'exec', {
-					command: '/bin/sh',
-					params: ['-c', '/etc/init.d/netify-collector enable >/dev/null 2>&1 || true']
-				});
-			} else {
-				await this.core.ubusCall('file', 'exec', {
-					command: '/bin/sh',
-					params: ['-c', '/etc/init.d/netify-collector stop >/dev/null 2>&1 || true; /etc/init.d/netify-collector disable >/dev/null 2>&1 || true']
-				});
-			}
-		} catch (err) {
-			console.error('Failed syncing netify service state:', err);
+	async saveMociServiceValues(values) {
+		const serviceMap = new Map(this.getMociServiceControls().map(service => [service.key, service]));
+		for (const [key, enabled] of Object.entries(values || {})) {
+			const service = serviceMap.get(key);
+			if (!service) continue;
+			await this.core.uciSet('moci', service.section, { enabled });
 		}
+	}
 
-		try {
-			if (monitoringEnabled) {
-				await this.core.ubusCall('file', 'exec', {
-					command: '/bin/sh',
-					params: ['-c', '/etc/init.d/ping-monitor enable >/dev/null 2>&1 || true']
-				});
-			} else {
-				await this.core.ubusCall('file', 'exec', {
-					command: '/bin/sh',
-					params: [
-						'-c',
-						'/etc/init.d/ping-monitor stop >/dev/null 2>&1 || true; /etc/init.d/ping-monitor disable >/dev/null 2>&1 || true; ' +
-							'CR=/etc/crontabs/root; TMP=/tmp/.moci_speedtest_cron.$$; ' +
-							'if [ -f "$CR" ]; then grep -v "MOCI_SPEEDTEST_MONITOR" "$CR" > "$TMP" 2>/dev/null || : > "$TMP"; else : > "$TMP"; fi; ' +
-							'cp "$TMP" "$CR"; rm -f "$TMP"; ' +
-							'/etc/init.d/cron reload 2>/dev/null || /etc/init.d/cron restart 2>/dev/null || /etc/init.d/crond reload 2>/dev/null || /etc/init.d/crond restart 2>/dev/null || killall -HUP crond 2>/dev/null || true'
-					]
-				});
+	async syncManagedServiceState(values) {
+		const serviceMap = new Map(this.getMociServiceControls().map(service => [service.key, service]));
+		for (const [key, enabledValue] of Object.entries(values || {})) {
+			const service = serviceMap.get(key);
+			if (!service) continue;
+			const enabled = String(enabledValue) === '1';
+			try {
+				await this.syncOneManagedService(service, enabled);
+			} catch (err) {
+				console.error(`Failed syncing ${service.label} service state:`, err);
 			}
-		} catch (err) {
-			console.error('Failed syncing monitoring service state:', err);
 		}
+	}
 
-		try {
-			if (quarantineEnabled) {
-				await this.core.ubusCall('file', 'exec', {
-					command: '/bin/sh',
-					params: ['-c', '/etc/init.d/moci-device-quarantine enable >/dev/null 2>&1 || true']
-				});
-			} else {
-				await this.core.ubusCall('file', 'exec', {
-					command: '/bin/sh',
-					params: ['-c', '/etc/init.d/moci-device-quarantine stop >/dev/null 2>&1 || true; /etc/init.d/moci-device-quarantine disable >/dev/null 2>&1 || true']
-				});
-			}
-		} catch (err) {
-			console.error('Failed syncing quarantine service state:', err);
+	async syncOneManagedService(service, enabled) {
+		if (service.key === 'speedtest_monitor') {
+			await this.syncSpeedtestCron(enabled);
+			return;
 		}
+		const init = String(service.init || '').trim();
+		if (!init) return;
+		const action = enabled
+			? `/etc/init.d/${this.shellQuote(init)} enable >/dev/null 2>&1 || true; /etc/init.d/${this.shellQuote(init)} restart >/dev/null 2>&1 || /etc/init.d/${this.shellQuote(init)} start >/dev/null 2>&1 || true`
+			: `/etc/init.d/${this.shellQuote(init)} stop >/dev/null 2>&1 || true; /etc/init.d/${this.shellQuote(init)} disable >/dev/null 2>&1 || true`;
+		await this.core.ubusCall('file', 'exec', {
+			command: '/bin/sh',
+			params: ['-c', action]
+		});
+	}
+
+	async syncSpeedtestCron(enabled) {
+		const command = enabled
+			? '/usr/bin/moci-state-sync sync-cron >/dev/null 2>&1 || true; /etc/init.d/cron reload 2>/dev/null || /etc/init.d/cron restart 2>/dev/null || /etc/init.d/crond reload 2>/dev/null || /etc/init.d/crond restart 2>/dev/null || killall -HUP crond 2>/dev/null || true'
+			: 'CR=/etc/crontabs/root; TMP=/tmp/.moci_speedtest_cron.$$; if [ -f "$CR" ]; then grep -v "MOCI_SPEEDTEST_MONITOR" "$CR" > "$TMP" 2>/dev/null || : > "$TMP"; else : > "$TMP"; fi; cp "$TMP" "$CR"; rm -f "$TMP"; /etc/init.d/cron reload 2>/dev/null || /etc/init.d/cron restart 2>/dev/null || /etc/init.d/crond reload 2>/dev/null || /etc/init.d/crond restart 2>/dev/null || killall -HUP crond 2>/dev/null || true';
+		await this.core.ubusCall('file', 'exec', {
+			command: '/bin/sh',
+			params: ['-c', command]
+		});
 	}
 
 	async saveGeneral() {

@@ -21,7 +21,6 @@ RETENTION_ROWS="$DEFAULT_RETENTION_ROWS"
 STREAM_TIMEOUT="$DEFAULT_STREAM_TIMEOUT"
 EXCLUDE_PROTOCOLS="$DEFAULT_EXCLUDE_PROTOCOLS"
 SQLITE_BIN=""
-NETIFY_FEATURE_ENABLED="1"
 
 log() {
 	printf "%s %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -126,9 +125,6 @@ load_config() {
 		value="$(sanitize_text "$value")"
 		[ -n "$value" ] && EXCLUDE_PROTOCOLS="$value"
 
-		value="$(uci -q get moci.features.netify 2>/dev/null || true)"
-		value="$(sanitize_text "$value")"
-		[ -n "$value" ] && NETIFY_FEATURE_ENABLED="$value"
 	fi
 }
 
@@ -254,17 +250,9 @@ consume_stream() {
 
 run_forever() {
 	refresh_runtime_config
-	if [ "$NETIFY_FEATURE_ENABLED" != "1" ]; then
-		log "netify feature disabled (moci.features.netify=$NETIFY_FEATURE_ENABLED); exiting collector"
-		exit 0
-	fi
 	log "starting netify collector host=$NETIFY_HOST port=$NETIFY_PORT db=$NETIFY_DB timeout=${STREAM_TIMEOUT}s"
 	while true; do
 		refresh_runtime_config
-		if [ "$NETIFY_FEATURE_ENABLED" != "1" ]; then
-			log "netify feature disabled (moci.features.netify=$NETIFY_FEATURE_ENABLED); exiting collector"
-			exit 0
-		fi
 		log "connecting to netify stream at $NETIFY_HOST:$NETIFY_PORT"
 		consume_stream || true
 		log "stream disconnected; retrying in ${RECONNECT_DELAY}s"
