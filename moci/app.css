@@ -2116,6 +2116,14 @@ select.form-input {
 	background: rgba(255, 255, 255, 0.08);
 }
 
+#tab-diagnostics .netify-collapsible-header {
+	margin-bottom: 12px;
+}
+
+#tab-diagnostics .netify-toggle-btn {
+	margin-left: 12px;
+}
+
 @media (max-width: 960px) {
 	#monitoring-page .tabs {
 		flex-wrap: nowrap;

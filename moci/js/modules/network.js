@@ -523,7 +523,7 @@ export default class NetworkModule {
 		if (!body || !icon || !btn) return;
 
 		const storageKey = `network_diag_${key}_expanded`;
-		const expanded = localStorage.getItem(storageKey) !== '0';
+		const expanded = localStorage.getItem(storageKey) === '1';
 		body.style.display = expanded ? 'block' : 'none';
 		icon.textContent = expanded ? '▾' : '▸';
 		btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
