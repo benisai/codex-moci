@@ -151,7 +151,7 @@ export default class DashboardModule {
 			: '';
 		if (!Number.isFinite(value) || value <= 90) return baseBackground;
 
-		const red = 'rgba(255, 170, 170, 0.92)';
+		const red = 'rgba(214, 74, 74, 0.95)';
 		const boundary = Math.max(0, Math.min(100, (90 / value) * 100));
 		if (this.isColorfulGraphsEnabled()) {
 			return `linear-gradient(90deg, rgba(124, 198, 255, 0.9) 0%, rgba(124, 228, 255, 0.75) ${boundary.toFixed(2)}%, ${red} ${boundary.toFixed(2)}%, ${red} 100%)`;
