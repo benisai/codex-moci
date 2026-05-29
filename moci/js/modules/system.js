@@ -1266,11 +1266,14 @@ fi`;
 		const entries = this.parseCron(this.cronRaw);
 		const entry = entries[parseInt(index)];
 		if (!entry) return;
+		const lines = this.cronRaw.split('\n');
+		const rawLine = String(lines[entry.rawIndex] || '').trimEnd();
 		document.getElementById('edit-cron-index').value = index;
 		document.getElementById('edit-cron-time').value = this.cronTimeFromEntry(entry);
 		this.applyCronWeekdaySelection(entry.weekday);
 		document.getElementById('edit-cron-command').value = entry.command;
 		document.getElementById('edit-cron-enabled').checked = entry.enabled;
+		document.getElementById('edit-cron-advanced').value = rawLine;
 		if (entry.day !== '*' || entry.month !== '*') {
 			this.core.showToast('Editing simplified to weekly/day schedule in this dialog', 'warning');
 		}
@@ -1285,23 +1288,40 @@ fi`;
 		const minute = Number(minutePart);
 		const command = document.getElementById('edit-cron-command').value.trim();
 		const enabled = document.getElementById('edit-cron-enabled').checked;
+		const advancedText = String(document.getElementById('edit-cron-advanced')?.value || '').trim();
 		const weekdays = this.getSelectedCronWeekdays();
 
-		if (!command) {
-			this.core.showToast('Command is required', 'error');
-			return;
-		}
-		if (!Number.isInteger(hour) || hour < 0 || hour > 23 || !Number.isInteger(minute) || minute < 0 || minute > 59) {
-			this.core.showToast('Select a valid time', 'error');
-			return;
-		}
-		if (weekdays.length === 0) {
-			this.core.showToast('Select at least one day', 'error');
-			return;
+		if (advancedText) {
+			const advancedLines = advancedText
+				.split('\n')
+				.map(line => line.trim())
+				.filter(Boolean);
+			if (advancedLines.length !== 1) {
+				this.core.showToast('Advanced edit must be a single cron line', 'error');
+				return;
+			}
+			const checkLine = advancedLines[0].replace(/^#\s*/, '');
+			if (checkLine.split(/\s+/).length < 6) {
+				this.core.showToast('Advanced cron line must include schedule and command', 'error');
+				return;
+			}
+		} else {
+			if (!command) {
+				this.core.showToast('Command is required', 'error');
+				return;
+			}
+			if (!Number.isInteger(hour) || hour < 0 || hour > 23 || !Number.isInteger(minute) || minute < 0 || minute > 59) {
+				this.core.showToast('Select a valid time', 'error');
+				return;
+			}
+			if (weekdays.length === 0) {
+				this.core.showToast('Select at least one day', 'error');
+				return;
+			}
 		}
 
 		const weekdayExpr = weekdays.length === 7 ? '*' : weekdays.join(',');
-		const newLine = `${enabled ? '' : '# '}${minute} ${hour} * * ${weekdayExpr} ${command}`;
+		const newLine = advancedText || `${enabled ? '' : '# '}${minute} ${hour} * * ${weekdayExpr} ${command}`;
 		const lines = this.cronRaw.split('\n');
 
 		if (index !== '') {
@@ -1332,6 +1352,7 @@ fi`;
 		document.getElementById('edit-cron-time').value = '00:00';
 		document.getElementById('edit-cron-command').value = '';
 		document.getElementById('edit-cron-enabled').checked = true;
+		document.getElementById('edit-cron-advanced').value = '';
 		this.applyCronWeekdaySelection('*');
 		this.core.openModal('cron-modal');
 	}
