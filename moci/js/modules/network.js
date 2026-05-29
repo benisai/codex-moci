@@ -308,12 +308,6 @@ export default class NetworkModule {
 			?.addEventListener('click', () => this.saveAdblockClassicSettings());
 		document.getElementById('refresh-adblock-classic-btn')?.addEventListener('click', () => this.loadAdblockClassic());
 		document
-			.getElementById('refresh-adblock-classic-report-btn')
-			?.addEventListener('click', () => this.loadAdblockClassicReport(true));
-		document
-			.getElementById('save-adblock-classic-report-settings-btn')
-			?.addEventListener('click', () => this.saveAdblockClassicReportSettings());
-		document
 			.getElementById('adblock-classic-enabled-on-btn')
 			?.addEventListener('click', () => this.setAdblockClassicSettingValue('enabled', '1'));
 		document
