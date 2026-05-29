@@ -2124,6 +2124,20 @@ select.form-input {
 	margin-left: 12px;
 }
 
+#tab-diagnostics .netify-collapsible-card.diag-collapsed {
+	padding-top: 14px;
+	padding-bottom: 14px;
+}
+
+#tab-diagnostics .netify-collapsible-card.diag-collapsed .netify-collapsible-header {
+	margin-bottom: 0;
+	min-height: 40px;
+}
+
+#tab-diagnostics .netify-collapsible-card.diag-collapsed .section-title {
+	margin: 0;
+}
+
 @media (max-width: 960px) {
 	#monitoring-page .tabs {
 		flex-wrap: nowrap;

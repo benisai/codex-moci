@@ -500,6 +500,7 @@ export default class NetworkModule {
 		const icon = document.getElementById(`diag-${key}-toggle-icon`);
 		const btn = document.getElementById(`diag-${key}-toggle-btn`);
 		if (!body || !icon || !btn) return;
+		const card = btn.closest('.netify-collapsible-card');
 
 		const storageKey = `network_diag_${key}_expanded`;
 		const isExpanded = body.style.display !== 'none';
@@ -507,11 +508,13 @@ export default class NetworkModule {
 			body.style.display = 'none';
 			icon.textContent = '▸';
 			btn.setAttribute('aria-expanded', 'false');
+			card?.classList?.add('diag-collapsed');
 			localStorage.setItem(storageKey, '0');
 		} else {
 			body.style.display = 'block';
 			icon.textContent = '▾';
 			btn.setAttribute('aria-expanded', 'true');
+			card?.classList?.remove('diag-collapsed');
 			localStorage.setItem(storageKey, '1');
 		}
 	}
@@ -521,12 +524,15 @@ export default class NetworkModule {
 		const icon = document.getElementById(`diag-${key}-toggle-icon`);
 		const btn = document.getElementById(`diag-${key}-toggle-btn`);
 		if (!body || !icon || !btn) return;
+		const card = btn.closest('.netify-collapsible-card');
 
 		const storageKey = `network_diag_${key}_expanded`;
 		const expanded = localStorage.getItem(storageKey) === '1';
 		body.style.display = expanded ? 'block' : 'none';
 		icon.textContent = expanded ? '▾' : '▸';
 		btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+		if (expanded) card?.classList?.remove('diag-collapsed');
+		else card?.classList?.add('diag-collapsed');
 	}
 
 	toggleAdblockSettingsPanel() {
