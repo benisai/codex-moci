@@ -2070,7 +2070,7 @@ Endpoint = host:51820"
 										<span id="adblock-classic-settings-toggle-icon">▸</span>
 									</button>
 								</div>
-								<div id="adblock-classic-settings-body" style="margin-top: 16px; display: none">
+								<div id="adblock-classic-settings-body" class="adblock-classic-settings-body" style="margin-top: 16px; display: none">
 									<div
 										id="adblock-classic-install-hint"
 										class="hidden"
@@ -2078,22 +2078,18 @@ Endpoint = host:51820"
 									>
 										AdBlock package not found. Install <code>adblock</code> (and optional LuCI package) first.
 									</div>
-									<div class="form-group">
+									<div class="form-group adblock-classic-status-grid">
 										<label class="form-label">SERVICE STATUS</label>
 										<div id="adblock-classic-service-status">Loading...</div>
-									</div>
-									<div class="form-group">
 										<label class="form-label">CONFIG STATUS</label>
 										<div id="adblock-classic-config-status">Loading...</div>
 									</div>
-									<div class="form-group">
+									<div class="form-group adblock-classic-toggle-grid">
 										<label class="form-label">ENABLE ADBLOCK</label>
 										<div class="action-buttons">
 											<button class="action-btn-sm status-indicator-btn" id="adblock-classic-enabled-on-btn" type="button">ENABLED</button>
 											<button class="action-btn-sm status-indicator-btn" id="adblock-classic-enabled-off-btn" type="button">DISABLED</button>
 										</div>
-									</div>
-									<div class="form-group">
 										<label class="form-label">ENABLE SAFESEARCH</label>
 										<div class="action-buttons">
 											<button class="action-btn-sm status-indicator-btn" id="adblock-classic-safesearch-on-btn" type="button">ENABLED</button>
@@ -2116,7 +2112,7 @@ Endpoint = host:51820"
 										<label class="form-label">STARTUP TRIGGER INTERFACE</label>
 										<input type="text" id="adblock-classic-trigger" class="form-input" placeholder="wan (leave empty for time-based startup)" />
 									</div>
-									<div class="quick-actions">
+									<div class="adblock-classic-actions">
 										<button class="action-btn" id="save-adblock-classic-config-btn">SAVE CONFIGURATION</button>
 										<button class="action-btn success" id="adblock-classic-start-btn">START</button>
 										<button class="action-btn danger" id="adblock-classic-stop-btn">STOP</button>

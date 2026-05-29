@@ -2175,6 +2175,45 @@ select.form-input {
 	margin-top: 3px;
 }
 
+.adblock-classic-status-grid,
+.adblock-classic-toggle-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	column-gap: 16px;
+	row-gap: 10px;
+}
+
+.adblock-classic-toggle-grid .action-buttons {
+	justify-self: end;
+}
+
+.adblock-classic-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin-top: 20px;
+}
+
+.adblock-classic-actions #save-adblock-classic-config-btn {
+	margin-right: auto;
+}
+
+@media (max-width: 900px) {
+	.adblock-classic-status-grid,
+	.adblock-classic-toggle-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.adblock-classic-toggle-grid .action-buttons {
+		justify-self: start;
+	}
+
+	.adblock-classic-actions #save-adblock-classic-config-btn {
+		margin-right: 0;
+	}
+}
+
 @media (max-width: 960px) {
 	#monitoring-page .tabs {
 		flex-wrap: nowrap;
