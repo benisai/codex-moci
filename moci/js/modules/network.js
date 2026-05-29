@@ -5505,8 +5505,7 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 		const dns = splitList(iface.dns);
 		const allowedIps = splitList(peer.allowedIps);
 
-		if (allowedIps.length === 0) allowedIps.push('0.0.0.0/0');
-		if (!allowedIps.includes('0.0.0.0/0')) allowedIps.unshift('0.0.0.0/0');
+		if (allowedIps.length === 0) allowedIps.push('0.0.0.0/0', '::/0');
 
 		return {
 			addresses,
@@ -5519,6 +5518,11 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 			keepalive: String(peer.keepalive || '').trim(),
 			presharedKey: String(peer.presharedKey || '').trim()
 		};
+	}
+
+	hasDefaultRouteAllowedIps(allowedIps) {
+		const set = new Set((Array.isArray(allowedIps) ? allowedIps : []).map(v => String(v || '').trim()));
+		return set.has('0.0.0.0/0') || set.has('::/0');
 	}
 
 	async ensureWgClientFirewall() {
@@ -5614,7 +5618,7 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 				dns: parsed.dns,
 				peerdns: parsed.dns.length > 0 ? '0' : '1',
 				auto: '1',
-				disabled: '0'
+				disabled: '1'
 			});
 
 			const [nStatus, nResult] = await this.core.uciGet('network');
@@ -5634,12 +5638,13 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 			}
 			if (!peerSection) throw new Error('Failed to create WireGuard peer');
 
+			const fullTunnel = this.hasDefaultRouteAllowedIps(parsed.allowedIps);
 			await this.core.uciSet('network', peerSection, {
 				public_key: parsed.publicKey,
 				allowed_ips: parsed.allowedIps,
 				endpoint_host: parsed.endpointHost,
 				endpoint_port: parsed.endpointPort,
-				route_allowed_ips: '1',
+				route_allowed_ips: fullTunnel ? '1' : '0',
 				persistent_keepalive: parsed.keepalive || '25',
 				preshared_key: parsed.presharedKey || ''
 			});
@@ -5653,24 +5658,21 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 
 			await this.ensureWgClientFirewall();
 			await this.core.uciCommit('firewall');
-			try {
-				await this.exec('/etc/init.d/network', ['restart']);
-			} catch {}
-			try {
-				await this.exec('/etc/init.d/firewall', ['restart']);
-			} catch {}
 
 			const wgIfaceEl = document.getElementById('wg-interface');
 			const wgEnabledEl = document.getElementById('wg-enabled');
 			const wgPrivateKeyEl = document.getElementById('wg-private-key');
 			const wgAddressEl = document.getElementById('wg-address');
 			if (wgIfaceEl) wgIfaceEl.value = ifaceName;
-			if (wgEnabledEl) wgEnabledEl.value = '1';
+			if (wgEnabledEl) wgEnabledEl.value = '0';
 			if (wgPrivateKeyEl) wgPrivateKeyEl.value = parsed.privateKey;
 			if (wgAddressEl) wgAddressEl.value = parsed.addresses[0] || '';
 
 			this.core.closeModal('wg-import-modal');
-			this.core.showToast('WireGuard VPN profile imported', 'success');
+			this.core.showToast(
+				'WireGuard profile imported safely (disabled by default). Review settings, then enable and Save Configuration.',
+				'success'
+			);
 			await this.loadVPN();
 		} catch (err) {
 			console.error('Failed to import WireGuard profile:', err);
