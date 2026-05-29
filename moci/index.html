@@ -2018,36 +2018,7 @@ Endpoint = host:51820"
 						</div>
 
 						<div class="tab-content hidden" id="tab-adblock-classic" data-feature="adblock">
-							<div class="stat-card netify-collapsible-card">
-								<div class="netify-collapsible-header">
-									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">ADBLOCK LIST</div>
-									<button class="netify-toggle-btn" id="adblock-classic-list-toggle-btn" type="button" aria-expanded="false">
-										<span id="adblock-classic-list-toggle-icon">▸</span>
-									</button>
-								</div>
-								<div id="adblock-classic-list-body" style="margin-top: 16px; display: none">
-								<input type="hidden" id="adblock-classic-enabled" value="0" />
-								<input type="hidden" id="adblock-classic-safesearch" value="0" />
-								<div class="form-group">
-									<label class="form-label">BLOCKLIST SOURCES</label>
-									<div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap">
-										<input type="text" id="adblock-classic-feed-search" class="form-input" placeholder="Search feeds..." style="flex: 1; min-width: 220px" />
-										<button class="action-btn-sm" id="adblock-classic-feed-all-btn" type="button">SELECT ALL</button>
-										<button class="action-btn-sm" id="adblock-classic-feed-none-btn" type="button">CLEAR</button>
-									</div>
-									<div id="adblock-classic-feed-list" class="adblock-feed-picker"></div>
-									<div id="adblock-classic-feed-selected" style="margin-top: 6px; color: var(--steel-muted); font-size: 11px; font-family: var(--font-mono)">
-										No sources selected
-									</div>
-								</div>
-								<div class="quick-actions">
-									<button class="action-btn" id="save-adblock-classic-btn">SAVE LIST</button>
-									<button class="action-btn" id="refresh-adblock-classic-btn">REFRESH</button>
-								</div>
-								</div>
-							</div>
-
-							<div class="stat-card" style="margin-top: 24px">
+							<div class="stat-card">
 								<div class="section-title">LATEST DNS REQUESTS</div>
 								<div class="form-group" style="margin-bottom: 10px">
 									<input
@@ -2074,6 +2045,35 @@ Endpoint = host:51820"
 										</tr>
 									</tbody>
 								</table>
+							</div>
+
+							<div class="stat-card netify-collapsible-card" style="margin-top: 24px">
+								<div class="netify-collapsible-header">
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">ADBLOCK LIST</div>
+									<button class="netify-toggle-btn" id="adblock-classic-list-toggle-btn" type="button" aria-expanded="false">
+										<span id="adblock-classic-list-toggle-icon">▸</span>
+									</button>
+								</div>
+								<div id="adblock-classic-list-body" style="margin-top: 16px; display: none">
+								<input type="hidden" id="adblock-classic-enabled" value="0" />
+								<input type="hidden" id="adblock-classic-safesearch" value="0" />
+								<div class="form-group">
+									<label class="form-label">BLOCKLIST SOURCES</label>
+									<div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap">
+										<input type="text" id="adblock-classic-feed-search" class="form-input" placeholder="Search feeds..." style="flex: 1; min-width: 220px" />
+										<button class="action-btn-sm" id="adblock-classic-feed-all-btn" type="button">SELECT ALL</button>
+										<button class="action-btn-sm" id="adblock-classic-feed-none-btn" type="button">CLEAR</button>
+									</div>
+									<div id="adblock-classic-feed-list" class="adblock-feed-picker"></div>
+									<div id="adblock-classic-feed-selected" style="margin-top: 6px; color: var(--steel-muted); font-size: 11px; font-family: var(--font-mono)">
+										No sources selected
+									</div>
+								</div>
+								<div class="quick-actions">
+									<button class="action-btn" id="save-adblock-classic-btn">SAVE LIST</button>
+									<button class="action-btn" id="refresh-adblock-classic-btn">REFRESH</button>
+								</div>
+								</div>
 							</div>
 
 							<div class="stat-card netify-collapsible-card" id="adblock-classic-config-card" style="margin-top: 24px">
