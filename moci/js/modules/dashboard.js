@@ -144,6 +144,21 @@ export default class DashboardModule {
 		if (barEl) barEl.style.background = styles.barBackground || '';
 	}
 
+	getMonthlyUsageBarBackground(percent) {
+		const value = Number(percent);
+		const baseBackground = this.isColorfulGraphsEnabled()
+			? 'linear-gradient(90deg, rgba(124, 198, 255, 0.9), rgba(124, 228, 255, 0.75))'
+			: '';
+		if (!Number.isFinite(value) || value <= 90) return baseBackground;
+
+		const red = 'rgba(255, 170, 170, 0.92)';
+		const boundary = Math.max(0, Math.min(100, (90 / value) * 100));
+		if (this.isColorfulGraphsEnabled()) {
+			return `linear-gradient(90deg, rgba(124, 198, 255, 0.9) 0%, rgba(124, 228, 255, 0.75) ${boundary.toFixed(2)}%, ${red} ${boundary.toFixed(2)}%, ${red} 100%)`;
+		}
+		return `linear-gradient(90deg, rgba(226, 226, 229, 0.9) 0%, rgba(226, 226, 229, 0.9) ${boundary.toFixed(2)}%, ${red} ${boundary.toFixed(2)}%, ${red} 100%)`;
+	}
+
 	renderSystemInfo(boardInfo, systemInfo) {
 		const hostnameEl = document.getElementById('hostname');
 		const uptimeEl = document.getElementById('uptime');
@@ -343,11 +358,13 @@ export default class DashboardModule {
 			const percent = limitBytes > 0 ? Math.min(100, (usedBytes / limitBytes) * 100) : summary.progressByDays;
 
 			barEl.style.width = `${percent.toFixed(1)}%`;
+			barEl.style.background = this.getMonthlyUsageBarBackground(percent);
 			totalEl.textContent = `${this.core.formatBytes(usedBytes)} used`;
 			daysLeftEl.textContent = `${summary.daysLeft} day${summary.daysLeft === 1 ? '' : 's'} left`;
 			metaEl.textContent = `Cycle: ${summary.startLabel} - ${summary.endLabel} • Limit: ${summary.limitLabel}`;
 		} catch {
 			barEl.style.width = '0%';
+			barEl.style.background = this.getMonthlyUsageBarBackground(0);
 			totalEl.textContent = '0 B used';
 			daysLeftEl.textContent = '-- days left';
 			metaEl.textContent = `Billing cycle starts on day ${this.monthStartDay}`;
