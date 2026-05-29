@@ -484,6 +484,49 @@ export default class NetworkModule {
 		document.getElementById('traceroute-btn')?.addEventListener('click', () => this.runDiagnostic('traceroute'));
 		document.getElementById('nslookup-btn')?.addEventListener('click', () => this.runDiagnostic('nslookup'));
 		document.getElementById('wol-btn')?.addEventListener('click', () => this.runWoL());
+		this.setupDiagnosticsCollapsibles();
+	}
+
+	setupDiagnosticsCollapsibles() {
+		const panels = ['ping', 'traceroute', 'nslookup', 'wol'];
+		for (const key of panels) {
+			document.getElementById(`diag-${key}-toggle-btn`)?.addEventListener('click', () => this.toggleDiagnosticsPanel(key));
+			this.syncDiagnosticsPanel(key);
+		}
+	}
+
+	toggleDiagnosticsPanel(key) {
+		const body = document.getElementById(`diag-${key}-body`);
+		const icon = document.getElementById(`diag-${key}-toggle-icon`);
+		const btn = document.getElementById(`diag-${key}-toggle-btn`);
+		if (!body || !icon || !btn) return;
+
+		const storageKey = `network_diag_${key}_expanded`;
+		const isExpanded = body.style.display !== 'none';
+		if (isExpanded) {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+			localStorage.setItem(storageKey, '0');
+		} else {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+			localStorage.setItem(storageKey, '1');
+		}
+	}
+
+	syncDiagnosticsPanel(key) {
+		const body = document.getElementById(`diag-${key}-body`);
+		const icon = document.getElementById(`diag-${key}-toggle-icon`);
+		const btn = document.getElementById(`diag-${key}-toggle-btn`);
+		if (!body || !icon || !btn) return;
+
+		const storageKey = `network_diag_${key}_expanded`;
+		const expanded = localStorage.getItem(storageKey) !== '0';
+		body.style.display = expanded ? 'block' : 'none';
+		icon.textContent = expanded ? '▾' : '▸';
+		btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
 	}
 
 	toggleAdblockSettingsPanel() {
@@ -5864,6 +5907,12 @@ printf 'STATE=%s\\nIP=%s\\n' "$state" "$ip"`;
 
 	async loadDiagnostics() {
 		if (!this.core.isFeatureEnabled('diagnostics')) return;
+		const pingInput = document.getElementById('ping-host');
+		if (pingInput && !String(pingInput.value || '').trim()) pingInput.value = '1.1.1.1';
+		const tracerouteInput = document.getElementById('traceroute-host');
+		if (tracerouteInput && !String(tracerouteInput.value || '').trim()) tracerouteInput.value = '1.1.1.1';
+		const nslookupInput = document.getElementById('nslookup-host');
+		if (nslookupInput && !String(nslookupInput.value || '').trim()) nslookupInput.value = 'google.com';
 		await this.loadWoLDeviceOptions();
 	}
 

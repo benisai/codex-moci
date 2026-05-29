@@ -2411,79 +2411,92 @@ Endpoint = host:51820"
 						</div>
 
 						<div class="tab-content hidden" id="tab-diagnostics" data-feature="diagnostics">
-							<div class="stat-card">
-								<div class="section-title">PING</div>
-								<div class="diagnostic-form">
-									<input
-										type="text"
-										id="ping-host"
-										placeholder="Enter hostname or IP"
-										class="diag-input"
-									/>
-									<button class="action-btn" id="ping-btn">RUN PING</button>
+							<div class="stat-card netify-collapsible-card">
+								<div class="netify-collapsible-header">
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">PING</div>
+									<button class="netify-toggle-btn" id="diag-ping-toggle-btn" type="button" aria-expanded="true">
+										<span id="diag-ping-toggle-icon">▾</span>
+									</button>
 								</div>
-								<div class="log-viewer" id="ping-output" style="min-height: 200px">
-									<div class="log-line" style="color: var(--steel-muted)">
-										Enter a hostname or IP address and click Run Ping
+								<div id="diag-ping-body">
+									<div class="diagnostic-form">
+										<input type="text" id="ping-host" placeholder="1.1.1.1" class="diag-input" />
+										<button class="action-btn" id="ping-btn">RUN PING</button>
+									</div>
+									<div class="log-viewer" id="ping-output" style="min-height: 200px">
+										<div class="log-line" style="color: var(--steel-muted)">
+											Enter a hostname or IP address and click Run Ping
+										</div>
 									</div>
 								</div>
 							</div>
 
-							<div class="stat-card" style="margin-top: 24px">
-								<div class="section-title">TRACEROUTE</div>
-								<div class="diagnostic-form">
-									<input
-										type="text"
-										id="traceroute-host"
-										placeholder="Enter hostname or IP"
-										class="diag-input"
-									/>
-									<button class="action-btn" id="traceroute-btn">RUN TRACEROUTE</button>
+							<div class="stat-card netify-collapsible-card" style="margin-top: 24px">
+								<div class="netify-collapsible-header">
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">TRACEROUTE</div>
+									<button class="netify-toggle-btn" id="diag-traceroute-toggle-btn" type="button" aria-expanded="true">
+										<span id="diag-traceroute-toggle-icon">▾</span>
+									</button>
 								</div>
-								<div class="log-viewer" id="traceroute-output" style="min-height: 200px">
-									<div class="log-line" style="color: var(--steel-muted)">
-										Enter a hostname or IP address and click Run Traceroute
+								<div id="diag-traceroute-body">
+									<div class="diagnostic-form">
+										<input type="text" id="traceroute-host" placeholder="1.1.1.1" class="diag-input" />
+										<button class="action-btn" id="traceroute-btn">RUN TRACEROUTE</button>
+									</div>
+									<div class="log-viewer" id="traceroute-output" style="min-height: 200px">
+										<div class="log-line" style="color: var(--steel-muted)">
+											Enter a hostname or IP address and click Run Traceroute
+										</div>
 									</div>
 								</div>
 							</div>
 
-							<div class="stat-card" style="margin-top: 24px">
-								<div class="section-title">NSLOOKUP</div>
-								<div class="diagnostic-form">
-									<input
-										type="text"
-										id="nslookup-host"
-										placeholder="Enter hostname or domain"
-										class="diag-input"
-									/>
-									<button class="action-btn" id="nslookup-btn">RUN NSLOOKUP</button>
+							<div class="stat-card netify-collapsible-card" style="margin-top: 24px">
+								<div class="netify-collapsible-header">
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">NSLOOKUP</div>
+									<button class="netify-toggle-btn" id="diag-nslookup-toggle-btn" type="button" aria-expanded="true">
+										<span id="diag-nslookup-toggle-icon">▾</span>
+									</button>
 								</div>
-								<div class="log-viewer" id="nslookup-output" style="min-height: 200px">
-									<div class="log-line" style="color: var(--steel-muted)">
-										Enter a hostname/domain and click Run Nslookup
+								<div id="diag-nslookup-body">
+									<div class="diagnostic-form">
+										<input type="text" id="nslookup-host" placeholder="google.com" class="diag-input" />
+										<button class="action-btn" id="nslookup-btn">RUN NSLOOKUP</button>
+									</div>
+									<div class="log-viewer" id="nslookup-output" style="min-height: 200px">
+										<div class="log-line" style="color: var(--steel-muted)">
+											Enter a hostname/domain and click Run Nslookup
+										</div>
 									</div>
 								</div>
 							</div>
 
-							<div class="stat-card" style="margin-top: 24px">
-								<div class="section-title">WAKE-ON-LAN</div>
-								<div class="diagnostic-form">
-									<input
-										type="text"
-										id="wol-mac"
-										placeholder="Enter MAC address (aa:bb:cc:dd:ee:ff)"
-										class="diag-input"
-										list="wol-device-list"
-									/>
-									<datalist id="wol-device-list"></datalist>
-									<button class="action-btn" id="wol-btn">SEND WOL PACKET</button>
+							<div class="stat-card netify-collapsible-card" style="margin-top: 24px">
+								<div class="netify-collapsible-header">
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">WAKE-ON-LAN</div>
+									<button class="netify-toggle-btn" id="diag-wol-toggle-btn" type="button" aria-expanded="true">
+										<span id="diag-wol-toggle-icon">▾</span>
+									</button>
 								</div>
-								<div id="wol-hint" style="margin-top: 8px; color: var(--steel-muted); font-size: 12px">
-									Start typing to pick a DHCP lease, or enter a MAC manually.
-								</div>
-								<div class="log-viewer" id="wol-output" style="min-height: 100px">
-									<div class="log-line" style="color: var(--steel-muted)">
-										Enter a MAC address to wake a device on the network
+								<div id="diag-wol-body">
+									<div class="diagnostic-form">
+										<input
+											type="text"
+											id="wol-mac"
+											placeholder="Enter MAC address (aa:bb:cc:dd:ee:ff)"
+											class="diag-input"
+											list="wol-device-list"
+										/>
+										<datalist id="wol-device-list"></datalist>
+										<button class="action-btn" id="wol-btn">SEND WOL PACKET</button>
+									</div>
+									<div id="wol-hint" style="margin-top: 8px; color: var(--steel-muted); font-size: 12px">
+										Start typing to pick a DHCP lease, or enter a MAC manually.
+									</div>
+									<div class="log-viewer" id="wol-output" style="min-height: 100px">
+										<div class="log-line" style="color: var(--steel-muted)">
+											Enter a MAC address to wake a device on the network
+										</div>
 									</div>
 								</div>
 							</div>
