@@ -877,8 +877,6 @@ export default class NetworkModule {
 				</tr>`;
 				})
 				.join('');
-
-			await this.loadPortStatus(result.interface);
 		});
 	}
 
