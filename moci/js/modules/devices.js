@@ -3,6 +3,8 @@ export default class DevicesModule {
 		this.core = core;
 		this.initialized = false;
 		this.refreshTimer = null;
+		this.liveRefreshTimer = null;
+		this.liveUsageSnapshot = new Map();
 		this.rowsByMac = new Map();
 		this.staticByMac = new Map();
 		this.deviceRows = [];
@@ -102,6 +104,38 @@ export default class DevicesModule {
 				this.loadDevices({ fromAuto: true });
 			}
 		}, 15000);
+		if (!this.liveRefreshTimer) {
+			this.liveRefreshTimer = setInterval(() => {
+				if (this.core.currentRoute?.startsWith('/devices')) {
+					this.refreshLiveRates().catch(err => console.error('Failed to refresh live device rates:', err));
+				}
+			}, 3000);
+		}
+	}
+
+	async refreshLiveRates() {
+		if (!Array.isArray(this.deviceRows) || this.deviceRows.length === 0) return;
+		const usage = await this.fetchBandixDeviceUsage();
+		this.bandixAvailable = Boolean(usage.available);
+		let changed = false;
+		const byMac = usage.byMac instanceof Map ? usage.byMac : new Map();
+		for (const row of this.deviceRows) {
+			const mac = this.normalizeMac(row?.mac || '');
+			if (!mac) continue;
+			const next = byMac.get(mac) || null;
+			const txRate = next?.txRateBps ?? null;
+			const rxRate = next?.rxRateBps ?? null;
+			const txBytes = next?.txBytes ?? null;
+			const rxBytes = next?.rxBytes ?? null;
+			if (row.liveTxRateBps !== txRate || row.liveRxRateBps !== rxRate || row.liveTxBytes !== txBytes || row.liveRxBytes !== rxBytes) {
+				row.liveTxRateBps = txRate;
+				row.liveRxRateBps = rxRate;
+				row.liveTxBytes = txBytes;
+				row.liveRxBytes = rxBytes;
+				changed = true;
+			}
+		}
+		if (changed) this.renderRows(this.sortRows(this.deviceRows));
 	}
 
 	async loadDevices(options = {}) {
@@ -514,6 +548,8 @@ rm -f "$tmp"
 	}
 
 	async fetchBandixDeviceUsage() {
+		const custom = await this.fetchMociRealtimeUsage();
+		if (custom.available) return custom;
 		const result = {
 			available: false,
 			byMac: new Map()
@@ -536,6 +572,56 @@ rm -f "$tmp"
 					rxRateBps: Number.isFinite(rxRateBps) ? Math.max(rxRateBps, 0) : null,
 					txBytes: Number.isFinite(txBytes) ? Math.max(txBytes, 0) : null,
 					rxBytes: Number.isFinite(rxBytes) ? Math.max(rxBytes, 0) : null
+				});
+			}
+
+			result.available = result.byMac.size > 0;
+			return result;
+		} catch {
+			return result;
+		}
+	}
+
+	async fetchMociRealtimeUsage() {
+		const result = {
+			available: false,
+			byMac: new Map()
+		};
+		try {
+			const now = Date.now();
+			const [status, execResult] = await this.core.ubusCall('file', 'exec', {
+				command: '/usr/bin/moci-device-bytes-nft',
+				params: []
+			});
+			if (status !== 0 || !execResult?.stdout) return result;
+			const payload = JSON.parse(String(execResult.stdout || '[]'));
+			if (!Array.isArray(payload)) return result;
+
+			for (const entry of payload) {
+				const mac = this.normalizeMac(entry?.mac || '');
+				if (!mac) continue;
+				const txBytes = Number(entry?.tx_bytes);
+				const rxBytes = Number(entry?.rx_bytes);
+				const tx = Number.isFinite(txBytes) && txBytes >= 0 ? txBytes : null;
+				const rx = Number.isFinite(rxBytes) && rxBytes >= 0 ? rxBytes : null;
+				const prev = this.liveUsageSnapshot.get(mac);
+				let txRateBps = null;
+				let rxRateBps = null;
+				if (prev && tx != null && rx != null) {
+					const elapsedSec = Math.max((now - Number(prev.ts || now)) / 1000, 0);
+					if (elapsedSec > 0) {
+						const txDelta = tx - Number(prev.txBytes || 0);
+						const rxDelta = rx - Number(prev.rxBytes || 0);
+						if (txDelta >= 0) txRateBps = txDelta / elapsedSec;
+						if (rxDelta >= 0) rxRateBps = rxDelta / elapsedSec;
+					}
+				}
+				this.liveUsageSnapshot.set(mac, { txBytes: tx ?? 0, rxBytes: rx ?? 0, ts: now });
+				result.byMac.set(mac, {
+					txRateBps: Number.isFinite(txRateBps) ? Math.max(txRateBps, 0) : null,
+					rxRateBps: Number.isFinite(rxRateBps) ? Math.max(rxRateBps, 0) : null,
+					txBytes: tx,
+					rxBytes: rx
 				});
 			}
 

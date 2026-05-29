@@ -232,6 +232,7 @@ require_file "$REPO_DIR/files/moci-speedtest-monitor.sh"
 require_file "$REPO_DIR/files/moci-notifications-db.sh"
 require_file "$REPO_DIR/files/moci-state-sync.sh"
 require_file "$REPO_DIR/files/moci-device-quarantine.sh"
+require_file "$REPO_DIR/files/moci-device-bytes-nft.sh"
 require_file "$REPO_DIR/files/connection-flows-collector.init"
 require_file "$REPO_DIR/files/ping-monitor.init"
 require_file "$REPO_DIR/files/dns-monitor.init"
@@ -324,6 +325,7 @@ install_file "$REPO_DIR/files/moci-speedtest-monitor.sh" /usr/bin/moci-speedtest
 install_file "$REPO_DIR/files/moci-notifications-db.sh" /usr/bin/moci-notifications-db 0755
 install_file "$REPO_DIR/files/moci-state-sync.sh" /usr/bin/moci-state-sync 0755
 install_file "$REPO_DIR/files/moci-device-quarantine.sh" /usr/bin/moci-device-quarantine 0755
+install_file "$REPO_DIR/files/moci-device-bytes-nft.sh" /usr/bin/moci-device-bytes-nft 0755
 install_file "$REPO_DIR/files/connection-flows-collector.init" /etc/init.d/connection-flows-collector 0755
 install_file "$REPO_DIR/files/ping-monitor.init" /etc/init.d/ping-monitor 0755
 install_file "$REPO_DIR/files/dns-monitor.init" /etc/init.d/dns-monitor 0755
