@@ -22,6 +22,7 @@ export default class NetworkModule {
 		this.wirelessBySection = new Map();
 		this.wirelessWwanScanRows = [];
 		this.wirelessWwanLastScanDevice = '';
+		this.adblockClassicDnsRows = [];
 
 		this.core.registerRoute('/network', async (path, subPaths) => {
 			const pageElement = document.getElementById('network-page');
@@ -333,6 +334,9 @@ export default class NetworkModule {
 		document.getElementById('adblock-classic-feed-search')?.addEventListener('input', () => this.filterAdblockClassicFeedOptions());
 		document.getElementById('adblock-classic-feed-all-btn')?.addEventListener('click', () => this.toggleAdblockClassicFeeds(true));
 		document.getElementById('adblock-classic-feed-none-btn')?.addEventListener('click', () => this.toggleAdblockClassicFeeds(false));
+		document.getElementById('adblock-classic-dns-search')?.addEventListener('input', () =>
+			this.renderAdblockClassicLatestDns(this.adblockClassicDnsRows)
+		);
 		document.getElementById('banip-feed-list')?.addEventListener('change', event => {
 			const target = event?.target;
 			if (target && target.classList?.contains('banip-feed-checkbox')) {
@@ -3725,8 +3729,26 @@ done`;
 	renderAdblockClassicLatestDns(rows) {
 		const tbody = document.querySelector('#adblock-classic-latestdns-table tbody');
 		if (!tbody) return;
+		this.adblockClassicDnsRows = Array.isArray(rows) ? rows : [];
 		const limit = this.adblockClassicReportMaxResults || 50;
-		const data = (Array.isArray(rows) ? rows : []).slice(0, limit);
+		const search = String(document.getElementById('adblock-classic-dns-search')?.value || '')
+			.trim()
+			.toLowerCase();
+		const filtered = this.adblockClassicDnsRows.filter(row => {
+			if (!search) return true;
+			const hay = [
+				row?.domain,
+				row?.client,
+				row?.date,
+				row?.time,
+				row?.answer,
+				row?.action
+			]
+				.map(v => String(v || '').toLowerCase())
+				.join(' ');
+			return hay.includes(search);
+		});
+		const data = filtered.slice(0, limit);
 		if (data.length === 0) {
 			this.core.renderEmptyTable(tbody, 6, 'No DNS request rows available');
 			return;
