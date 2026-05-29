@@ -520,6 +520,11 @@ body {
 	margin-top: 8px;
 }
 
+.monthly-usage-progress-bar {
+	background: rgba(226, 226, 229, 0.22);
+	border: 1px solid rgba(226, 226, 229, 0.24);
+}
+
 .progress-fill {
 	height: 100%;
 	background: linear-gradient(90deg, var(--primary-accent), var(--secondary-accent));
