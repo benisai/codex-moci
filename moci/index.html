@@ -2119,15 +2119,14 @@ Endpoint = host:51820"
 										<button class="action-btn warning" id="adblock-classic-restart-btn">RESTART</button>
 									</div>
 									<div class="form-group" style="margin-top: 12px">
-										<label class="form-label">REPORT DEBUG LOG</label>
-										<div
+										<div class="stat-label">REPORT DEBUG LOG</div>
+										<pre
 											id="adblock-classic-debug-log"
-											class="status-output"
-											style="max-height: 180px; overflow: auto; white-space: pre-wrap"
+											style="margin-top: 8px; max-height: 180px; overflow: auto; white-space: pre-wrap; font-family: var(--font-mono); font-size: 11px; color: var(--steel-light); background: rgba(0, 0, 0, 0.28); border: 1px solid var(--glass-border); border-radius: 4px; padding: 10px"
 										>
 											No debug entries yet
-										</div>
-										<div class="quick-actions" style="margin-top: 8px">
+										</pre>
+										<div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px">
 											<button class="action-btn-sm" id="refresh-adblock-classic-debug-btn" type="button">REFRESH LOG</button>
 											<button class="action-btn-sm" id="clear-adblock-classic-debug-btn" type="button">CLEAR LOG</button>
 										</div>
