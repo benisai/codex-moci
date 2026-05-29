@@ -3238,31 +3238,6 @@ Endpoint = host:51820"
 							</div>
 
 							<div class="stat-card" style="margin-top: 24px">
-								<div class="section-title">TOP APPLICATIONS</div>
-								<table class="data-table" id="netify-top-apps-table">
-									<thead>
-										<tr>
-											<th>APPLICATION</th>
-											<th>FLOWS</th>
-											<th>LAST SEEN</th>
-										</tr>
-									</thead>
-									<tbody>
-										<tr>
-											<td colspan="3" style="text-align: center; color: var(--steel-muted)">Loading...</td>
-										</tr>
-									</tbody>
-								</table>
-								<div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 12px">
-									<span id="netify-top-apps-page-info" style="font-family: var(--font-mono); font-size: 11px; color: var(--steel-muted)">
-										0-0 of 0
-									</span>
-									<button class="action-btn-sm" id="netify-top-apps-prev-btn" type="button" aria-label="Previous top applications page">◀</button>
-									<button class="action-btn-sm" id="netify-top-apps-next-btn" type="button" aria-label="Next top applications page">▶</button>
-								</div>
-							</div>
-
-							<div class="stat-card" style="margin-top: 24px">
 								<div class="traffic-header-row" style="margin-bottom: 8px">
 									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">RECENT FLOWS</div>
 									<button class="action-btn-sm" id="netify-auto-refresh-toggle-btn" type="button">PAUSE</button>
@@ -3309,6 +3284,38 @@ Endpoint = host:51820"
 									</span>
 									<button class="action-btn-sm" id="netify-flows-prev-btn" type="button" aria-label="Previous page">◀</button>
 									<button class="action-btn-sm" id="netify-flows-next-btn" type="button" aria-label="Next page">▶</button>
+								</div>
+							</div>
+
+							<div class="stat-card netify-collapsible-card" style="margin-top: 24px">
+								<div class="netify-collapsible-header">
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">TOP APPLICATIONS</div>
+									<button class="netify-toggle-btn" id="netify-top-apps-toggle-btn" type="button" aria-expanded="false">
+										<span id="netify-top-apps-toggle-icon">▸</span>
+									</button>
+								</div>
+								<div id="netify-top-apps-body" style="display: none; margin-top: 12px">
+									<table class="data-table" id="netify-top-apps-table">
+										<thead>
+											<tr>
+												<th>APPLICATION</th>
+												<th>FLOWS</th>
+												<th>LAST SEEN</th>
+											</tr>
+										</thead>
+										<tbody>
+											<tr>
+												<td colspan="3" style="text-align: center; color: var(--steel-muted)">Loading...</td>
+											</tr>
+										</tbody>
+									</table>
+									<div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 12px">
+										<span id="netify-top-apps-page-info" style="font-family: var(--font-mono); font-size: 11px; color: var(--steel-muted)">
+											0-0 of 0
+										</span>
+										<button class="action-btn-sm" id="netify-top-apps-prev-btn" type="button" aria-label="Previous top applications page">◀</button>
+										<button class="action-btn-sm" id="netify-top-apps-next-btn" type="button" aria-label="Next top applications page">▶</button>
+									</div>
 								</div>
 							</div>
 

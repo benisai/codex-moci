@@ -59,6 +59,7 @@ export default class NetifyModule {
 		document.getElementById('netify-full-reset-btn')?.addEventListener('click', () => this.fullResetCollector());
 		document.getElementById('netify-debug-clear-btn')?.addEventListener('click', () => this.clearDebugLog());
 		document.getElementById('netify-collector-toggle-btn')?.addEventListener('click', () => this.toggleCollectorPanel());
+		document.getElementById('netify-top-apps-toggle-btn')?.addEventListener('click', () => this.toggleTopAppsPanel());
 		document.getElementById('netify-auto-refresh-toggle-btn')?.addEventListener('click', () =>
 			this.toggleAutoRefreshPause()
 		);
@@ -118,6 +119,7 @@ export default class NetifyModule {
 			?.addEventListener('click', () => this.openFlowActionFromDetails());
 		document.querySelector('#netify-flows-table tbody')?.addEventListener('click', event => this.handleFlowRowClick(event));
 		this.syncCollectorPanel();
+		this.syncTopAppsPanel();
 		this.updateAutoRefreshToggleUi();
 		this.renderDebugLog();
 	}
@@ -160,12 +162,51 @@ export default class NetifyModule {
 		}
 	}
 
+	toggleTopAppsPanel() {
+		const body = document.getElementById('netify-top-apps-body');
+		const icon = document.getElementById('netify-top-apps-toggle-icon');
+		const btn = document.getElementById('netify-top-apps-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const isHidden = body.style.display === 'none' || body.style.display === '';
+		if (isHidden) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+			localStorage.setItem('netify_top_apps_expanded', '1');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+			localStorage.setItem('netify_top_apps_expanded', '0');
+		}
+	}
+
+	syncTopAppsPanel() {
+		const body = document.getElementById('netify-top-apps-body');
+		const icon = document.getElementById('netify-top-apps-toggle-icon');
+		const btn = document.getElementById('netify-top-apps-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const expanded = localStorage.getItem('netify_top_apps_expanded') === '1';
+		if (expanded) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+		}
+	}
+
 	async load() {
 		this.logDebug(`Netify page load; db=${this.outputPath}`);
 		this.userPausedAutoRefresh = true;
 		this.updateAutoRefreshToggleUi();
 		await this.loadConfig();
 		this.syncCollectorPanel();
+		this.syncTopAppsPanel();
 		this.startPolling();
 		await this.refresh(false, true);
 	}
