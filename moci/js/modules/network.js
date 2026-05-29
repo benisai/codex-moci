@@ -330,6 +330,9 @@ export default class NetworkModule {
 				this.syncAdblockClassicFeedSummary();
 			}
 		});
+		document.getElementById('adblock-classic-feed-search')?.addEventListener('input', () => this.filterAdblockClassicFeedOptions());
+		document.getElementById('adblock-classic-feed-all-btn')?.addEventListener('click', () => this.toggleAdblockClassicFeeds(true));
+		document.getElementById('adblock-classic-feed-none-btn')?.addEventListener('click', () => this.toggleAdblockClassicFeeds(false));
 		document.getElementById('banip-feed-list')?.addEventListener('change', event => {
 			const target = event?.target;
 			if (target && target.classList?.contains('banip-feed-checkbox')) {
@@ -2849,6 +2852,20 @@ done`;
 		return map;
 	}
 
+	parseAdblockClassicFeedsJson(text) {
+		const map = new Map();
+		try {
+			const obj = JSON.parse(String(text || '').trim());
+			for (const [id, cfg] of Object.entries(obj || {})) {
+				const key = String(id || '').trim();
+				if (!key) continue;
+				const desc = String(cfg?.descr || '').trim();
+				map.set(key, { id: key, descr: desc });
+			}
+		} catch {}
+		return map;
+	}
+
 	async readTextFileFlexible(path) {
 		try {
 			const [status, result] = await this.core.ubusCall('file', 'read', { path });
@@ -3169,19 +3186,32 @@ done`;
 		const selectedSet = new Set((Array.isArray(selectedFeeds) ? selectedFeeds : []).map(v => String(v || '').trim()).filter(Boolean));
 		const sourceMap = new Map();
 
-		const sourceFiles = [
-			'/etc/adblock/adblock.sources',
-			'/usr/share/adblock/adblock.sources',
-			'/usr/lib/adblock/adblock.sources',
-			'/usr/share/adblock/sources',
-			'/etc/adblock/sources'
-		];
-		for (const path of sourceFiles) {
+		// Match LuCI feeds source behavior: custom file overrides stock feed catalog.
+		for (const path of ['/etc/adblock/adblock.custom.feeds', '/etc/adblock/adblock.feeds']) {
 			const text = await this.readTextFileFlexible(path);
 			if (!text) continue;
-			const parsed = this.parseAdblockClassicSourcesFromText(text);
-			for (const [id, label] of parsed.entries()) {
-				if (!sourceMap.has(id)) sourceMap.set(id, label || id);
+			const parsed = this.parseAdblockClassicFeedsJson(text);
+			for (const [id, cfg] of parsed.entries()) {
+				if (!sourceMap.has(id)) sourceMap.set(id, cfg);
+			}
+		}
+
+		// Fallback for older layouts where source metadata is not JSON feeds.
+		if (sourceMap.size === 0) {
+			const sourceFiles = [
+				'/etc/adblock/adblock.sources',
+				'/usr/share/adblock/adblock.sources',
+				'/usr/lib/adblock/adblock.sources',
+				'/usr/share/adblock/sources',
+				'/etc/adblock/sources'
+			];
+			for (const path of sourceFiles) {
+				const text = await this.readTextFileFlexible(path);
+				if (!text) continue;
+				const parsed = this.parseAdblockClassicSourcesFromText(text);
+				for (const [id, label] of parsed.entries()) {
+					if (!sourceMap.has(id)) sourceMap.set(id, { id, descr: label === id ? '' : label });
+				}
 			}
 		}
 
@@ -3194,35 +3224,60 @@ done`;
 				for (const raw of String(result.stdout || '').split('\n')) {
 					const id = String(raw || '').trim();
 					if (!id) continue;
-					if (!sourceMap.has(id)) sourceMap.set(id, id);
+					if (!sourceMap.has(id)) sourceMap.set(id, { id, descr: '' });
 				}
 			}
 		} catch {}
 
 		if (sourceMap.size === 0) {
 			for (const id of this.getDefaultAdblockClassicSources()) {
-				if (!sourceMap.has(id)) sourceMap.set(id, id);
+				if (!sourceMap.has(id)) sourceMap.set(id, { id, descr: '' });
 			}
 		}
 		// Ensure currently selected feeds are always represented, even if catalog parsing misses them.
 		for (const id of selectedSet) {
-			if (!sourceMap.has(id)) sourceMap.set(id, id);
+			if (!sourceMap.has(id)) sourceMap.set(id, { id, descr: '' });
 		}
 
-		const options = Array.from(sourceMap.entries()).sort((a, b) => String(a[0] || '').localeCompare(String(b[0] || '')));
+		const options = Array.from(sourceMap.values()).sort((a, b) => String(a?.id || '').localeCompare(String(b?.id || '')));
 		list.innerHTML = options.length
 			? options
-					.map(([id, label]) => {
+					.map(item => {
+						const id = String(item?.id || '').trim();
 						const checked = selectedSet.has(id) ? ' checked' : '';
 						const escapedId = this.core.escapeHtml(id);
-						const escapedLabel = this.core.escapeHtml(label || id);
-						return `<label class="checkbox-label" style="display:flex; align-items:center; gap:8px; margin:0; padding:4px 2px;">
+						const escapedDesc = this.core.escapeHtml(String(item?.descr || '').trim());
+						const searchable = this.core.escapeHtml(`${id} ${String(item?.descr || '')}`.toLowerCase());
+						return `<label class="adblock-feed-option" data-search="${searchable}">
 							<input type="checkbox" class="adblock-classic-feed-checkbox" value="${escapedId}"${checked} />
-							<span style="font-size: 12px; color: var(--text-primary); line-height: 1.4;">${escapedLabel}</span>
+							<span>
+								<div class="adblock-feed-option-name">${escapedId}</div>
+								${escapedDesc ? `<div class="adblock-feed-option-desc">${escapedDesc}</div>` : ''}
+							</span>
 						</label>`;
 					})
 					.join('')
 			: '<div style="color: var(--steel-muted); padding: 6px 4px;">No source catalog found</div>';
+		this.syncAdblockClassicFeedSummary();
+		this.filterAdblockClassicFeedOptions();
+	}
+
+	filterAdblockClassicFeedOptions() {
+		const q = String(document.getElementById('adblock-classic-feed-search')?.value || '')
+			.trim()
+			.toLowerCase();
+		const rows = document.querySelectorAll('#adblock-classic-feed-list .adblock-feed-option');
+		rows.forEach(row => {
+			const hay = String(row.getAttribute('data-search') || '').toLowerCase();
+			row.style.display = !q || hay.includes(q) ? '' : 'none';
+		});
+	}
+
+	toggleAdblockClassicFeeds(checked) {
+		const boxes = document.querySelectorAll('#adblock-classic-feed-list .adblock-classic-feed-checkbox');
+		boxes.forEach(box => {
+			box.checked = Boolean(checked);
+		});
 		this.syncAdblockClassicFeedSummary();
 	}
 
