@@ -367,6 +367,9 @@ export default class NetworkModule {
 		document.getElementById('adblock-classic-settings-toggle-btn')?.addEventListener('click', () =>
 			this.toggleAdblockClassicSettingsPanel()
 		);
+		document.getElementById('adblock-classic-list-toggle-btn')?.addEventListener('click', () =>
+			this.toggleAdblockClassicListPanel()
+		);
 		document.getElementById('adblock-settings-toggle-btn')?.addEventListener('click', () =>
 			this.toggleAdblockSettingsPanel()
 		);
@@ -439,6 +442,7 @@ export default class NetworkModule {
 		});
 		this.syncAdblockSettingsPanel();
 		this.syncAdblockClassicSettingsPanel();
+		this.syncAdblockClassicListPanel();
 		this.syncBanIPSettingsPanel();
 		this.syncAdblockSettingsButtons();
 		this.syncPbrSettingsPanel();
@@ -590,6 +594,38 @@ export default class NetworkModule {
 			btn.setAttribute('aria-expanded', 'false');
 			localStorage.setItem('adblock_classic_settings_expanded', '0');
 		}
+	}
+
+	toggleAdblockClassicListPanel() {
+		const body = document.getElementById('adblock-classic-list-body');
+		const icon = document.getElementById('adblock-classic-list-toggle-icon');
+		const btn = document.getElementById('adblock-classic-list-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const isHidden = body.style.display === 'none' || body.style.display === '';
+		if (isHidden) {
+			body.style.display = 'block';
+			icon.textContent = '▾';
+			btn.setAttribute('aria-expanded', 'true');
+			localStorage.setItem('adblock_classic_list_expanded', '1');
+		} else {
+			body.style.display = 'none';
+			icon.textContent = '▸';
+			btn.setAttribute('aria-expanded', 'false');
+			localStorage.setItem('adblock_classic_list_expanded', '0');
+		}
+	}
+
+	syncAdblockClassicListPanel() {
+		const body = document.getElementById('adblock-classic-list-body');
+		const icon = document.getElementById('adblock-classic-list-toggle-icon');
+		const btn = document.getElementById('adblock-classic-list-toggle-btn');
+		if (!body || !icon || !btn) return;
+
+		const expanded = localStorage.getItem('adblock_classic_list_expanded') === '1';
+		body.style.display = expanded ? 'block' : 'none';
+		icon.textContent = expanded ? '▾' : '▸';
+		btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
 	}
 
 	syncAdblockClassicSettingsPanel() {

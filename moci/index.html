@@ -2018,8 +2018,14 @@ Endpoint = host:51820"
 						</div>
 
 						<div class="tab-content hidden" id="tab-adblock-classic" data-feature="adblock">
-							<div class="stat-card">
-								<div class="section-title">ADBLOCK LIST</div>
+							<div class="stat-card netify-collapsible-card">
+								<div class="netify-collapsible-header">
+									<div class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0">ADBLOCK LIST</div>
+									<button class="netify-toggle-btn" id="adblock-classic-list-toggle-btn" type="button" aria-expanded="false">
+										<span id="adblock-classic-list-toggle-icon">▸</span>
+									</button>
+								</div>
+								<div id="adblock-classic-list-body" style="margin-top: 16px; display: none">
 								<input type="hidden" id="adblock-classic-enabled" value="0" />
 								<input type="hidden" id="adblock-classic-safesearch" value="0" />
 								<div class="form-group">
@@ -2037,6 +2043,7 @@ Endpoint = host:51820"
 								<div class="quick-actions">
 									<button class="action-btn" id="save-adblock-classic-btn">SAVE LIST</button>
 									<button class="action-btn" id="refresh-adblock-classic-btn">REFRESH</button>
+								</div>
 								</div>
 							</div>
 
