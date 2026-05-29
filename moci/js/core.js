@@ -118,12 +118,6 @@ export class OpenWrtCore {
 				if (status === 0 && result && result.values) {
 					// Merge router config over defaults so newly added features remain visible.
 					this.features = { ...defaults, ...result.values };
-					if (
-						typeof this.features.adblock_fast === 'undefined' &&
-						typeof this.features.adblock !== 'undefined'
-					) {
-						this.features.adblock_fast = this.features.adblock;
-					}
 				} else {
 					this.features = defaults;
 				}
@@ -139,7 +133,6 @@ export class OpenWrtCore {
 		const current = { ...(this.features || {}) };
 		const checkMap = {
 			adblock: '[ -x /etc/init.d/adblock ]',
-			adblock_fast: '[ -x /etc/init.d/adblock-fast ]',
 			banip: '[ -x /etc/init.d/banip ]',
 			ddns: '[ -x /etc/init.d/ddns ]',
 			sqm: '[ -x /etc/init.d/sqm ]',
@@ -200,7 +193,6 @@ export class OpenWrtCore {
 			dns: '1',
 			banip: '1',
 			adblock: '1',
-			adblock_fast: '1',
 			pbr: '1',
 			wireguard: '1',
 			qos: '1',
@@ -223,10 +215,6 @@ export class OpenWrtCore {
 	isFeatureEnabled(feature) {
 		const alwaysEnabled = new Set(['network', 'system', 'firewall', 'dhcp', 'dns', 'backup']);
 		if (alwaysEnabled.has(feature)) return true;
-		if (feature === 'adblock_fast') {
-			const value = this.features.adblock_fast ?? this.features.adblock;
-			return value === '1';
-		}
 		return this.features[feature] === '1';
 	}
 
@@ -281,7 +269,6 @@ export class OpenWrtCore {
 					'dhcp',
 					'dns',
 					'adblock',
-					'adblock_fast',
 					'pbr',
 					'diagnostics',
 					'quarantine'

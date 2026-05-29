@@ -290,8 +290,6 @@ done
 if [ "$INSTALL_ADBLOCK" = "1" ]; then
 	install_pkg_if_available "adblock"
 	install_pkg_if_available "luci-app-adblock"
-	install_pkg_if_available "adblock-fast"
-	install_pkg_if_available "luci-app-adblock-fast"
 fi
 
 if [ "$INSTALL_PBR" = "1" ]; then
@@ -351,7 +349,6 @@ set_uci moci.features.qosify "1"
 set_uci moci.features.sqm "1"
 set_uci moci.features.banip "1"
 set_uci moci.features.adblock "$INSTALL_ADBLOCK"
-set_uci moci.features.adblock_fast "$INSTALL_ADBLOCK"
 set_uci moci.features.pbr "$INSTALL_PBR"
 set_uci moci.features.netify "$INSTALL_NETIFY"
 set_uci moci.collector.enabled "$INSTALL_NETIFY"
@@ -476,7 +473,7 @@ if [ "$INSTALL_NETIFY" = "1" ]; then
 	SERVICES="vnstat nlbwmon netifyd netify-collector connection-flows-collector ping-monitor dns-monitor moci-state-sync moci-device-quarantine"
 fi
 if [ "$INSTALL_ADBLOCK" = "1" ]; then
-	SERVICES="$SERVICES adblock adblock-fast"
+	SERVICES="$SERVICES adblock"
 fi
 if [ "$INSTALL_PBR" = "1" ]; then
 	SERVICES="$SERVICES pbr"

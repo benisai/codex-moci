@@ -201,7 +201,6 @@ export default class SystemModule {
 
 		const defaults = {
 			adblock: true,
-			adblock_fast: true,
 			banip: true,
 			ddns: true,
 			sqm: true,
@@ -216,7 +215,6 @@ export default class SystemModule {
 					'-c',
 					[
 						'[ -x /etc/init.d/adblock ] && echo "adblock=1" || echo "adblock=0"',
-						'[ -x /etc/init.d/adblock-fast ] && echo "adblock_fast=1" || echo "adblock_fast=0"',
 						'[ -x /etc/init.d/banip ] && echo "banip=1" || echo "banip=0"',
 						'[ -x /etc/init.d/ddns ] && echo "ddns=1" || echo "ddns=0"',
 						'[ -x /etc/init.d/sqm ] && echo "sqm=1" || echo "sqm=0"',

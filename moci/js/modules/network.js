@@ -37,7 +37,6 @@ export default class NetworkModule {
 					dns: () => this.loadDNS(),
 					banip: () => this.loadBanIP(),
 					'adblock-classic': () => this.loadAdblockClassic(),
-					'adblock-fast': () => this.loadAdblock(),
 					pbr: () => this.loadPBR(),
 					ddns: () => this.loadDDNS(),
 					qos: () => this.loadQoS(),
@@ -66,7 +65,6 @@ export default class NetworkModule {
 			}
 			this.subTabs.showSubTab(tab);
 			if (tab === 'adblock-classic') this.loadAdblockClassic();
-			if (tab === 'adblock-fast') this.loadAdblock();
 		});
 	}
 
@@ -171,14 +169,6 @@ export default class NetworkModule {
 			cancelBtnId: 'cancel-wg-import-btn',
 			saveBtnId: 'save-wg-import-btn',
 			saveHandler: () => this.importWgProfile()
-		});
-
-		this.core.setupModal({
-			modalId: 'adblock-list-modal',
-			closeBtnId: 'close-adblock-list-modal',
-			cancelBtnId: 'cancel-adblock-list-btn',
-			saveBtnId: 'save-adblock-list-btn',
-			saveHandler: () => this.addAdblockTargetList()
 		});
 
 		this.core.setupModal({
@@ -301,8 +291,6 @@ export default class NetworkModule {
 			this.core.resetModal('wg-import-modal');
 			this.core.openModal('wg-import-modal');
 		});
-		document.getElementById('save-adblock-settings-btn')?.addEventListener('click', () => this.saveAdblockSettings());
-		document.getElementById('refresh-adblock-btn')?.addEventListener('click', () => this.loadAdblock());
 		document.getElementById('save-adblock-classic-btn')?.addEventListener('click', () => this.saveAdblockClassicSettings());
 		document
 			.getElementById('save-adblock-classic-config-btn')
@@ -349,11 +337,6 @@ export default class NetworkModule {
 				this.syncBanIPSelectionSummary();
 			}
 		});
-		document.getElementById('add-adblock-list-btn')?.addEventListener('click', () => {
-			this.core.resetModal('adblock-list-modal');
-			this.resetAdblockListForm();
-			this.core.openModal('adblock-list-modal');
-		});
 		document.getElementById('save-banip-feed-btn')?.addEventListener('click', () => this.saveBanIPFeeds());
 		document.getElementById('refresh-banip-feed-btn')?.addEventListener('click', () => this.loadBanIP());
 		document.getElementById('save-banip-settings-btn')?.addEventListener('click', () => this.saveBanIPSettings());
@@ -374,21 +357,6 @@ export default class NetworkModule {
 		document.getElementById('adblock-classic-list-toggle-btn')?.addEventListener('click', () =>
 			this.toggleAdblockClassicListPanel()
 		);
-		document.getElementById('adblock-settings-toggle-btn')?.addEventListener('click', () =>
-			this.toggleAdblockSettingsPanel()
-		);
-		document
-			.getElementById('adblock-enabled-on-btn')
-			?.addEventListener('click', () => this.setAdblockSettingValue('enabled', '1'));
-		document
-			.getElementById('adblock-enabled-off-btn')
-			?.addEventListener('click', () => this.setAdblockSettingValue('enabled', '0'));
-		document
-			.getElementById('adblock-config-update-on-btn')
-			?.addEventListener('click', () => this.setAdblockSettingValue('config_update', '1'));
-		document
-			.getElementById('adblock-config-update-off-btn')
-			?.addEventListener('click', () => this.setAdblockSettingValue('config_update', '0'));
 		document.getElementById('save-pbr-settings-btn')?.addEventListener('click', () => this.savePbrSettings());
 		document.getElementById('refresh-pbr-btn')?.addEventListener('click', () => this.loadPBR());
 		document.getElementById('pbr-start-btn')?.addEventListener('click', () => this.runPbrServiceAction('start'));
@@ -444,21 +412,13 @@ export default class NetworkModule {
 			this.resetPbrIncludeAddForm();
 			this.core.openModal('pbr-include-add-modal');
 		});
-		this.syncAdblockSettingsPanel();
 		this.syncAdblockClassicSettingsPanel();
 		this.syncAdblockClassicListPanel();
 		this.syncBanIPSettingsPanel();
-		this.syncAdblockSettingsButtons();
 		this.syncPbrSettingsPanel();
 		this.syncAllPbrSectionPanels();
 		this.syncQuarantineSettingsPanel();
 		this.syncDnsHostsPanel();
-
-		const adblockCleanup = this.core.delegateActions('adblock-targets-table', {
-			toggle: id => this.toggleAdblockTargetList(id),
-			delete: id => this.deleteAdblockTargetList(id)
-		});
-		if (adblockCleanup) this.cleanups.push(adblockCleanup);
 
 		const pbrPolicyCleanup = this.core.delegateActions('pbr-policies-table', {
 			toggle: id => this.togglePbrPolicy(id),
@@ -540,44 +500,6 @@ export default class NetworkModule {
 		btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
 		if (expanded) card?.classList?.remove('diag-collapsed');
 		else card?.classList?.add('diag-collapsed');
-	}
-
-	toggleAdblockSettingsPanel() {
-		const body = document.getElementById('adblock-settings-body');
-		const icon = document.getElementById('adblock-settings-toggle-icon');
-		const btn = document.getElementById('adblock-settings-toggle-btn');
-		if (!body || !icon || !btn) return;
-
-		const isHidden = body.style.display === 'none' || body.style.display === '';
-		if (isHidden) {
-			body.style.display = 'block';
-			icon.textContent = '▾';
-			btn.setAttribute('aria-expanded', 'true');
-			localStorage.setItem('adblock_settings_expanded', '1');
-		} else {
-			body.style.display = 'none';
-			icon.textContent = '▸';
-			btn.setAttribute('aria-expanded', 'false');
-			localStorage.setItem('adblock_settings_expanded', '0');
-		}
-	}
-
-	syncAdblockSettingsPanel() {
-		const body = document.getElementById('adblock-settings-body');
-		const icon = document.getElementById('adblock-settings-toggle-icon');
-		const btn = document.getElementById('adblock-settings-toggle-btn');
-		if (!body || !icon || !btn) return;
-
-		const expanded = localStorage.getItem('adblock_settings_expanded') === '1';
-		if (expanded) {
-			body.style.display = 'block';
-			icon.textContent = '▾';
-			btn.setAttribute('aria-expanded', 'true');
-		} else {
-			body.style.display = 'none';
-			icon.textContent = '▸';
-			btn.setAttribute('aria-expanded', 'false');
-		}
 	}
 
 	toggleAdblockClassicSettingsPanel() {
@@ -724,30 +646,6 @@ export default class NetworkModule {
 			icon.textContent = '▸';
 			btn.setAttribute('aria-expanded', 'false');
 		}
-	}
-
-	setAdblockSettingValue(setting, value, options = {}) {
-		const next = String(value) === '1' ? '1' : '0';
-		if (setting === 'enabled') {
-			const input = document.getElementById('adblock-enabled');
-			if (input) input.value = next;
-		} else if (setting === 'config_update') {
-			const input = document.getElementById('adblock-config-update');
-			if (input) input.value = next;
-		}
-		this.syncAdblockSettingsButtons();
-		if (options.syncOnly) return;
-	}
-
-	syncAdblockSettingsButtons() {
-		const enabledValue = String(document.getElementById('adblock-enabled')?.value || '0') === '1';
-		const configUpdateValue = String(document.getElementById('adblock-config-update')?.value || '0') === '1';
-		this.syncAdblockTogglePair('adblock-enabled-on-btn', 'adblock-enabled-off-btn', enabledValue);
-		this.syncAdblockTogglePair(
-			'adblock-config-update-on-btn',
-			'adblock-config-update-off-btn',
-			configUpdateValue
-		);
 	}
 
 	syncAdblockTogglePair(onId, offId, isEnabled) {
@@ -3979,118 +3877,7 @@ done`;
 		}
 	}
 
-	async loadAdblock() {
-		await this.core.loadResource('adblock-targets-table', 4, 'adblock_fast', async () => {
-			this.syncAdblockSettingsPanel();
-			const installHintEl = document.getElementById('adblock-fast-install-hint');
-			const tbody = document.querySelector('#adblock-targets-table tbody');
-			if (!tbody) return;
-
-			const config = await this.readAdblockFastConfig();
-			if (!config || !config.values) {
-				this.setAdblockSettingValue('enabled', '0', { syncOnly: true });
-				this.setAdblockSettingValue('config_update', '0', { syncOnly: true });
-				this.core.renderEmptyTable(
-					tbody,
-					4,
-					'Adblock-Fast config not found. Install adblock-fast/luci-app-adblock-fast first.'
-				);
-				if (installHintEl) installHintEl.classList.remove('hidden');
-				return;
-			}
-			if (installHintEl) installHintEl.classList.add('hidden');
-
-			let mainSection = null;
-			const rows = [];
-			for (const [section, cfg] of Object.entries(config.values)) {
-				const type = String(cfg?.['.type'] || '');
-				if ((type === 'adblock-fast' || section === 'config') && !mainSection) {
-					mainSection = { id: section, values: cfg };
-				} else if (type === 'file_url' || type === 'file' || type === 'source') {
-					const hasEnabled = Object.prototype.hasOwnProperty.call(cfg || {}, 'enabled');
-					const hasDisabled = Object.prototype.hasOwnProperty.call(cfg || {}, 'disabled');
-					const hasStatus = Object.prototype.hasOwnProperty.call(cfg || {}, 'status');
-					let enabled = true;
-					if (hasEnabled) {
-						enabled = this.isEnabledValue(cfg.enabled);
-					} else if (hasDisabled) {
-						enabled = !this.isEnabledValue(cfg.disabled);
-					} else if (hasStatus) {
-						enabled = this.isEnabledValue(cfg.status);
-					}
-					rows.push({
-						id: section,
-						name: String(cfg.name || cfg.label || cfg.title || section),
-						url: String(cfg.url || cfg.uri || cfg.source || cfg.file || ''),
-						enabled
-					});
-				}
-			}
-
-			this.setAdblockSettingValue(
-				'enabled',
-				this.isEnabledValue(mainSection?.values?.enabled ?? '0') ? '1' : '0',
-				{ syncOnly: true }
-			);
-			this.setAdblockSettingValue(
-				'config_update',
-				this.isEnabledValue(mainSection?.values?.config_update_enabled ?? '0') ? '1' : '0',
-				{ syncOnly: true }
-			);
-
-			if (rows.length === 0) {
-				this.core.renderEmptyTable(tbody, 4, 'No target lists configured');
-				return;
-			}
-
-			rows.sort((a, b) => {
-				if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
-				return String(a.name || '').localeCompare(String(b.name || ''));
-			});
-
-			tbody.innerHTML = rows
-				.map(
-					row => `<tr>
-				<td data-label="Name">${this.core.escapeHtml(row.name)}</td>
-				<td data-label="URL">${this.core.escapeHtml(row.url || 'N/A')}</td>
-				<td data-label="Status">${this.renderAdblockStatusBadge(row.enabled)}</td>
-				<td data-label="Actions"><div class="action-buttons">
-					<button class="action-btn-sm" data-action="toggle" data-id="${this.core.escapeHtml(row.id)}">${row.enabled ? 'DISABLE' : 'ENABLE'}</button>
-					<button class="action-btn-sm danger" data-action="delete" data-id="${this.core.escapeHtml(row.id)}">DELETE</button>
-				</div></td>
-			</tr>`
-				)
-				.join('');
-		});
-	}
-
-	renderAdblockStatusBadge(enabled) {
-		const isEnabled = Boolean(enabled);
-		if (!this.core.isFeatureEnabled('colorful_graphs')) {
-			return this.core.renderBadge(isEnabled ? 'success' : 'error', isEnabled ? 'ENABLED' : 'DISABLED');
-		}
-		const cls = isEnabled ? 'badge-interface-up' : 'badge-adblock-disabled-soft';
-		return `<span class="badge ${cls}">${isEnabled ? 'ENABLED' : 'DISABLED'}</span>`;
-	}
-
-	async readAdblockFastConfig() {
-		try {
-			const [status, result] = await this.core.uciGet('adblock-fast');
-			if (status === 0 && result?.values) return result;
-		} catch {}
-		try {
-			const [status, result] = await this.core.ubusCall('file', 'exec', {
-				command: '/bin/sh',
-				params: ['-c', 'uci -q show adblock-fast 2>/dev/null || true']
-			});
-			if (status !== 0 || !result?.stdout) return null;
-			return { values: this.parseUciShowToConfig(String(result.stdout || ''), 'adblock-fast') || null };
-		} catch {
-			return null;
-		}
-	}
-
-	parseUciShowToConfig(output, packageName = 'adblock-fast') {
+	parseUciShowToConfig(output, packageName = 'adblock') {
 		const cfg = {};
 		const lines = String(output || '')
 			.split('\n')
@@ -4130,124 +3917,6 @@ done`;
 	isEnabledValue(value) {
 		const v = this.stripOuterQuotes(value).toLowerCase();
 		return v === '1' || v === 'true' || v === 'on' || v === 'enabled' || v === 'yes';
-	}
-
-	async saveAdblockSettings() {
-		const enabled = String(document.getElementById('adblock-enabled')?.value || '0') === '1' ? '1' : '0';
-		const configUpdate = String(document.getElementById('adblock-config-update')?.value || '0') === '1' ? '1' : '0';
-
-		try {
-			let section = 'config';
-			const [status, result] = await this.core.uciGet('adblock-fast', 'config');
-			if (status !== 0 || !result?.values) {
-				const [addStatus, addResult] = await this.core.uciAdd('adblock-fast', 'adblock-fast', 'config');
-				if (addStatus !== 0 || !addResult?.section) throw new Error('Unable to create adblock-fast section');
-				section = addResult.section;
-			}
-
-			await this.core.uciSet('adblock-fast', section, {
-				enabled,
-				config_update_enabled: configUpdate
-			});
-			await this.core.uciCommit('adblock-fast');
-			await this.reloadAdblockService();
-			this.core.showToast('Adblock-Fast settings saved', 'success');
-			await this.loadAdblock();
-		} catch {
-			this.core.showToast('Failed to save Adblock-Fast settings', 'error');
-		}
-	}
-
-	async addAdblockTargetList() {
-		const name = String(document.getElementById('adblock-new-list-name')?.value || '').trim();
-		const url = String(document.getElementById('adblock-new-list-url')?.value || '').trim();
-		const enabled = String(document.getElementById('adblock-new-list-enabled')?.value || '1') === '1' ? '1' : '0';
-
-		if (!name) {
-			this.core.showToast('Target list name is required', 'error');
-			return;
-		}
-		if (url && !/^https?:\/\/\S+/i.test(url)) {
-			this.core.showToast('Enter a valid target list URL', 'error');
-			return;
-		}
-
-		try {
-			const [status, result] = await this.core.uciAdd('adblock-fast', 'file_url');
-			if (status !== 0 || !result?.section) throw new Error('Unable to create adblock-fast target list');
-			await this.core.uciSet('adblock-fast', result.section, {
-				name,
-				url,
-				enabled
-			});
-			await this.core.uciCommit('adblock-fast');
-			await this.reloadAdblockService();
-			this.core.showToast('Target list added', 'success');
-			this.resetAdblockListForm();
-			this.core.closeModal('adblock-list-modal');
-			await this.loadAdblock();
-		} catch {
-			this.core.showToast('Failed to add target list', 'error');
-		}
-	}
-
-	resetAdblockListForm() {
-		const nameEl = document.getElementById('adblock-new-list-name');
-		const urlEl = document.getElementById('adblock-new-list-url');
-		const enabledEl = document.getElementById('adblock-new-list-enabled');
-		if (nameEl) nameEl.value = '';
-		if (urlEl) urlEl.value = '';
-		if (enabledEl) enabledEl.value = '1';
-	}
-
-	async deleteAdblockTargetList(section) {
-		if (!section) return;
-		if (!confirm('Delete this target list?')) return;
-		try {
-			await this.core.uciDelete('adblock-fast', String(section));
-			await this.core.uciCommit('adblock-fast');
-			await this.reloadAdblockService();
-			this.core.showToast('Target list deleted', 'success');
-			await this.loadAdblock();
-		} catch {
-			this.core.showToast('Failed to delete target list', 'error');
-		}
-	}
-
-	async toggleAdblockTargetList(section) {
-		if (!section) return;
-		try {
-			const [status, result] = await this.core.uciGet('adblock-fast', String(section));
-			if (status !== 0 || !result?.values) throw new Error('Target list section not found');
-			let current = '1';
-			if (Object.prototype.hasOwnProperty.call(result.values, 'enabled')) {
-				current = this.isEnabledValue(result.values.enabled) ? '1' : '0';
-			} else if (Object.prototype.hasOwnProperty.call(result.values, 'disabled')) {
-				current = this.isEnabledValue(result.values.disabled) ? '0' : '1';
-			} else if (Object.prototype.hasOwnProperty.call(result.values, 'status')) {
-				current = this.isEnabledValue(result.values.status) ? '1' : '0';
-			}
-			const next = current === '1' ? '0' : '1';
-			await this.core.uciSet('adblock-fast', String(section), { enabled: next });
-			await this.core.uciCommit('adblock-fast');
-			await this.reloadAdblockService();
-			this.core.showToast(`Target list ${next === '1' ? 'enabled' : 'disabled'}`, 'success');
-			await this.loadAdblock();
-		} catch {
-			this.core.showToast('Failed to toggle target list', 'error');
-		}
-	}
-
-	async reloadAdblockService() {
-		await this.core.ubusCall('file', 'exec', {
-			command: '/bin/sh',
-			params: [
-				'-c',
-				'/etc/init.d/adblock-fast reload 2>/dev/null || ' +
-					'/etc/init.d/adblock-fast restart 2>/dev/null || ' +
-					'/etc/init.d/adblock-fast start 2>/dev/null || true'
-			]
-		});
 	}
 
 	async loadPBR() {
