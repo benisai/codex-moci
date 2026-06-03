@@ -561,6 +561,33 @@ ORDER BY daily.mac;`;
 				});
 			}
 
+			const historySql = `
+SELECT mac, bucket_start, rx_bytes, tx_bytes
+FROM device_bandwidth_15m
+WHERE bucket_start >= CAST(strftime('%s','now') AS INTEGER) - 86400
+ORDER BY mac, bucket_start;`;
+			const historyOutput = await this.querySql(dbPath, historySql);
+			for (const line of String(historyOutput || '').split('\n')) {
+				if (!line.trim()) continue;
+				const [rawMac, bucketStart, rxBytes, txBytes] = line.split('|');
+				const mac = this.normalizeMac(rawMac || '');
+				if (!mac) continue;
+				const current = result.byMac.get(mac) || {
+					rx15m: 0,
+					tx15m: 0,
+					rx24h: 0,
+					tx24h: 0,
+					latestBucket: 0
+				};
+				if (!Array.isArray(current.history)) current.history = [];
+				current.history.push({
+					bucketStart: Math.max(0, Number(bucketStart) || 0),
+					rxBytes: Math.max(0, Number(rxBytes) || 0),
+					txBytes: Math.max(0, Number(txBytes) || 0)
+				});
+				result.byMac.set(mac, current);
+			}
+
 			result.available = result.byMac.size > 0;
 			return result;
 		} catch {
@@ -616,6 +643,7 @@ ORDER BY daily.mac;`;
 				tx24h: bandwidth?.tx24h ?? null,
 				rx24h: bandwidth?.rx24h ?? null,
 				bandwidthLatestBucket: bandwidth?.latestBucket ?? null,
+				bandwidthHistory: Array.isArray(bandwidth?.history) ? bandwidth.history : [],
 				nlbwTopApps: this.extractTopNlbwApps(usage),
 				online: ip ? pingReachableIps.has(ip) || conntrackIps.has(ip) : false,
 				pinned: Boolean(pin?.ip),
@@ -653,6 +681,7 @@ ORDER BY daily.mac;`;
 				tx24h: bandwidth?.tx24h ?? null,
 				rx24h: bandwidth?.rx24h ?? null,
 				bandwidthLatestBucket: bandwidth?.latestBucket ?? null,
+				bandwidthHistory: Array.isArray(bandwidth?.history) ? bandwidth.history : [],
 				nlbwTopApps: this.extractTopNlbwApps(usage),
 				online:
 					(usage?.ip ? pingReachableIps.has(usage.ip) || conntrackIps.has(usage.ip) : false) ||
@@ -700,6 +729,7 @@ ORDER BY daily.mac;`;
 				tx24h: bandwidth?.tx24h ?? null,
 				rx24h: bandwidth?.rx24h ?? null,
 				bandwidthLatestBucket: bandwidth?.latestBucket ?? null,
+				bandwidthHistory: Array.isArray(bandwidth?.history) ? bandwidth.history : [],
 				nlbwTopApps: this.extractTopNlbwApps(usage),
 				online:
 					Boolean(arp?.ip) ||
@@ -947,18 +977,6 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 		const hasDnsHijack13 = String(row?.dnsHijackDest || '').trim() === '1.1.1.3' && Boolean(row?.dnsHijackEnabled);
 		const quarantined = Boolean(row?.quarantined);
 		const escapedMac = this.core.escapeHtml(mac);
-		const nlbwApps = Array.isArray(row?.nlbwTopApps) ? row.nlbwTopApps : [];
-		const nlbwRows =
-			nlbwApps.length > 0
-				? nlbwApps
-						.map(
-							item => `<tr>
-					<td>${this.core.escapeHtml(item.name)}</td>
-					<td>${this.core.escapeHtml(this.core.formatBytes(item.bytes || 0))}</td>
-				</tr>`
-						)
-						.join('')
-				: `<tr><td colspan="2" style="text-align:center;color:var(--steel-muted)">No NLBW data for this device</td></tr>`;
 		return `<div style="padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 6px;">
 			<div style="display:flex; flex-wrap:wrap; gap:14px; margin-bottom:10px; font-size:11px; font-family:var(--font-mono); color:var(--steel-light)">
 				<span>PARENTAL STATUS: ${this.core.escapeHtml(row?.parentalBlocked ? 'INTERNET BLOCKED' : 'INTERNET ALLOWED')}</span>
@@ -990,16 +1008,56 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 				<span>NLBW UPLOAD: ${this.core.escapeHtml(row?.tx == null ? 'N/A' : this.core.formatBytes(row.tx || 0))}</span>
 				<span>NLBW DOWNLOAD: ${this.core.escapeHtml(row?.rx == null ? 'N/A' : this.core.formatBytes(row.rx || 0))}</span>
 			</div>
-			<div style="margin-bottom:10px; font-size:11px; color:var(--steel-muted); font-family:var(--font-mono)">NLBW TOP APPLICATIONS</div>
-			<table class="data-table" style="margin-top:0">
-				<thead>
-					<tr>
-						<th>APPLICATION</th>
-						<th>TOTAL BYTES</th>
-					</tr>
-				</thead>
-				<tbody>${nlbwRows}</tbody>
-			</table>
+			${this.renderDeviceBandwidthChart(row)}
+		</div>`;
+	}
+
+	renderDeviceBandwidthChart(row) {
+		const history = Array.isArray(row?.bandwidthHistory) ? row.bandwidthHistory.slice(-96) : [];
+		if (history.length === 0) {
+			return `<div class="devices-bandwidth-chart-panel">
+				<div class="devices-bandwidth-chart-header">
+					<span>15M BANDWIDTH HISTORY</span>
+					<span>No bucket data yet</span>
+				</div>
+				<div class="devices-bandwidth-empty">Collector needs at least two samples before usage appears.</div>
+			</div>`;
+		}
+
+		const maxBytes = Math.max(...history.map(point => Number(point.rxBytes || 0) + Number(point.txBytes || 0)), 1);
+		const bars = history
+			.map(point => {
+				const rx = Math.max(0, Number(point.rxBytes || 0));
+				const tx = Math.max(0, Number(point.txBytes || 0));
+				const total = rx + tx;
+				const height = Math.max(3, Math.round((total / maxBytes) * 100));
+				const rxPct = total > 0 ? Math.max(0, Math.min(100, (rx / total) * 100)) : 0;
+				const txPct = total > 0 ? 100 - rxPct : 0;
+				const date = new Date((Number(point.bucketStart || 0) || 0) * 1000);
+				const label = Number(point.bucketStart || 0)
+					? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+					: 'Unknown';
+				const title = `${label} - Down ${this.core.formatBytes(rx)}, Up ${this.core.formatBytes(tx)}`;
+				return `<div class="devices-bandwidth-bar" style="height:${height}%" title="${this.core.escapeHtml(title)}">
+					<div class="devices-bandwidth-bar-upload" style="height:${txPct}%"></div>
+					<div class="devices-bandwidth-bar-download" style="height:${rxPct}%"></div>
+				</div>`;
+			})
+			.join('');
+
+		const totalDown = history.reduce((sum, point) => sum + (Number(point.rxBytes) || 0), 0);
+		const totalUp = history.reduce((sum, point) => sum + (Number(point.txBytes) || 0), 0);
+
+		return `<div class="devices-bandwidth-chart-panel">
+			<div class="devices-bandwidth-chart-header">
+				<span>15M BANDWIDTH HISTORY</span>
+				<span>24H Down ${this.core.escapeHtml(this.core.formatBytes(totalDown))} / Up ${this.core.escapeHtml(this.core.formatBytes(totalUp))}</span>
+			</div>
+			<div class="devices-bandwidth-chart" style="grid-template-columns: repeat(${Math.max(history.length, 1)}, minmax(2px, 1fr))" aria-label="15 minute device bandwidth history">${bars}</div>
+			<div class="devices-bandwidth-legend">
+				<span><i class="devices-bandwidth-legend-download"></i>Download</span>
+				<span><i class="devices-bandwidth-legend-upload"></i>Upload</span>
+			</div>
 		</div>`;
 	}
 

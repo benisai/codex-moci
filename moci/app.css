@@ -723,6 +723,101 @@ body {
 	background: rgba(255, 255, 255, 0.015);
 }
 
+.devices-bandwidth-chart-panel {
+	margin-top: 12px;
+	padding: 10px;
+	border: 1px solid var(--glass-border);
+	border-radius: 6px;
+	background: rgba(0, 0, 0, 0.16);
+}
+
+.devices-bandwidth-chart-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 10px;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	color: var(--steel-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+}
+
+.devices-bandwidth-chart {
+	display: grid;
+	grid-template-columns: repeat(96, minmax(2px, 1fr));
+	align-items: end;
+	gap: 2px;
+	height: 96px;
+	padding: 8px;
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	border-radius: 4px;
+	background: rgba(0, 0, 0, 0.2);
+}
+
+.devices-bandwidth-bar {
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
+	min-width: 2px;
+	border-radius: 2px 2px 0 0;
+	overflow: hidden;
+	background: rgba(255, 255, 255, 0.08);
+}
+
+.devices-bandwidth-bar-download {
+	background: rgba(132, 210, 255, 0.92);
+}
+
+.devices-bandwidth-bar-upload {
+	background: rgba(255, 193, 122, 0.9);
+}
+
+.devices-bandwidth-legend {
+	display: flex;
+	justify-content: flex-end;
+	gap: 14px;
+	margin-top: 8px;
+	font-family: var(--font-mono);
+	font-size: 10px;
+	color: var(--steel-muted);
+}
+
+.devices-bandwidth-legend span {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.devices-bandwidth-legend i {
+	width: 16px;
+	height: 4px;
+	display: inline-block;
+	border-radius: 999px;
+}
+
+.devices-bandwidth-legend-download {
+	background: rgba(132, 210, 255, 0.92);
+}
+
+.devices-bandwidth-legend-upload {
+	background: rgba(255, 193, 122, 0.9);
+}
+
+.devices-bandwidth-empty {
+	min-height: 52px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	color: var(--steel-muted);
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	border-radius: 4px;
+	background: rgba(0, 0, 0, 0.18);
+}
+
 .data-table tbody tr:hover {
 	background: rgba(255, 255, 255, 0.02);
 }
