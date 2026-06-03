@@ -997,9 +997,9 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 		tbody.innerHTML = rows
 			.map(row => {
 				const upload =
-					row.liveTxRateBps == null || !this.liveTrafficAvailable ? 'N/A' : this.formatByteRate(row.liveTxRateBps);
+					row.liveTxRateBps == null || !this.liveTrafficAvailable ? 'N/A' : this.formatBitRate(row.liveTxRateBps);
 				const download =
-					row.liveRxRateBps == null || !this.liveTrafficAvailable ? 'N/A' : this.formatByteRate(row.liveRxRateBps);
+					row.liveRxRateBps == null || !this.liveTrafficAvailable ? 'N/A' : this.formatBitRate(row.liveRxRateBps);
 				const isExpandable = row.mac && row.mac !== 'N/A';
 				const isExpanded = isExpandable && this.expandedMac === row.mac;
 				const marker = isExpandable ? (isExpanded ? '▾ ' : '▸ ') : '';
@@ -1033,13 +1033,13 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 		});
 	}
 
-	formatByteRate(bytesPerSecond) {
-		const value = Math.max(0, Number(bytesPerSecond) || 0);
-		const units = ['B/s', 'KB/s', 'MB/s', 'GB/s', 'TB/s'];
+	formatBitRate(bytesPerSecond) {
+		const value = Math.max(0, Number(bytesPerSecond) || 0) * 8;
+		const units = ['bps', 'Kbps', 'Mbps', 'Gbps', 'Tbps'];
 		let scaled = value;
 		let unitIndex = 0;
-		while (scaled >= 1024 && unitIndex < units.length - 1) {
-			scaled /= 1024;
+		while (scaled >= 1000 && unitIndex < units.length - 1) {
+			scaled /= 1000;
 			unitIndex++;
 		}
 		const digits = scaled >= 100 || unitIndex === 0 ? 0 : scaled >= 10 ? 1 : 2;

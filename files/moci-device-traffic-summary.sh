@@ -6,15 +6,16 @@
 PATH="/usr/sbin:/usr/bin:/sbin:/bin"
 export PATH
 
-is_device_ip() {
-	case "${1:-}" in
-		10.* | 192.168.* | 172.1[6-9].* | 172.2[0-9].* | 172.3[0-1].* | 100.6[4-9].* | 100.[7-9][0-9].* | 100.1[01][0-9].* | 100.12[0-7].*)
-			return 0
-			;;
-		*)
-			return 1
-			;;
-	esac
+get_lan_device() {
+	local dev
+	dev="$(uci -q get network.lan.device 2>/dev/null || true)"
+	if [ -z "$dev" ]; then
+		dev="$(uci -q get network.lan.ifname 2>/dev/null || true)"
+	fi
+	if [ -z "$dev" ]; then
+		dev="br-lan"
+	fi
+	printf "%s\n" "$dev"
 }
 
 conntrack_source() {
@@ -33,20 +34,27 @@ conntrack_source() {
 	return 1
 }
 
-conntrack_source | awk '
-function is_device_ip(ip) {
-	return (ip ~ /^10\./ ||
-		ip ~ /^192\.168\./ ||
-		ip ~ /^172\.(1[6-9]|2[0-9]|3[0-1])\./ ||
-		ip ~ /^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\./)
+LAN_DEV="$(get_lan_device)"
+LAN_SUBNET="$(ip -4 addr show dev "$LAN_DEV" 2>/dev/null | awk "/inet / {print \$2; exit}")"
+LAN_IP="${LAN_SUBNET%%/*}"
+LAN_PREFIX="$(printf "%s\n" "$LAN_IP" | awk -F. 'NF >= 3 {print $1 "." $2 "." $3}')"
+
+conntrack_source | awk -v lan_prefix="$LAN_PREFIX" -v lan_ip="$LAN_IP" '
+function is_private_ip(ip) {
+	return (ip ~ /^10\./ || ip ~ /^192\.168\./ || ip ~ /^172\.(1[6-9]|2[0-9]|3[0-1])\./)
 }
 
-function add_bytes(ip, direction, bytes) {
-	if (!is_device_ip(ip)) return
-	if (bytes < 0) return
+function is_lan_device_ip(ip) {
+	if (ip == "" || ip == lan_ip || ip ~ /^127\./ || ip ~ /^255\./ || ip ~ /\.255$/) return 0
+	if (lan_prefix != "") return index(ip, lan_prefix ".") == 1
+	return is_private_ip(ip)
+}
+
+function add_flow(ip, upload_bytes, download_bytes) {
+	if (!is_lan_device_ip(ip)) return
 	seen[ip] = 1
-	if (direction == "tx") tx[ip] += bytes
-	else rx[ip] += bytes
+	tx[ip] += upload_bytes + 0
+	rx[ip] += download_bytes + 0
 }
 
 {
@@ -66,13 +74,11 @@ function add_bytes(ip, direction, bytes) {
 		}
 	}
 
-	if (src_count >= 1 && dst_count >= 1 && bytes_count >= 1) {
-		add_bytes(src[1], "tx", b[1])
-		add_bytes(dst[1], "rx", b[1])
-	}
-	if (src_count >= 2 && dst_count >= 2 && bytes_count >= 2) {
-		add_bytes(src[2], "tx", b[2])
-		add_bytes(dst[2], "rx", b[2])
+	if (src_count >= 1 && dst_count >= 1 && bytes_count >= 1 && src[1] != dst[1] && is_lan_device_ip(src[1])) {
+		download = 0
+		if (src_count >= 2 && dst_count >= 2 && bytes_count >= 2 && dst[2] == src[1])
+			download = b[2]
+		add_flow(src[1], b[1], download)
 	}
 }
 
@@ -83,6 +89,12 @@ END {
 }
 ' | awk '
 BEGIN {
+	while ((getline line < "/tmp/dhcp.leases") > 0) {
+		n = split(line, f, /[ \t]+/)
+		if (n >= 4 && f[2] ~ /^([0-9a-fA-F][0-9a-fA-F]:){5}[0-9a-fA-F][0-9a-fA-F]$/)
+			mac[tolower(f[3])] = tolower(f[2])
+	}
+
 	while ((getline line < "/proc/net/arp") > 0) {
 		if (line ~ /^IP/) continue
 		n = split(line, f, /[ \t]+/)
