@@ -1852,6 +1852,7 @@ select.form-input {
 }
 
 .throughput-graph-container {
+	position: relative;
 	height: min(420px, 48vh);
 	min-height: 280px;
 	margin-top: 18px;
@@ -1926,6 +1927,37 @@ select.form-input {
 
 .throughput-rate-upload {
 	color: rgba(255, 193, 122, 0.96);
+}
+
+.bandwidth-tooltip.throughput-tooltip {
+	min-width: 230px;
+	max-width: min(320px, calc(100vw - 32px));
+}
+
+.throughput-tooltip-row {
+	display: grid;
+	grid-template-columns: 10px minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 7px;
+	margin-top: 5px;
+}
+
+.throughput-tooltip-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+}
+
+.throughput-tooltip-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.throughput-tooltip-sub {
+	margin: 1px 0 4px 17px;
+	color: var(--steel-muted);
+	font-size: 10px;
 }
 
 .bandwidth-tooltip {

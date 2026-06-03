@@ -11,6 +11,9 @@ export default class ThroughputModule {
 		this.hiddenDevices = new Set();
 		this.canvas = null;
 		this.ctx = null;
+		this.tooltip = null;
+		this.hoverSlot = -1;
+		this.hoverBound = false;
 		this.maxBytesPerSecond = 125 * 1024 * 1024;
 		this.colors = [
 			'#84d2ff',
@@ -32,6 +35,8 @@ export default class ThroughputModule {
 		this.setupHandlers();
 		this.canvas = document.getElementById('throughput-graph');
 		this.ctx = this.canvas?.getContext?.('2d') || null;
+		this.bindGraphHover();
+		this.ensureTooltip();
 		await this.refreshDeviceLabels();
 		await this.poll();
 		this.startPolling();
@@ -50,6 +55,52 @@ export default class ThroughputModule {
 			else this.hiddenDevices.add(key);
 			this.render();
 		});
+	}
+
+	bindGraphHover() {
+		if (!this.canvas || this.hoverBound) return;
+		this.hoverBound = true;
+		this.canvas.addEventListener('mousemove', event => this.handleGraphHover(event));
+		this.canvas.addEventListener('mouseleave', () => {
+			this.hoverSlot = -1;
+			this.hideTooltip();
+			this.drawGraph();
+		});
+		this.canvas.addEventListener('touchstart', event => this.handleGraphTouch(event), { passive: true });
+		this.canvas.addEventListener('touchmove', event => this.handleGraphTouch(event), { passive: true });
+	}
+
+	ensureTooltip() {
+		if (this.tooltip) return;
+		const container = this.canvas?.closest?.('.throughput-graph-container');
+		if (!container) return;
+		const tooltip = document.createElement('div');
+		tooltip.className = 'bandwidth-tooltip throughput-tooltip hidden';
+		container.appendChild(tooltip);
+		this.tooltip = tooltip;
+	}
+
+	handleGraphTouch(event) {
+		const touch = event.touches?.[0];
+		if (!touch) return;
+		this.handleGraphHover(touch);
+	}
+
+	handleGraphHover(event) {
+		if (!this.canvas || !this.ctx) return;
+		const rect = this.canvas.getBoundingClientRect();
+		const localX = event.clientX - rect.left;
+		const localY = event.clientY - rect.top;
+		const slot = this.resolveHoverSlot(localX, rect.width);
+		if (slot !== this.hoverSlot) {
+			this.hoverSlot = slot;
+			this.drawGraph();
+		}
+		if (slot < 0) {
+			this.hideTooltip();
+			return;
+		}
+		this.showTooltip(slot, localX, localY, rect.width);
 	}
 
 	startPolling() {
@@ -275,6 +326,7 @@ export default class ThroughputModule {
 			this.ctx.lineCap = 'round';
 			this.ctx.stroke();
 		});
+		this.drawHoverGuide(width, height, pad, plotW);
 	}
 
 	drawGrid(width, height, pad, plotW, plotH, maxRate) {
@@ -306,6 +358,107 @@ export default class ThroughputModule {
 		this.ctx.textAlign = 'center';
 		this.ctx.fillText('Select at least one device with samples', width / 2, height / 2);
 		this.ctx.restore();
+	}
+
+	drawHoverGuide(width, height, pad, plotW) {
+		if (this.hoverSlot < 0) return;
+		const x = pad.left + (this.hoverSlot / Math.max(1, this.maxSamples - 1)) * plotW;
+		this.ctx.save();
+		this.ctx.strokeStyle = 'rgba(255,255,255,0.32)';
+		this.ctx.lineWidth = 1;
+		this.ctx.setLineDash([4, 4]);
+		this.ctx.beginPath();
+		this.ctx.moveTo(x, pad.top);
+		this.ctx.lineTo(x, height - pad.bottom);
+		this.ctx.stroke();
+		this.ctx.setLineDash([]);
+		this.ctx.fillStyle = 'rgba(255,255,255,0.68)';
+		this.ctx.beginPath();
+		this.ctx.arc(x, height - pad.bottom, 3, 0, Math.PI * 2);
+		this.ctx.fill();
+		this.ctx.restore();
+	}
+
+	resolveHoverSlot(localX, containerWidth) {
+		const width = Math.max(320, Math.floor(containerWidth || this.canvas?.clientWidth || 900));
+		const pad = { left: 54, right: 14 };
+		const plotW = Math.max(1, width - pad.left - pad.right);
+		if (localX < pad.left || localX > width - pad.right) return -1;
+		const ratio = (localX - pad.left) / plotW;
+		return Math.min(Math.max(Math.round(ratio * (this.maxSamples - 1)), 0), this.maxSamples - 1);
+	}
+
+	showTooltip(slot, localX, localY, containerWidth) {
+		if (!this.tooltip) return;
+		const entries = this.getVisibleDeviceKeys()
+			.map(key => {
+				const sample = this.getSampleAtSlot(key, slot);
+				if (!sample) return null;
+				return {
+					key,
+					label: this.getDeviceLabel(key),
+					rxRate: sample.rxRate || 0,
+					txRate: sample.txRate || 0,
+					total: (sample.rxRate || 0) + (sample.txRate || 0),
+					timestamp: sample.timestamp || 0
+				};
+			})
+			.filter(Boolean)
+			.sort((a, b) => b.total - a.total);
+
+		const activeEntries = entries.filter(entry => entry.total > 0).slice(0, 6);
+		const shownEntries = activeEntries.length > 0 ? activeEntries : entries.slice(0, 4);
+		const newestTimestamp = shownEntries.find(entry => entry.timestamp)?.timestamp || 0;
+		const title = newestTimestamp ? this.formatSampleAge(newestTimestamp) : 'No sample';
+		const allKeys = this.getDeviceKeys();
+
+		this.tooltip.innerHTML = `
+			<div class="bandwidth-tooltip-title">${this.core.escapeHtml(title)}</div>
+			${
+				shownEntries.length
+					? shownEntries
+							.map(entry => {
+								const color = this.getColor(allKeys.indexOf(entry.key));
+								return `<div class="throughput-tooltip-row">
+									<span class="throughput-tooltip-dot" style="background:${this.core.escapeHtml(color)}"></span>
+									<span class="throughput-tooltip-name">${this.core.escapeHtml(entry.label)}</span>
+									<span>${this.core.escapeHtml(this.formatBitRate(entry.total))}</span>
+								</div>
+								<div class="throughput-tooltip-sub">D ${this.core.escapeHtml(this.formatBitRate(entry.rxRate))} / U ${this.core.escapeHtml(this.formatBitRate(entry.txRate))}</div>`;
+							})
+							.join('')
+					: '<div>No visible device samples</div>'
+			}
+		`;
+
+		this.tooltip.classList.remove('hidden');
+		const tooltipWidth = this.tooltip.offsetWidth || 220;
+		const left = Math.min(Math.max(12, localX + 12), Math.max(12, containerWidth - tooltipWidth - 12));
+		const top = Math.max(8, localY - 72);
+		this.tooltip.style.left = `${left}px`;
+		this.tooltip.style.top = `${top}px`;
+	}
+
+	hideTooltip() {
+		if (!this.tooltip) return;
+		this.tooltip.classList.add('hidden');
+	}
+
+	getSampleAtSlot(key, slot) {
+		const samples = this.deviceSamples.get(key) || [];
+		const offset = Math.max(0, this.maxSamples - samples.length);
+		const idx = slot - offset;
+		if (idx < 0 || idx >= samples.length) return null;
+		return samples[idx] || null;
+	}
+
+	formatSampleAge(timestamp) {
+		const secondsAgo = Math.max(0, Math.round((Date.now() - Number(timestamp || 0)) / 1000));
+		if (secondsAgo <= 2) return 'Now';
+		if (secondsAgo < 60) return `${secondsAgo}s ago`;
+		const minutes = Math.floor(secondsAgo / 60);
+		const seconds = secondsAgo % 60;
+		return `${minutes}m ${seconds}s ago`;
 	}
 
 	getDeviceKeys() {
