@@ -51,6 +51,7 @@
 				"/usr/bin/moci-netify-collector": ["exec"],
 				"/usr/bin/moci-connection-flow-collector": ["exec"],
 				"/usr/bin/moci-speedtest-monitor": ["exec"],
+				"/usr/bin/moci-device-traffic-summary": ["exec"],
 				"/usr/bin/sqlite3": ["exec"],
 				"/usr/bin/sqlite3-cli": ["exec"],
 				"/etc/crontabs/root": ["write"],

@@ -477,7 +477,8 @@ rm -f "$tmp"
 			result.available = parsed.available;
 			result.totalsByClient = parsed.totalsByClient;
 			return result;
-		} catch {
+		} catch (err) {
+			console.warn('Live device traffic summary unavailable:', err);
 			return result;
 		}
 	}
