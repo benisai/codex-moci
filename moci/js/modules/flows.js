@@ -411,12 +411,19 @@ export default class FlowsModule {
 		tbody.innerHTML = pageRows
 			.map(
 				(row, idx) => `<tr class="netify-flow-row" data-flow-index="${idx}" style="cursor: pointer" title="Click for actions">
-				<td>${this.core.escapeHtml(row.timeLabel || '-')}</td>
-				<td title="${this.core.escapeHtml(row.source)}">${this.core.escapeHtml(this.resolveSourceLabel(row))}</td>
-				<td title="${this.core.escapeHtml(row.destination)}">${this.core.escapeHtml(this.resolveDestinationLabel(row))}</td>
-				<td>${this.core.escapeHtml(row.transfer)}</td>
-				<td>${this.core.escapeHtml(row.protocol)}</td>
-				<td>${this.core.escapeHtml(row.status)}</td>
+				<td data-label="TIME">
+					<span class="flows-time-full">${this.core.escapeHtml(row.timeLabel || '-')}</span>
+					<span class="flows-time-short">${this.core.escapeHtml(this.formatTimeOnly(row.ts))}</span>
+				</td>
+				<td data-label="SOURCE" title="${this.core.escapeHtml(row.source)}">
+					<span class="flows-endpoint-ellipsis">${this.core.escapeHtml(this.resolveSourceLabel(row))}</span>
+				</td>
+				<td data-label="DESTINATION" title="${this.core.escapeHtml(row.destination)}">
+					<span class="flows-endpoint-ellipsis">${this.core.escapeHtml(this.resolveDestinationLabel(row))}</span>
+				</td>
+				<td data-label="TRANSFER">${this.core.escapeHtml(row.transfer)}</td>
+				<td data-label="PROTOCOL">${this.core.escapeHtml(row.protocol)}</td>
+				<td data-label="STATUS">${this.core.escapeHtml(row.status)}</td>
 			</tr>`
 			)
 			.join('');
@@ -431,6 +438,17 @@ export default class FlowsModule {
 			year: 'numeric',
 			month: '2-digit',
 			day: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		});
+	}
+
+	formatTimeOnly(tsSeconds) {
+		if (!Number.isFinite(tsSeconds) || tsSeconds <= 0) return '-';
+		const d = new Date(tsSeconds * 1000);
+		if (Number.isNaN(d.getTime())) return '-';
+		return d.toLocaleTimeString([], {
 			hour: '2-digit',
 			minute: '2-digit',
 			second: '2-digit'

@@ -2182,6 +2182,10 @@ select.form-input {
 	display: none;
 }
 
+.flows-time-short {
+	display: none;
+}
+
 .software-root-space-fill {
 	background: linear-gradient(90deg, rgba(90, 180, 255, 0.95), rgba(120, 215, 255, 0.88));
 }
@@ -2720,6 +2724,34 @@ select.form-input {
 		text-overflow: clip;
 		overflow-wrap: anywhere;
 		word-break: break-word;
+	}
+
+	#flows-table .flows-time-full {
+		display: none;
+	}
+
+	#flows-table .flows-time-short {
+		display: inline;
+	}
+
+	#flows-table .flows-endpoint-ellipsis {
+		max-width: none;
+		display: block;
+		white-space: normal;
+		overflow: visible;
+		text-overflow: clip;
+		overflow-wrap: anywhere;
+		word-break: break-word;
+	}
+
+	/* Conntrack Flows on mobile/tablet: keep Time, Destination, Transfer */
+	#flows-table th:nth-child(2),
+	#flows-table th:nth-child(5),
+	#flows-table th:nth-child(6),
+	#flows-table td:nth-child(2),
+	#flows-table td:nth-child(5),
+	#flows-table td:nth-child(6) {
+		display: none;
 	}
 
 	#netify-collector-body .stats-grid {
