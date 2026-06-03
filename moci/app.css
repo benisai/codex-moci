@@ -768,6 +768,11 @@ body {
 	background: rgba(255, 255, 255, 0.08);
 }
 
+.devices-bandwidth-bar-spacer {
+	min-width: 2px;
+	height: 1px;
+}
+
 .devices-bandwidth-bar-download {
 	background: rgba(132, 210, 255, 0.92);
 }

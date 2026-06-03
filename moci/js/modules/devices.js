@@ -1152,6 +1152,9 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 		}
 
 		const maxBytes = Math.max(...history.map(point => Number(point.rxBytes || 0) + Number(point.txBytes || 0)), 1);
+		const chartSlots = 96;
+		const emptySlots = Math.max(0, chartSlots - history.length);
+		const spacers = Array.from({ length: emptySlots }, () => '<div class="devices-bandwidth-bar-spacer" aria-hidden="true"></div>').join('');
 		const bars = history
 			.map(point => {
 				const rx = Math.max(0, Number(point.rxBytes || 0));
@@ -1180,7 +1183,7 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 				<span>15M BANDWIDTH HISTORY</span>
 				<span>24H Down ${this.core.escapeHtml(this.core.formatBytes(totalDown))} / Up ${this.core.escapeHtml(this.core.formatBytes(totalUp))}</span>
 			</div>
-			<div class="devices-bandwidth-chart" style="grid-template-columns: repeat(${Math.max(history.length, 1)}, minmax(2px, 1fr))" aria-label="15 minute device bandwidth history">${bars}</div>
+			<div class="devices-bandwidth-chart" aria-label="15 minute device bandwidth history">${spacers}${bars}</div>
 			<div class="devices-bandwidth-legend">
 				<span><i class="devices-bandwidth-legend-download"></i>Download</span>
 				<span><i class="devices-bandwidth-legend-upload"></i>Upload</span>
