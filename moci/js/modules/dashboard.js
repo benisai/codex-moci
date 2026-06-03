@@ -289,9 +289,11 @@ export default class DashboardModule {
 		const cpuCard = cpuValue?.closest?.('.stat-card');
 		const memCard = memValue?.closest?.('.stat-card');
 		const devicesCard = clientsValue?.closest?.('.stat-card');
+		const networkActivityCard = document.getElementById('network-activity-card');
 		const openProcesses = () => this.core.navigate('/system/processes');
 		const openMonitoring = () => this.core.navigate('/monitoring');
 		const openDevices = () => this.core.navigate('/devices');
+		const openThroughput = () => this.core.navigate('/throughput');
 
 		[cpuCard, memCard].forEach(card => {
 			if (!card) return;
@@ -315,6 +317,11 @@ export default class DashboardModule {
 			devicesCard.style.cursor = 'pointer';
 			devicesCard.setAttribute('title', 'Open Devices');
 			devicesCard.addEventListener('click', openDevices);
+		}
+		if (networkActivityCard) {
+			networkActivityCard.style.cursor = 'pointer';
+			networkActivityCard.setAttribute('title', 'Open Live Throughput');
+			networkActivityCard.addEventListener('click', openThroughput);
 		}
 	}
 

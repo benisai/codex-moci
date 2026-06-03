@@ -21,6 +21,7 @@ export class OpenWrtCore {
 	getModuleForRoute(basePath) {
 		const routeModuleMap = {
 			dashboard: 'dashboard',
+			throughput: 'throughput',
 			devices: 'devices',
 			network: 'network',
 			monitoring: 'monitoring',
@@ -221,6 +222,7 @@ export class OpenWrtCore {
 	getModuleMap() {
 		return {
 			dashboard: './modules/dashboard.js',
+			throughput: './modules/throughput.js',
 			devices: './modules/devices.js',
 			network: './modules/network.js',
 			monitoring: './modules/monitoring.js',
@@ -261,6 +263,7 @@ export class OpenWrtCore {
 	shouldLoadModule(moduleName) {
 		const moduleFeatures = {
 			dashboard: ['dashboard'],
+			throughput: ['dashboard'],
 			devices: ['devices'],
 				network: [
 					'network',
