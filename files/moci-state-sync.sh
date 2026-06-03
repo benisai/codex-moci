@@ -53,6 +53,33 @@ read_netify_db() {
 	echo "$path"
 }
 
+read_connection_flows_db() {
+	local path
+	path="$(uci_get moci.connection_flows.db_path)"
+	if [ -z "$path" ]; then
+		path="/tmp/connection-flows.sqlite"
+	fi
+	echo "$path"
+}
+
+read_device_bandwidth_db() {
+	local path
+	path="$(uci_get moci.device_bandwidth.db_path)"
+	if [ -z "$path" ]; then
+		path="/tmp/moci-device-bandwidth.sqlite"
+	fi
+	echo "$path"
+}
+
+read_notifications_db() {
+	local path
+	path="$(uci_get moci.notifications.db_path)"
+	if [ -z "$path" ]; then
+		path="/tmp/moci-notifications.sqlite"
+	fi
+	echo "$path"
+}
+
 read_ping_file() {
 	local path
 	path="$(uci_get moci.ping_monitor.output_file)"
@@ -62,11 +89,29 @@ read_ping_file() {
 	echo "$path"
 }
 
+read_dns_file() {
+	local path
+	path="$(uci_get moci.dns_monitor.output_file)"
+	if [ -z "$path" ]; then
+		path="/tmp/moci-dns-monitor.txt"
+	fi
+	echo "$path"
+}
+
 read_speedtest_file() {
 	local path
 	path="$(uci_get moci.speedtest_monitor.output_file)"
 	if [ -z "$path" ]; then
 		path="/tmp/moci-speedtest-monitor.txt"
+	fi
+	echo "$path"
+}
+
+read_quarantine_state_file() {
+	local path
+	path="$(uci_get moci.quarantine.state_file)"
+	if [ -z "$path" ]; then
+		path="/tmp/moci-quarantine-known.txt"
 	fi
 	echo "$path"
 }
@@ -112,11 +157,37 @@ save_vnstat_dir() {
 	( cd "$src" && tar -cf - . ) | ( cd "$dst" && tar -xf - ) 2>/dev/null || true
 }
 
+save_runtime_logs() {
+	local state_dir="$1"
+	local dst="$state_dir/tmp"
+	mkdir -p "$dst"
+	for f in \
+		/tmp/moci-netify-collector.log \
+		/tmp/moci-connection-flows-collector.log \
+		/tmp/moci-device-bandwidth-collector.log \
+		/tmp/moci-device-quarantine.log \
+		/tmp/moci-speedtest-monitor.last.log
+	do
+		[ -f "$f" ] || continue
+		cp -f "$f" "$dst/" 2>/dev/null || true
+	done
+}
+
 restore_copy() {
 	local src="$1"
 	local dst="$2"
 	[ -f "$src" ] || return 0
 	cp -f "$src" "$dst" 2>/dev/null || true
+}
+
+restore_runtime_logs() {
+	local state_dir="$1"
+	local src="$state_dir/tmp"
+	[ -d "$src" ] || return 0
+	for f in "$src"/moci-*.log "$src"/moci-speedtest-monitor.last.log; do
+		[ -f "$f" ] || continue
+		cp -f "$f" "/tmp/$(basename "$f")" 2>/dev/null || true
+	done
 }
 
 restore_netify_archives() {
@@ -150,37 +221,59 @@ restore_moci_web() {
 }
 
 save_state() {
-	local state_dir netify_db ping_file speedtest_file
+	local state_dir netify_db flows_db device_bandwidth_db notifications_db ping_file dns_file speedtest_file quarantine_state_file
 	state_dir="$(read_state_dir)"
 	netify_db="$(read_netify_db)"
+	flows_db="$(read_connection_flows_db)"
+	device_bandwidth_db="$(read_device_bandwidth_db)"
+	notifications_db="$(read_notifications_db)"
 	ping_file="$(read_ping_file)"
+	dns_file="$(read_dns_file)"
 	speedtest_file="$(read_speedtest_file)"
+	quarantine_state_file="$(read_quarantine_state_file)"
 
 	mkdir -p "$state_dir"
 	save_sqlite "$netify_db" "$state_dir/moci-netify.sqlite"
+	save_sqlite "$flows_db" "$state_dir/connection-flows.sqlite"
+	save_sqlite "$device_bandwidth_db" "$state_dir/moci-device-bandwidth.sqlite"
+	save_sqlite "$notifications_db" "$state_dir/moci-notifications.sqlite"
 	save_netify_archives "$netify_db" "$state_dir"
 	save_copy "$ping_file" "$state_dir/moci-ping-monitor.txt"
+	save_copy "$dns_file" "$state_dir/moci-dns-monitor.txt"
 	save_copy "$speedtest_file" "$state_dir/moci-speedtest-monitor.txt"
+	save_copy "$quarantine_state_file" "$state_dir/moci-quarantine-known.txt"
 	save_copy "/etc/config/moci" "$state_dir/moci.config"
 	save_vnstat_dir "$state_dir"
+	save_runtime_logs "$state_dir"
 	date +%s >"$STATE_TS_FILE" 2>/dev/null || true
 }
 
 restore_state() {
-	local state_dir netify_db ping_file speedtest_file
+	local state_dir netify_db flows_db device_bandwidth_db notifications_db ping_file dns_file speedtest_file quarantine_state_file
 	state_dir="$(read_state_dir)"
 	netify_db="$(read_netify_db)"
+	flows_db="$(read_connection_flows_db)"
+	device_bandwidth_db="$(read_device_bandwidth_db)"
+	notifications_db="$(read_notifications_db)"
 	ping_file="$(read_ping_file)"
+	dns_file="$(read_dns_file)"
 	speedtest_file="$(read_speedtest_file)"
+	quarantine_state_file="$(read_quarantine_state_file)"
 
 	[ -d "$state_dir" ] || return 0
 	restore_copy "$state_dir/moci-netify.sqlite" "$netify_db"
+	restore_copy "$state_dir/connection-flows.sqlite" "$flows_db"
+	restore_copy "$state_dir/moci-device-bandwidth.sqlite" "$device_bandwidth_db"
+	restore_copy "$state_dir/moci-notifications.sqlite" "$notifications_db"
 	restore_netify_archives "$netify_db" "$state_dir"
 	restore_copy "$state_dir/moci-ping-monitor.txt" "$ping_file"
+	restore_copy "$state_dir/moci-dns-monitor.txt" "$dns_file"
 	restore_copy "$state_dir/moci-speedtest-monitor.txt" "$speedtest_file"
+	restore_copy "$state_dir/moci-quarantine-known.txt" "$quarantine_state_file"
 	restore_copy "$state_dir/moci.config" "/etc/config/moci"
 	restore_vnstat_dir "$state_dir"
 	restore_moci_web "$state_dir"
+	restore_runtime_logs "$state_dir"
 }
 
 save_if_due() {
