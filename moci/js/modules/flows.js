@@ -413,7 +413,7 @@ export default class FlowsModule {
 				(row, idx) => `<tr class="netify-flow-row" data-flow-index="${idx}" style="cursor: pointer" title="Click for actions">
 				<td data-label="TIME">
 					<span class="flows-time-full">${this.core.escapeHtml(row.timeLabel || '-')}</span>
-					<span class="flows-time-short">${this.core.escapeHtml(this.formatTimeOnly(row.ts))}</span>
+					<span class="flows-time-short">${this.core.escapeHtml(this.formatTimeOnly(row.timeinsert))}</span>
 				</td>
 				<td data-label="SOURCE" title="${this.core.escapeHtml(row.source)}">
 					<span class="flows-endpoint-ellipsis">${this.core.escapeHtml(this.resolveSourceLabel(row))}</span>

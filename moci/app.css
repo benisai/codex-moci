@@ -2744,11 +2744,13 @@ select.form-input {
 		word-break: break-word;
 	}
 
-	/* Conntrack Flows on mobile/tablet: keep Time, Destination, Transfer */
+	/* Conntrack Flows on mobile/tablet: keep Time and Destination */
 	#flows-table th:nth-child(2),
+	#flows-table th:nth-child(4),
 	#flows-table th:nth-child(5),
 	#flows-table th:nth-child(6),
 	#flows-table td:nth-child(2),
+	#flows-table td:nth-child(4),
 	#flows-table td:nth-child(5),
 	#flows-table td:nth-child(6) {
 		display: none;
