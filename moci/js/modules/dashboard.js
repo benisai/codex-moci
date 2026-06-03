@@ -29,10 +29,7 @@ export default class DashboardModule {
 		this.bandwidthWindowSeconds = 900;
 		this.bandwidthHistoryMaxPoints = Math.max(20, Math.ceil(this.bandwidthWindowSeconds / this.bandwidthSampleSeconds));
 		this.bandwidthHistoryStorageKey = 'moci_dashboard_bandwidth_history_v1';
-		this.trafficProviderPreference = 'auto';
-		this.activeTrafficProvider = 'interface';
 		this.vnstatInterface = 'br-lan';
-		this.lastBandixTotals = null;
 		this.monthlyBandwidthGb = 500;
 		this.monthStartDay = 10;
 		this.lastMonthlyUsageRefresh = 0;
@@ -196,15 +193,6 @@ export default class DashboardModule {
 					}
 				}
 			} catch {}
-		}
-
-		const provider = String(sectionValues?.provider || 'auto')
-			.trim()
-			.toLowerCase();
-		if (['auto', 'interface', 'bandix'].includes(provider)) {
-			this.trafficProviderPreference = provider;
-		} else {
-			this.trafficProviderPreference = 'auto';
 		}
 
 		const windowSeconds = Number(sectionValues?.window_seconds || 900);
@@ -732,208 +720,15 @@ SQL
 		}
 	}
 
-	syncBandwidthHistoryFromSeries(series) {
-		if (!Array.isArray(series) || series.length === 0) return;
-		const down = [];
-		const up = [];
-		for (const point of series) {
-			const rxRate = Number(point?.rxRate || 0);
-			const txRate = Number(point?.txRate || 0);
-			if (!Number.isFinite(rxRate) || !Number.isFinite(txRate)) continue;
-			down.push(rxRate);
-			up.push(txRate);
-		}
-		if (down.length === 0) return;
-		this.bandwidthHistory.down = down.slice(-this.bandwidthHistoryMaxPoints);
-		this.bandwidthHistory.up = up.slice(-this.bandwidthHistoryMaxPoints);
-	}
-
 	async fetchInterfaceTrafficSnapshot() {
 		const content = await this.fetchNetworkStats();
 		const currentStats = this.parseNetworkStats(content);
 		const rates = this.calculateBandwidthRates(currentStats, this.lastNetStats);
 		this.lastNetStats = currentStats;
-		this.activeTrafficProvider = 'interface';
 		return {
 			rates,
 			totals: currentStats
 		};
-	}
-
-	resolveBandixPair(payload, mode = 'rate') {
-		const isObject = value => value && typeof value === 'object';
-		const asNumber = value => {
-			if (typeof value === 'number' && Number.isFinite(value)) return value;
-			if (typeof value === 'string') {
-				const n = Number(value.trim());
-				return Number.isFinite(n) ? n : NaN;
-			}
-			if (isObject(value)) {
-				const keys = ['value', 'val', 'bytes', 'total', 'speed', 'rate', 'bps', 'kbps', 'mbps'];
-				for (const k of keys) {
-					if (value[k] != null) {
-						const n = asNumber(value[k]);
-						if (Number.isFinite(n)) return n;
-					}
-				}
-			}
-			return NaN;
-		};
-		const normalizeRateKbps = (value, key) => {
-			const n = asNumber(value);
-			if (!Number.isFinite(n)) return NaN;
-			const k = String(key || '').toLowerCase();
-			if (k.includes('mbps') || k.includes('mbit')) return n * 1000;
-			if (k.includes('kbps') || k.includes('kbit')) return n;
-			if (k.includes('bps') || k.includes('bit')) return n / 1000;
-			if (k.includes('byte') && (k.includes('sec') || k.includes('/s') || k.includes('ps'))) return (n * 8) / 1000;
-			return n;
-		};
-		const normalizeBytes = (value, key) => {
-			const n = asNumber(value);
-			if (!Number.isFinite(n)) return NaN;
-			const k = String(key || '').toLowerCase();
-			if (k.includes('gib') || k.includes('gb')) return n * 1024 * 1024 * 1024;
-			if (k.includes('mib') || k.includes('mb')) return n * 1024 * 1024;
-			if (k.includes('kib') || k.includes('kb')) return n * 1024;
-			if (k.includes('bit')) return n / 8;
-			return n;
-		};
-		const pullPair = obj => {
-			if (!isObject(obj)) return null;
-			const keys = Object.keys(obj);
-			let down = null;
-			let up = null;
-			for (const key of keys) {
-				const keyLower = key.toLowerCase();
-				const downMatch = /(download|down|rx|inbound|ingress|recv|receive)/.test(keyLower);
-				const upMatch = /(upload|up|tx|outbound|egress|sent|send)/.test(keyLower);
-				if (!downMatch && !upMatch) continue;
-				const isRateKey = /(rate|speed|kbps|mbps|bps|per_sec|persec|current)/.test(keyLower);
-				const isTotalKey = /(total|bytes|byte|sum|cumulative|accum|usage)/.test(keyLower);
-				if (mode === 'rate' && !isRateKey && isTotalKey) continue;
-				if (mode === 'total' && !isTotalKey && isRateKey) continue;
-				const normalized =
-					mode === 'rate' ? normalizeRateKbps(obj[key], keyLower) : normalizeBytes(obj[key], keyLower);
-				if (!Number.isFinite(normalized)) continue;
-				if (downMatch && down == null) down = normalized;
-				if (upMatch && up == null) up = normalized;
-			}
-			if (Number.isFinite(down) && Number.isFinite(up)) return { rx: down, tx: up };
-			return null;
-		};
-		const queue = [{ value: payload, depth: 0 }];
-		while (queue.length > 0) {
-			const { value, depth } = queue.shift();
-			if (!isObject(value) || depth > 7) continue;
-			const pair = pullPair(value);
-			if (pair) return pair;
-			if (Array.isArray(value)) {
-				for (let i = value.length - 1; i >= 0; i--) queue.push({ value: value[i], depth: depth + 1 });
-				continue;
-			}
-			for (const child of Object.values(value)) queue.push({ value: child, depth: depth + 1 });
-		}
-		return null;
-	}
-
-	computeRatesFromTotals(totals, previousTotals) {
-		if (!totals || !previousTotals) return null;
-		const rxDelta = Number(totals.rx || 0) - Number(previousTotals.rx || 0);
-		const txDelta = Number(totals.tx || 0) - Number(previousTotals.tx || 0);
-		if (rxDelta < 0 || txDelta < 0) return null;
-		return {
-			rxRate: rxDelta / 1024 / this.bandwidthSampleSeconds,
-			txRate: txDelta / 1024 / this.bandwidthSampleSeconds
-		};
-	}
-
-	parseBandixMetricsSeries(metrics) {
-		if (!Array.isArray(metrics)) return [];
-		const points = [];
-		for (const row of metrics) {
-			if (!Array.isArray(row) || row.length < 3) continue;
-			let ts = Number(row[0]) || 0;
-			if (ts > 0 && ts < 1000000000000) ts *= 1000;
-			const totalRxRateBytes = Number(row[1]) || 0;
-			const totalTxRateBytes = Number(row[2]) || 0;
-			const totalRxBytes = Number(row[7]) || 0;
-			const totalTxBytes = Number(row[8]) || 0;
-			points.push({
-				ts,
-				rxRate: totalRxRateBytes / 1024,
-				txRate: totalTxRateBytes / 1024,
-				rxBytes: totalRxBytes,
-				txBytes: totalTxBytes
-			});
-		}
-		points.sort((a, b) => a.ts - b.ts);
-		return points;
-	}
-
-	async fetchBandixTrafficSnapshot() {
-		let metricsPayload = null;
-		let statusPayload = null;
-		try {
-			const [metricsStatus, metricsResult] = await this.core.ubusCall('luci.bandix', 'getMetrics', { mac: '' });
-			if (metricsStatus !== 0) return null;
-			metricsPayload = metricsResult;
-		} catch {
-			return null;
-		}
-
-		try {
-			const [status, result] = await this.core.ubusCall('luci.bandix', 'getStatus', {});
-			if (status === 0) statusPayload = result;
-		} catch {}
-
-		const series = this.parseBandixMetricsSeries(metricsPayload?.metrics);
-		const latestPoint = series.length > 0 ? series[series.length - 1] : null;
-		if (series.length > 1) {
-			this.syncBandwidthHistoryFromSeries(series);
-		}
-
-		const arrayRates = latestPoint
-			? {
-					rxRate: latestPoint.rxRate,
-					txRate: latestPoint.txRate
-				}
-			: null;
-		const arrayTotals = latestPoint
-			? {
-					rx: latestPoint.rxBytes,
-					tx: latestPoint.txBytes
-				}
-			: null;
-
-		const rates = this.resolveBandixPair(metricsPayload, 'rate') || this.resolveBandixPair(statusPayload, 'rate');
-		const totals = this.resolveBandixPair(metricsPayload, 'total') || this.resolveBandixPair(statusPayload, 'total');
-		const finalTotals = arrayTotals || totals;
-		const fallbackRates = this.computeRatesFromTotals(finalTotals, this.lastBandixTotals);
-		if (finalTotals) this.lastBandixTotals = finalTotals;
-		const finalRates = arrayRates || rates || fallbackRates;
-		if (!finalRates && !finalTotals) return null;
-
-		this.activeTrafficProvider = 'bandix';
-		return {
-			rates: finalRates,
-			totals: finalTotals
-		};
-	}
-
-	async fetchTrafficSnapshot() {
-		if (this.trafficProviderPreference !== 'interface') {
-			const bandix = await this.fetchBandixTrafficSnapshot();
-			if (bandix) return bandix;
-		}
-		return this.fetchInterfaceTrafficSnapshot();
-	}
-
-	async fetchActivityTrafficSnapshot(interfaceSnapshot) {
-		if (this.trafficProviderPreference === 'interface') return interfaceSnapshot;
-		const bandix = await this.fetchBandixTrafficSnapshot();
-		if (bandix && this.isValidBandwidthRates(bandix.rates)) return bandix;
-		return interfaceSnapshot;
 	}
 
 	async updateNetworkStats() {
@@ -941,13 +736,10 @@ SQL
 			const interfaceSnapshot = await this.fetchInterfaceTrafficSnapshot();
 			this.renderBandwidthRates(interfaceSnapshot?.rates || null);
 
-			const activitySnapshot = await this.fetchActivityTrafficSnapshot(interfaceSnapshot);
-			const activityRates = activitySnapshot?.rates || null;
+			const activityRates = interfaceSnapshot?.rates || null;
 			if (this.isValidBandwidthRates(activityRates)) {
 				this.updateBandwidthHistory(Number(activityRates.rxRate), Number(activityRates.txRate));
-				if (this.activeTrafficProvider !== 'bandix') {
-					this.persistBandwidthHistory();
-				}
+				this.persistBandwidthHistory();
 			}
 			this.updateBandwidthGraph();
 		} catch (err) {
