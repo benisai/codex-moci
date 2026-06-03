@@ -45,7 +45,6 @@ export default class ThroughputModule {
 	setupHandlers() {
 		if (this.initialized) return;
 		this.initialized = true;
-		document.getElementById('throughput-back-btn')?.addEventListener('click', () => this.core.navigate('/dashboard'));
 		document.getElementById('throughput-device-list')?.addEventListener('click', event => {
 			const chip = event.target?.closest?.('[data-throughput-device]');
 			if (!chip) return;
@@ -251,11 +250,6 @@ export default class ThroughputModule {
 		setText('throughput-total-download', this.formatBitRate(this.latestTotalRx || 0));
 		setText('throughput-total-upload', this.formatBitRate(this.latestTotalTx || 0));
 		setText('throughput-device-count', String(this.latestDeviceCount || this.getDeviceKeys().length || 0));
-
-		const statusEl = document.getElementById('throughput-status');
-		if (!statusEl) return;
-		const sampleCount = Math.max(0, ...this.getDeviceKeys().map(key => (this.deviceSamples.get(key) || []).length));
-		statusEl.textContent = sampleCount > 0 ? `Live samples every ${Math.round(this.pollMs / 1000)}s` : 'Waiting for second sample...';
 	}
 
 	renderDeviceList() {
