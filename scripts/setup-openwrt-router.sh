@@ -233,6 +233,7 @@ require_file "$REPO_DIR/files/moci-notifications-db.sh"
 require_file "$REPO_DIR/files/moci-state-sync.sh"
 require_file "$REPO_DIR/files/moci-device-quarantine.sh"
 require_file "$REPO_DIR/files/moci-device-bandwidth-collector.sh"
+require_file "$REPO_DIR/files/moci-device-traffic-summary.sh"
 require_file "$REPO_DIR/files/connection-flows-collector.init"
 require_file "$REPO_DIR/files/device-bandwidth-collector.init"
 require_file "$REPO_DIR/files/ping-monitor.init"
@@ -325,6 +326,7 @@ install_file "$REPO_DIR/files/moci-notifications-db.sh" /usr/bin/moci-notificati
 install_file "$REPO_DIR/files/moci-state-sync.sh" /usr/bin/moci-state-sync 0755
 install_file "$REPO_DIR/files/moci-device-quarantine.sh" /usr/bin/moci-device-quarantine 0755
 install_file "$REPO_DIR/files/moci-device-bandwidth-collector.sh" /usr/bin/moci-device-bandwidth-collector 0755
+install_file "$REPO_DIR/files/moci-device-traffic-summary.sh" /usr/bin/moci-device-traffic-summary 0755
 install_file "$REPO_DIR/files/connection-flows-collector.init" /etc/init.d/connection-flows-collector 0755
 install_file "$REPO_DIR/files/device-bandwidth-collector.init" /etc/init.d/moci-device-bandwidth-collector 0755
 install_file "$REPO_DIR/files/ping-monitor.init" /etc/init.d/ping-monitor 0755

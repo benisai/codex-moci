@@ -3,6 +3,10 @@ export default class DevicesModule {
 		this.core = core;
 		this.initialized = false;
 		this.refreshTimer = null;
+		this.liveRefreshTimer = null;
+		this.liveTrafficSnapshot = new Map();
+		this.liveTrafficAvailable = false;
+		this.liveTrafficMaxBytesPerSec = 125 * 1024 * 1024;
 		this.rowsByMac = new Map();
 		this.staticByMac = new Map();
 		this.deviceRows = [];
@@ -95,14 +99,23 @@ export default class DevicesModule {
 	}
 
 	startRefreshLoop() {
-		if (this.refreshTimer) return;
-		this.refreshTimer = setInterval(() => {
-			if (this.core.currentRoute?.startsWith('/devices')) {
-				// Keep row order stable while user is inspecting expanded details.
-				if (this.expandedMac) return;
-				this.loadDevices({ fromAuto: true });
-			}
-		}, 15000);
+		if (!this.refreshTimer) {
+			this.refreshTimer = setInterval(() => {
+				if (this.core.currentRoute?.startsWith('/devices')) {
+					// Keep row order stable while user is inspecting expanded details.
+					if (this.expandedMac) return;
+					this.loadDevices({ fromAuto: true });
+				}
+			}, 15000);
+		}
+
+		if (!this.liveRefreshTimer) {
+			this.liveRefreshTimer = setInterval(() => {
+				if (this.core.currentRoute?.startsWith('/devices')) {
+					this.refreshLiveTrafficRates().catch(err => console.error('Failed to refresh live device traffic:', err));
+				}
+			}, 2000);
+		}
 	}
 
 	async loadDevices(options = {}) {
@@ -148,6 +161,7 @@ export default class DevicesModule {
 			if (fromAuto && this.expandedMac) return;
 			this.deviceRows = rows;
 			this.renderRows(this.sortRows(rows));
+			this.refreshLiveTrafficRates().catch(err => console.error('Failed to refresh live device traffic:', err));
 			this.notifyNewDevices(rows).catch(err => console.error('Failed to notify new devices:', err));
 		} catch (err) {
 			console.error('Failed to load devices page:', err);
@@ -605,6 +619,103 @@ ORDER BY mac, bucket_start;`;
 		return this.deviceBandwidthDbPath;
 	}
 
+	async fetchRealtimeTrafficSummary() {
+		const result = {
+			available: false,
+			byMac: new Map(),
+			byIp: new Map(),
+			timestamp: Date.now()
+		};
+
+		try {
+			const execResult = await this.exec('/usr/bin/moci-device-traffic-summary', [], { timeout: 8000 });
+			const rows = JSON.parse(String(execResult?.stdout || '[]'));
+			if (!Array.isArray(rows)) return result;
+
+			for (const item of rows) {
+				const mac = this.normalizeMac(item?.mac || '');
+				const ip = String(item?.ip || '').trim();
+				const entry = {
+					mac,
+					ip,
+					rxBytes: Math.max(0, Number(item?.rx_bytes) || 0),
+					txBytes: Math.max(0, Number(item?.tx_bytes) || 0)
+				};
+				if (mac) result.byMac.set(mac, entry);
+				if (ip) result.byIp.set(ip, entry);
+			}
+
+			result.available = result.byMac.size > 0 || result.byIp.size > 0;
+			return result;
+		} catch {
+			return result;
+		}
+	}
+
+	async refreshLiveTrafficRates() {
+		if (!Array.isArray(this.deviceRows) || this.deviceRows.length === 0) return;
+
+		const snapshot = await this.fetchRealtimeTrafficSummary();
+		this.liveTrafficAvailable = Boolean(snapshot.available);
+		const nextSnapshot = new Map();
+		const now = Number(snapshot.timestamp || Date.now());
+		let changed = false;
+
+		for (const row of this.deviceRows) {
+			const mac = this.normalizeMac(row?.mac || '');
+			const ip = String(row?.ip && row.ip !== 'N/A' ? row.ip : row?.leaseIp || '').trim();
+			const entry = (mac && snapshot.byMac.get(mac)) || (ip && snapshot.byIp.get(ip)) || null;
+			const key = mac || ip;
+			if (!key) continue;
+
+			if (!entry) {
+				if (row.liveRxRateBps != null || row.liveTxRateBps != null) {
+					row.liveRxRateBps = null;
+					row.liveTxRateBps = null;
+					changed = true;
+				}
+				continue;
+			}
+
+			const current = {
+				rxBytes: Math.max(0, Number(entry.rxBytes) || 0),
+				txBytes: Math.max(0, Number(entry.txBytes) || 0),
+				timestamp: now
+			};
+			nextSnapshot.set(key, current);
+
+			const previous = this.liveTrafficSnapshot.get(key);
+			if (!previous || !previous.timestamp || current.timestamp <= previous.timestamp) {
+				if (row.liveRxRateBps != null || row.liveTxRateBps != null) {
+					row.liveRxRateBps = null;
+					row.liveTxRateBps = null;
+					changed = true;
+				}
+				continue;
+			}
+
+			const intervalSeconds = Math.max(0.25, (current.timestamp - previous.timestamp) / 1000);
+			const rxRate = this.calculateLiveRate(current.rxBytes, previous.rxBytes, intervalSeconds);
+			const txRate = this.calculateLiveRate(current.txBytes, previous.txBytes, intervalSeconds);
+			if (row.liveRxRateBps !== rxRate || row.liveTxRateBps !== txRate) {
+				row.liveRxRateBps = rxRate;
+				row.liveTxRateBps = txRate;
+				changed = true;
+			}
+		}
+
+		this.liveTrafficSnapshot = nextSnapshot;
+		if (changed) this.renderRows(this.sortRows(this.deviceRows));
+	}
+
+	calculateLiveRate(currentBytes, previousBytes, intervalSeconds) {
+		const delta = Math.max(0, Number(currentBytes || 0) - Number(previousBytes || 0));
+		const rate = delta / Math.max(0.25, Number(intervalSeconds || 0));
+		if (!Number.isFinite(rate)) return null;
+		if (rate > this.liveTrafficMaxBytesPerSec) return null;
+		return Math.max(0, Math.round(rate));
+	}
+
 	mergeRows(
 		leases,
 		pingReachableIps,
@@ -840,7 +951,9 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 		const dir = this.sortDir === 'asc' ? 1 : -1;
 		const list = Array.isArray(rows) ? [...rows] : [];
 		const rankStatus = row => (row?.quarantined ? 3 : row?.parentalBlocked ? 2 : row?.online ? 1 : 0);
-		const totalTraffic = row => Number(row?.rx15m ?? row?.rx ?? 0) + Number(row?.tx15m ?? row?.tx ?? 0);
+		const totalTraffic = row =>
+			Number(row?.liveRxRateBps ?? row?.rx15m ?? row?.rx ?? 0) +
+			Number(row?.liveTxRateBps ?? row?.tx15m ?? row?.tx ?? 0);
 		const numCmp = (a, b) => (a === b ? 0 : a > b ? 1 : -1);
 		const strCmp = (a, b) => String(a || '').localeCompare(String(b || ''));
 
@@ -883,9 +996,9 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 		tbody.innerHTML = rows
 			.map(row => {
 				const upload =
-					row.tx15m == null || !this.deviceBandwidthAvailable ? 'N/A' : this.core.formatBytes(row.tx15m || 0);
+					row.liveTxRateBps == null || !this.liveTrafficAvailable ? 'N/A' : this.formatByteRate(row.liveTxRateBps);
 				const download =
-					row.rx15m == null || !this.deviceBandwidthAvailable ? 'N/A' : this.core.formatBytes(row.rx15m || 0);
+					row.liveRxRateBps == null || !this.liveTrafficAvailable ? 'N/A' : this.formatByteRate(row.liveRxRateBps);
 				const isExpandable = row.mac && row.mac !== 'N/A';
 				const isExpanded = isExpandable && this.expandedMac === row.mac;
 				const marker = isExpandable ? (isExpanded ? '▾ ' : '▸ ') : '';
@@ -917,6 +1030,19 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 		tbody.querySelectorAll('tr[data-device-mac]').forEach(tr => {
 			tr.addEventListener('click', event => this.handleRowClick(event));
 		});
+	}
+
+	formatByteRate(bytesPerSecond) {
+		const value = Math.max(0, Number(bytesPerSecond) || 0);
+		const units = ['B/s', 'KB/s', 'MB/s', 'GB/s', 'TB/s'];
+		let scaled = value;
+		let unitIndex = 0;
+		while (scaled >= 1024 && unitIndex < units.length - 1) {
+			scaled /= 1024;
+			unitIndex++;
+		}
+		const digits = scaled >= 100 || unitIndex === 0 ? 0 : scaled >= 10 ? 1 : 2;
+		return `${scaled.toFixed(digits)} ${units[unitIndex]}`;
 	}
 
 	renderDeviceStatusBadge(row) {
