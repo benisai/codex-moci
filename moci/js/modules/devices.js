@@ -3,19 +3,18 @@ export default class DevicesModule {
 		this.core = core;
 		this.initialized = false;
 		this.refreshTimer = null;
-		this.liveRefreshTimer = null;
-		this.liveUsageSnapshot = new Map();
 		this.rowsByMac = new Map();
 		this.staticByMac = new Map();
 		this.deviceRows = [];
 		this.expandedMac = '';
 		this.netifyByMac = new Map();
 		this.netifyDbPath = '/tmp/moci-netify.sqlite';
+		this.deviceBandwidthDbPath = '/tmp/moci-device-bandwidth.sqlite';
 		this.deviceSqlChunkSize = 200;
 		this.deviceSqlChunkCalls = 15;
 		this.deviceMaxRows = 3000;
 		this.nlbwAvailable = false;
-		this.bandixAvailable = false;
+		this.deviceBandwidthAvailable = false;
 		this.netifyFeatureEnabled = true;
 		this.parentalByMac = new Map();
 		this.parentalRulePrefix = 'moci_parental_';
@@ -104,38 +103,6 @@ export default class DevicesModule {
 				this.loadDevices({ fromAuto: true });
 			}
 		}, 15000);
-		if (!this.liveRefreshTimer) {
-			this.liveRefreshTimer = setInterval(() => {
-				if (this.core.currentRoute?.startsWith('/devices')) {
-					this.refreshLiveRates().catch(err => console.error('Failed to refresh live device rates:', err));
-				}
-			}, 3000);
-		}
-	}
-
-	async refreshLiveRates() {
-		if (!Array.isArray(this.deviceRows) || this.deviceRows.length === 0) return;
-		const usage = await this.fetchBandixDeviceUsage();
-		this.bandixAvailable = Boolean(usage.available);
-		let changed = false;
-		const byMac = usage.byMac instanceof Map ? usage.byMac : new Map();
-		for (const row of this.deviceRows) {
-			const mac = this.normalizeMac(row?.mac || '');
-			if (!mac) continue;
-			const next = byMac.get(mac) || null;
-			const txRate = next?.txRateBps ?? null;
-			const rxRate = next?.rxRateBps ?? null;
-			const txBytes = next?.txBytes ?? null;
-			const rxBytes = next?.rxBytes ?? null;
-			if (row.liveTxRateBps !== txRate || row.liveRxRateBps !== rxRate || row.liveTxBytes !== txBytes || row.liveRxBytes !== rxBytes) {
-				row.liveTxRateBps = txRate;
-				row.liveRxRateBps = rxRate;
-				row.liveTxBytes = txBytes;
-				row.liveRxBytes = rxBytes;
-				changed = true;
-			}
-		}
-		if (changed) this.renderRows(this.sortRows(this.deviceRows));
 	}
 
 	async loadDevices(options = {}) {
@@ -145,11 +112,11 @@ export default class DevicesModule {
 
 		try {
 			const leases = await this.fetchLeases();
-			const [pingReachableIps, conntrackIps, usage, bandixUsage, staticByMac, netifyEnabled, parentalByMac, dnsHijackByMac, quarantineByMac, arpByMac] = await Promise.all([
+			const [pingReachableIps, conntrackIps, usage, bandwidthUsage, staticByMac, netifyEnabled, parentalByMac, dnsHijackByMac, quarantineByMac, arpByMac] = await Promise.all([
 				this.fetchPingReachableIps(leases),
 				this.fetchConntrackIps(),
 				this.fetchNlbwmonUsage(),
-				this.fetchBandixDeviceUsage(),
+				this.fetchDeviceBandwidthUsage(),
 				this.fetchStaticLeasesByMac(),
 				this.fetchNetifyFeatureFlag(),
 				this.fetchParentalRulesByMac(),
@@ -160,7 +127,7 @@ export default class DevicesModule {
 
 			this.staticByMac = staticByMac;
 			this.nlbwAvailable = Boolean(usage.available);
-			this.bandixAvailable = Boolean(bandixUsage.available);
+			this.deviceBandwidthAvailable = Boolean(bandwidthUsage.available);
 			this.netifyFeatureEnabled = Boolean(netifyEnabled);
 			this.parentalByMac = parentalByMac;
 			this.dnsHijackByMac = dnsHijackByMac instanceof Map ? dnsHijackByMac : new Map();
@@ -171,7 +138,7 @@ export default class DevicesModule {
 				pingReachableIps,
 				conntrackIps,
 				usage.totalsByClient,
-				bandixUsage.byMac,
+				bandwidthUsage.byMac,
 				staticByMac,
 				parentalByMac,
 				this.dnsHijackByMac,
@@ -547,31 +514,50 @@ rm -f "$tmp"
 		return { available: true, totalsByClient };
 	}
 
-	async fetchBandixDeviceUsage() {
-		const custom = await this.fetchMociRealtimeUsage();
-		if (custom.available) return custom;
+	async fetchDeviceBandwidthUsage() {
 		const result = {
 			available: false,
 			byMac: new Map()
 		};
 
 		try {
-			const [status, payload] = await this.core.ubusCall('luci.bandix', 'getStatus', {});
-			if (status !== 0 || !Array.isArray(payload?.d)) return result;
+			const dbPath = await this.resolveDeviceBandwidthDbPath();
+			const sql = `
+WITH latest AS (
+	SELECT mac, MAX(bucket_start) AS latest_bucket
+	FROM device_bandwidth_15m
+	GROUP BY mac
+),
+daily AS (
+	SELECT mac, SUM(rx_bytes) AS rx_24h, SUM(tx_bytes) AS tx_24h
+	FROM device_bandwidth_15m
+	WHERE bucket_start >= CAST(strftime('%s','now') AS INTEGER) - 86400
+	GROUP BY mac
+)
+SELECT daily.mac,
+	COALESCE(current.rx_bytes, 0),
+	COALESCE(current.tx_bytes, 0),
+	COALESCE(daily.rx_24h, 0),
+	COALESCE(daily.tx_24h, 0),
+	COALESCE(latest.latest_bucket, 0)
+FROM daily
+LEFT JOIN latest ON latest.mac = daily.mac
+LEFT JOIN device_bandwidth_15m AS current
+	ON current.mac = latest.mac AND current.bucket_start = latest.latest_bucket
+ORDER BY daily.mac;`;
+			const output = await this.querySql(dbPath, sql);
 
-			for (const device of payload.d) {
-				const mac = this.normalizeMac(device?.mac || '');
+			for (const line of String(output || '').split('\n')) {
+				if (!line.trim()) continue;
+				const [rawMac, rx15m, tx15m, rx24h, tx24h, latestBucket] = line.split('|');
+				const mac = this.normalizeMac(rawMac || '');
 				if (!mac) continue;
-				const txRateBps = Number(device?.w_tx_r);
-				const rxRateBps = Number(device?.w_rx_r);
-				const txBytes = Number(device?.w_tx_b);
-				const rxBytes = Number(device?.w_rx_b);
-
 				result.byMac.set(mac, {
-					txRateBps: Number.isFinite(txRateBps) ? Math.max(txRateBps, 0) : null,
-					rxRateBps: Number.isFinite(rxRateBps) ? Math.max(rxRateBps, 0) : null,
-					txBytes: Number.isFinite(txBytes) ? Math.max(txBytes, 0) : null,
-					rxBytes: Number.isFinite(rxBytes) ? Math.max(rxBytes, 0) : null
+					rx15m: Math.max(0, Number(rx15m) || 0),
+					tx15m: Math.max(0, Number(tx15m) || 0),
+					rx24h: Math.max(0, Number(rx24h) || 0),
+					tx24h: Math.max(0, Number(tx24h) || 0),
+					latestBucket: Math.max(0, Number(latestBucket) || 0)
 				});
 			}
 
@@ -582,54 +568,14 @@ rm -f "$tmp"
 		}
 	}
 
-	async fetchMociRealtimeUsage() {
-		const result = {
-			available: false,
-			byMac: new Map()
-		};
+	async resolveDeviceBandwidthDbPath() {
 		try {
-			const now = Date.now();
-			const [status, execResult] = await this.core.ubusCall('file', 'exec', {
-				command: '/usr/bin/moci-device-bytes-nft',
-				params: []
-			});
-			if (status !== 0 || !execResult?.stdout) return result;
-			const payload = JSON.parse(String(execResult.stdout || '[]'));
-			if (!Array.isArray(payload)) return result;
-
-			for (const entry of payload) {
-				const mac = this.normalizeMac(entry?.mac || '');
-				if (!mac) continue;
-				const txBytes = Number(entry?.tx_bytes);
-				const rxBytes = Number(entry?.rx_bytes);
-				const tx = Number.isFinite(txBytes) && txBytes >= 0 ? txBytes : null;
-				const rx = Number.isFinite(rxBytes) && rxBytes >= 0 ? rxBytes : null;
-				const prev = this.liveUsageSnapshot.get(mac);
-				let txRateBps = null;
-				let rxRateBps = null;
-				if (prev && tx != null && rx != null) {
-					const elapsedSec = Math.max((now - Number(prev.ts || now)) / 1000, 0);
-					if (elapsedSec > 0) {
-						const txDelta = tx - Number(prev.txBytes || 0);
-						const rxDelta = rx - Number(prev.rxBytes || 0);
-						if (txDelta >= 0) txRateBps = txDelta / elapsedSec;
-						if (rxDelta >= 0) rxRateBps = rxDelta / elapsedSec;
-					}
-				}
-				this.liveUsageSnapshot.set(mac, { txBytes: tx ?? 0, rxBytes: rx ?? 0, ts: now });
-				result.byMac.set(mac, {
-					txRateBps: Number.isFinite(txRateBps) ? Math.max(txRateBps, 0) : null,
-					rxRateBps: Number.isFinite(rxRateBps) ? Math.max(rxRateBps, 0) : null,
-					txBytes: tx,
-					rxBytes: rx
-				});
+			const [status, result] = await this.core.uciGet('moci', 'device_bandwidth');
+			if (status === 0 && result?.values?.db_path) {
+				this.deviceBandwidthDbPath = String(result.values.db_path).trim() || this.deviceBandwidthDbPath;
 			}
-
-			result.available = result.byMac.size > 0;
-			return result;
-		} catch {
-			return result;
-		}
+		} catch {}
+		return this.deviceBandwidthDbPath;
 	}
 
 	mergeRows(
@@ -637,7 +583,7 @@ rm -f "$tmp"
 		pingReachableIps,
 		conntrackIps,
 		totalsByClient,
-		bandixByMac,
+		bandwidthByMac,
 		staticByMac,
 		parentalByMac,
 		dnsHijackByMac,
@@ -653,7 +599,7 @@ rm -f "$tmp"
 			const ip = String(lease.ipaddr || '');
 			const key = mac || ip;
 			const usage = totalsByClient.get(key) || totalsByClient.get(ip) || null;
-			const bandix = mac ? bandixByMac.get(mac) : null;
+			const bandwidth = mac ? bandwidthByMac.get(mac) : null;
 			const pin = mac ? staticByMac.get(mac) : null;
 			const parental = mac ? parentalByMac.get(mac) : null;
 			const dnsHijack = mac ? dnsHijackByMac.get(mac) : null;
@@ -665,10 +611,11 @@ rm -f "$tmp"
 				mac: mac || 'N/A',
 				tx: usage ? usage.tx : null,
 				rx: usage ? usage.rx : null,
-				liveTxRateBps: bandix?.txRateBps ?? null,
-				liveRxRateBps: bandix?.rxRateBps ?? null,
-				liveTxBytes: bandix?.txBytes ?? null,
-				liveRxBytes: bandix?.rxBytes ?? null,
+				tx15m: bandwidth?.tx15m ?? null,
+				rx15m: bandwidth?.rx15m ?? null,
+				tx24h: bandwidth?.tx24h ?? null,
+				rx24h: bandwidth?.rx24h ?? null,
+				bandwidthLatestBucket: bandwidth?.latestBucket ?? null,
 				nlbwTopApps: this.extractTopNlbwApps(usage),
 				online: ip ? pingReachableIps.has(ip) || conntrackIps.has(ip) : false,
 				pinned: Boolean(pin?.ip),
@@ -690,7 +637,7 @@ rm -f "$tmp"
 		for (const [mac, pin] of staticByMac.entries()) {
 			if (!mac || seenMacs.has(mac)) continue;
 			const usage = totalsByClient.get(mac) || totalsByClient.get(pin?.ip || '') || null;
-			const bandix = bandixByMac.get(mac) || null;
+			const bandwidth = bandwidthByMac.get(mac) || null;
 			const parental = parentalByMac.get(mac) || null;
 			const dnsHijack = dnsHijackByMac.get(mac) || null;
 			const quarantine = quarantineByMac.get(mac) || null;
@@ -701,10 +648,11 @@ rm -f "$tmp"
 				mac,
 				tx: usage ? usage.tx : null,
 				rx: usage ? usage.rx : null,
-				liveTxRateBps: bandix?.txRateBps ?? null,
-				liveRxRateBps: bandix?.rxRateBps ?? null,
-				liveTxBytes: bandix?.txBytes ?? null,
-				liveRxBytes: bandix?.rxBytes ?? null,
+				tx15m: bandwidth?.tx15m ?? null,
+				rx15m: bandwidth?.rx15m ?? null,
+				tx24h: bandwidth?.tx24h ?? null,
+				rx24h: bandwidth?.rx24h ?? null,
+				bandwidthLatestBucket: bandwidth?.latestBucket ?? null,
 				nlbwTopApps: this.extractTopNlbwApps(usage),
 				online:
 					(usage?.ip ? pingReachableIps.has(usage.ip) || conntrackIps.has(usage.ip) : false) ||
@@ -734,7 +682,7 @@ rm -f "$tmp"
 			}
 
 			const usage = totalsByClient.get(mac) || totalsByClient.get(arp?.ip || '') || null;
-			const bandix = bandixByMac.get(mac) || null;
+			const bandwidth = bandwidthByMac.get(mac) || null;
 			const pin = staticByMac.get(mac) || null;
 			const parental = parentalByMac.get(mac) || null;
 			const dnsHijack = dnsHijackByMac.get(mac) || null;
@@ -747,10 +695,11 @@ rm -f "$tmp"
 				mac,
 				tx: usage ? usage.tx : null,
 				rx: usage ? usage.rx : null,
-				liveTxRateBps: bandix?.txRateBps ?? null,
-				liveRxRateBps: bandix?.rxRateBps ?? null,
-				liveTxBytes: bandix?.txBytes ?? null,
-				liveRxBytes: bandix?.rxBytes ?? null,
+				tx15m: bandwidth?.tx15m ?? null,
+				rx15m: bandwidth?.rx15m ?? null,
+				tx24h: bandwidth?.tx24h ?? null,
+				rx24h: bandwidth?.rx24h ?? null,
+				bandwidthLatestBucket: bandwidth?.latestBucket ?? null,
 				nlbwTopApps: this.extractTopNlbwApps(usage),
 				online:
 					Boolean(arp?.ip) ||
@@ -861,7 +810,7 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 		const dir = this.sortDir === 'asc' ? 1 : -1;
 		const list = Array.isArray(rows) ? [...rows] : [];
 		const rankStatus = row => (row?.quarantined ? 3 : row?.parentalBlocked ? 2 : row?.online ? 1 : 0);
-		const totalTraffic = row => Number(row?.rx || 0) + Number(row?.tx || 0);
+		const totalTraffic = row => Number(row?.rx15m ?? row?.rx ?? 0) + Number(row?.tx15m ?? row?.tx ?? 0);
 		const numCmp = (a, b) => (a === b ? 0 : a > b ? 1 : -1);
 		const strCmp = (a, b) => String(a || '').localeCompare(String(b || ''));
 
@@ -885,19 +834,6 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 			.map(([name, bytes]) => ({ name, bytes }));
 	}
 
-	formatByteRate(bytesPerSec) {
-		const n = Number(bytesPerSec);
-		if (!Number.isFinite(n) || n <= 0) return '0 B/s';
-		const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
-		let value = n;
-		let idx = 0;
-		while (value >= 1024 && idx < units.length - 1) {
-			value /= 1024;
-			idx += 1;
-		}
-		return `${parseFloat(value.toFixed(2))} ${units[idx]}`;
-	}
-
 	renderRows(rows) {
 		const tbody = document.querySelector('#devices-table tbody');
 		if (!tbody) return;
@@ -916,18 +852,10 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 
 		tbody.innerHTML = rows
 			.map(row => {
-				const hasLiveRates =
-					Number.isFinite(Number(row?.liveTxRateBps)) && Number.isFinite(Number(row?.liveRxRateBps)) && this.bandixAvailable;
-				const upload = hasLiveRates
-					? this.formatByteRate(Number(row.liveTxRateBps))
-					: row.tx == null
-						? 'N/A'
-						: this.core.formatBytes(row.tx);
-				const download = hasLiveRates
-					? this.formatByteRate(Number(row.liveRxRateBps))
-					: row.rx == null
-						? 'N/A'
-						: this.core.formatBytes(row.rx);
+				const upload =
+					row.tx15m == null || !this.deviceBandwidthAvailable ? 'N/A' : this.core.formatBytes(row.tx15m || 0);
+				const download =
+					row.rx15m == null || !this.deviceBandwidthAvailable ? 'N/A' : this.core.formatBytes(row.rx15m || 0);
 				const isExpandable = row.mac && row.mac !== 'N/A';
 				const isExpanded = isExpandable && this.expandedMac === row.mac;
 				const marker = isExpandable ? (isExpanded ? '▾ ' : '▸ ') : '';
@@ -1055,6 +983,10 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 			</div>
 			<div style="margin: 10px 0; border-top: 2px dashed var(--glass-border);"></div>
 			<div style="display:flex; flex-wrap:wrap; gap:14px; margin-bottom:10px; font-size:11px; font-family:var(--font-mono); color:var(--steel-light)">
+				<span>15M UPLOAD: ${this.core.escapeHtml(row?.tx15m == null ? 'N/A' : this.core.formatBytes(row.tx15m || 0))}</span>
+				<span>15M DOWNLOAD: ${this.core.escapeHtml(row?.rx15m == null ? 'N/A' : this.core.formatBytes(row.rx15m || 0))}</span>
+				<span>24H UPLOAD: ${this.core.escapeHtml(row?.tx24h == null ? 'N/A' : this.core.formatBytes(row.tx24h || 0))}</span>
+				<span>24H DOWNLOAD: ${this.core.escapeHtml(row?.rx24h == null ? 'N/A' : this.core.formatBytes(row.rx24h || 0))}</span>
 				<span>NLBW UPLOAD: ${this.core.escapeHtml(row?.tx == null ? 'N/A' : this.core.formatBytes(row.tx || 0))}</span>
 				<span>NLBW DOWNLOAD: ${this.core.escapeHtml(row?.rx == null ? 'N/A' : this.core.formatBytes(row.rx || 0))}</span>
 			</div>

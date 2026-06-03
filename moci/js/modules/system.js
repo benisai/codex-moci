@@ -189,6 +189,7 @@ export default class SystemModule {
 		return [
 			{ key: 'netify_collector', label: 'NETIFY COLLECTOR', section: 'collector', init: 'netify-collector' },
 			{ key: 'flow_collector', label: 'FLOW COLLECTOR', section: 'connection_flows', init: 'connection-flows-collector' },
+			{ key: 'device_bandwidth', label: 'DEVICE BANDWIDTH', section: 'device_bandwidth', init: 'moci-device-bandwidth-collector' },
 			{ key: 'ping_monitor', label: 'PING MONITOR', section: 'ping_monitor', init: 'ping-monitor' },
 			{ key: 'dns_monitor', label: 'DNS MONITOR', section: 'dns_monitor', init: 'dns-monitor' },
 			{ key: 'speedtest_monitor', label: 'SPEEDTEST CRON', section: 'speedtest_monitor', init: '' },

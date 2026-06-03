@@ -232,8 +232,9 @@ require_file "$REPO_DIR/files/moci-speedtest-monitor.sh"
 require_file "$REPO_DIR/files/moci-notifications-db.sh"
 require_file "$REPO_DIR/files/moci-state-sync.sh"
 require_file "$REPO_DIR/files/moci-device-quarantine.sh"
-require_file "$REPO_DIR/files/moci-device-bytes-nft.sh"
+require_file "$REPO_DIR/files/moci-device-bandwidth-collector.sh"
 require_file "$REPO_DIR/files/connection-flows-collector.init"
+require_file "$REPO_DIR/files/device-bandwidth-collector.init"
 require_file "$REPO_DIR/files/ping-monitor.init"
 require_file "$REPO_DIR/files/dns-monitor.init"
 require_file "$REPO_DIR/files/moci-state-sync.init"
@@ -323,8 +324,9 @@ install_file "$REPO_DIR/files/moci-speedtest-monitor.sh" /usr/bin/moci-speedtest
 install_file "$REPO_DIR/files/moci-notifications-db.sh" /usr/bin/moci-notifications-db 0755
 install_file "$REPO_DIR/files/moci-state-sync.sh" /usr/bin/moci-state-sync 0755
 install_file "$REPO_DIR/files/moci-device-quarantine.sh" /usr/bin/moci-device-quarantine 0755
-install_file "$REPO_DIR/files/moci-device-bytes-nft.sh" /usr/bin/moci-device-bytes-nft 0755
+install_file "$REPO_DIR/files/moci-device-bandwidth-collector.sh" /usr/bin/moci-device-bandwidth-collector 0755
 install_file "$REPO_DIR/files/connection-flows-collector.init" /etc/init.d/connection-flows-collector 0755
+install_file "$REPO_DIR/files/device-bandwidth-collector.init" /etc/init.d/moci-device-bandwidth-collector 0755
 install_file "$REPO_DIR/files/ping-monitor.init" /etc/init.d/ping-monitor 0755
 install_file "$REPO_DIR/files/dns-monitor.init" /etc/init.d/dns-monitor 0755
 install_file "$REPO_DIR/files/moci-state-sync.init" /etc/init.d/moci-state-sync 0755
@@ -366,6 +368,11 @@ set_uci moci.connection_flows.retention_rows "50000"
 set_uci moci.connection_flows.exclude_endpoints "127.0.0.1"
 set_uci moci.connection_flows.ignore_ipv6 "1"
 set_uci moci.connection_flows.lan_to_wan_only "0"
+set_uci moci.device_bandwidth.enabled "1"
+set_uci moci.device_bandwidth.db_path "/tmp/moci-device-bandwidth.sqlite"
+set_uci moci.device_bandwidth.poll_seconds "60"
+set_uci moci.device_bandwidth.bucket_seconds "900"
+set_uci moci.device_bandwidth.retention_seconds "86400"
 set_uci moci.ping_monitor.enabled "1"
 set_uci moci.ping_monitor.target "1.1.1.1"
 set_uci moci.ping_monitor.interval "60"
@@ -427,6 +434,8 @@ if [ "$INSTALL_NETIFY" = "1" ] && [ -x /usr/bin/moci-netify-collector ]; then
 	/usr/bin/moci-netify-collector --init-db || true
 fi
 /usr/bin/moci-connection-flow-collector --init-db || true
+/usr/bin/moci-device-bandwidth-collector --init-db || true
+/usr/bin/moci-device-bandwidth-collector --once || true
 /usr/bin/moci-ping-monitor --once || true
 /usr/bin/moci-dns-monitor --once || true
 /usr/bin/moci-speedtest-monitor --init-file || true
@@ -468,9 +477,9 @@ cp "$TMP_CRON" "$CRON_PATH"
 rm -f "$TMP_CRON"
 /bin/sh -c '/etc/init.d/cron reload 2>/dev/null || /etc/init.d/cron restart 2>/dev/null || /etc/init.d/crond reload 2>/dev/null || /etc/init.d/crond restart 2>/dev/null || killall -HUP crond 2>/dev/null || true'
 
-SERVICES="vnstat nlbwmon connection-flows-collector ping-monitor dns-monitor moci-state-sync moci-device-quarantine"
+SERVICES="vnstat nlbwmon connection-flows-collector moci-device-bandwidth-collector ping-monitor dns-monitor moci-state-sync moci-device-quarantine"
 if [ "$INSTALL_NETIFY" = "1" ]; then
-	SERVICES="vnstat nlbwmon netifyd netify-collector connection-flows-collector ping-monitor dns-monitor moci-state-sync moci-device-quarantine"
+	SERVICES="vnstat nlbwmon netifyd netify-collector connection-flows-collector moci-device-bandwidth-collector ping-monitor dns-monitor moci-state-sync moci-device-quarantine"
 fi
 if [ "$INSTALL_ADBLOCK" = "1" ]; then
 	SERVICES="$SERVICES adblock"
