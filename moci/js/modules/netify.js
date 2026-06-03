@@ -38,16 +38,17 @@ export default class NetifyModule {
 		this.isRefreshingTopApps = false;
 
 		this.core.registerRoute('/netify', async () => {
-			const pageElement = document.getElementById('netify-page');
-			if (pageElement) pageElement.classList.remove('hidden');
-
-			if (!this.initialized) {
-				this.setupHandlers();
-				this.initialized = true;
-			}
-
-			await this.load();
+			this.core.navigate('/flows/netify');
 		});
+	}
+
+	async loadFlowsTab() {
+		if (!this.initialized) {
+			this.setupHandlers();
+			this.initialized = true;
+		}
+
+		await this.load();
 	}
 
 	setupHandlers() {
@@ -216,10 +217,10 @@ export default class NetifyModule {
 		this.pollInterval = setInterval(() => {
 			// Preserve user position while paging historical rows.
 			// Auto-refresh only when on page 1 (index 0).
-			if (this.core.currentRoute && this.core.currentRoute.startsWith('/netify') && !this.isAutoRefreshPaused()) {
+			if (this.isNetifyRoute() && !this.isAutoRefreshPaused()) {
 				this.refresh(false, false);
 			}
-			if (this.core.currentRoute && this.core.currentRoute.startsWith('/netify')) {
+			if (this.isNetifyRoute()) {
 				const now = Date.now();
 				if (now - this.lastCardsRefreshAt >= this.cardsRefreshIntervalMs) {
 					this.refreshCardsAuto();
@@ -229,6 +230,11 @@ export default class NetifyModule {
 				}
 			}
 		}, 10000);
+	}
+
+	isNetifyRoute() {
+		const route = String(this.core.currentRoute || '');
+		return route.startsWith('/netify') || route.startsWith('/flows/netify');
 	}
 
 	isAutoRefreshPaused() {

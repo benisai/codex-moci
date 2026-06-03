@@ -68,7 +68,6 @@
 						<nav class="nav">
 							<a href="#/dashboard" class="active">DASHBOARD</a>
 							<a href="#/devices" data-feature="devices">DEVICES</a>
-							<a href="#/netify" data-feature="netify">NETIFY</a>
 							<a href="#/flows" data-feature="flows">FLOWS</a>
 							<a href="#/monitoring" data-feature="monitoring">MONITORING</a>
 							<a href="#/network">NETWORK</a>
@@ -2914,12 +2913,15 @@ Endpoint = host:51820"
 						</div>
 
 						<div id="flows-page" class="page hidden" data-feature="flows">
-							<h2>
-								FLOWS
-								<span style="font-size: 10px; color: var(--steel-muted)"
-									>(Simple Conntrack Output to SQLite. IP resolution to fqdn/hostname is a best attempt.)</span
-								>
-							</h2>
+							<h2>FLOWS</h2>
+							<div class="tabs">
+								<button class="tab-btn active" data-tab="netify" data-feature="netify">NETIFY</button>
+								<button class="tab-btn" data-tab="conntrack" data-feature="flows">CONNTRACK FLOWS</button>
+							</div>
+							<div class="tab-content hidden" id="tab-conntrack">
+								<div style="font-size: 10px; color: var(--steel-muted); margin-bottom: 12px">
+									Simple Conntrack Output to SQLite. IP resolution to fqdn/hostname is a best attempt.
+								</div>
 							<div class="stat-card" style="margin-top: 24px">
 								<div class="section-title">RECENT FLOWS</div>
 								<div style="display: flex; justify-content: flex-start; margin-bottom: 12px">
@@ -3049,13 +3051,10 @@ Endpoint = host:51820"
 							</div>
 						</div>
 
-						<div id="netify-page" class="page hidden" data-feature="netify">
-							<h2>
-								NETIFY
-								<span style="font-size: 0.72em; font-weight: 500; opacity: 0.8"
-									>(Please wait for flows to load, it could take up to 1 minute)</span
-								>
-							</h2>
+						<div class="tab-content hidden" id="tab-netify" data-feature="netify">
+							<div style="font-size: 10px; color: var(--steel-muted); margin-bottom: 12px">
+								Please wait for flows to load, it could take up to 1 minute.
+							</div>
 							<div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 24px">
 								<div class="stat-card">
 									<div class="stat-label">FLOWS</div>
@@ -3309,6 +3308,7 @@ Endpoint = host:51820"
 									</div>
 								</div>
 							</div>
+						</div>
 						</div>
 
 						<div id="system-page" class="page hidden">

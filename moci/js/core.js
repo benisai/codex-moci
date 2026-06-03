@@ -274,7 +274,7 @@ export class OpenWrtCore {
 					'quarantine'
 				],
 			monitoring: ['monitoring'],
-			flows: ['flows'],
+			flows: ['flows', 'netify'],
 			notifications: ['network'],
 			system: ['system', 'backup', 'packages', 'services', 'ssh_keys', 'storage', 'leds', 'firmware'],
 			netify: ['netify'],

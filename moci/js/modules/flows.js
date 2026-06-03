@@ -19,8 +19,10 @@ export default class FlowsModule {
 		this.hostnameByIp = new Map();
 		this.lastHostRefreshAt = 0;
 		this.destinationDnsCache = new Map();
+		this.subTabs = null;
+		this.activeTab = 'netify';
 
-		this.core.registerRoute('/flows', async () => {
+		this.core.registerRoute('/flows', async (path, subPaths) => {
 			const pageElement = document.getElementById('flows-page');
 			if (pageElement) pageElement.classList.remove('hidden');
 
@@ -29,8 +31,38 @@ export default class FlowsModule {
 				this.initialized = true;
 			}
 
-			await this.load();
+			if (!this.subTabs) {
+				this.subTabs = this.core.setupSubTabs('flows-page', {
+					netify: () => this.loadNetifyTab(),
+					conntrack: () => this.loadConntrackTab()
+				});
+				this.subTabs.attachListeners();
+			}
+
+			const defaultTab = this.core.isFeatureEnabled('netify') ? 'netify' : 'conntrack';
+			if (!subPaths?.[0]) {
+				this.core.navigate(`/flows/${defaultTab}`);
+				return;
+			}
+			const tab = subPaths?.[0] || defaultTab;
+			this.activeTab = tab;
+			this.subTabs.showSubTab(tab);
 		});
+	}
+
+	async loadConntrackTab() {
+		this.activeTab = 'conntrack';
+		await this.load();
+	}
+
+	async loadNetifyTab() {
+		this.activeTab = 'netify';
+		const netify = await this.core.loadModule('netify');
+		if (netify?.loadFlowsTab) {
+			await netify.loadFlowsTab();
+		} else if (netify?.load) {
+			await netify.load();
+		}
 	}
 
 	setupHandlers() {
@@ -92,7 +124,7 @@ export default class FlowsModule {
 		if (this.pollInterval) return;
 		this.pollInterval = setInterval(() => {
 			// Preserve user paging position while browsing history.
-			if (this.core.currentRoute && this.core.currentRoute.startsWith('/flows') && this.flowsPage === 0) {
+			if (this.core.currentRoute && this.core.currentRoute.startsWith('/flows') && this.activeTab === 'conntrack' && this.flowsPage === 0) {
 				this.refresh(false);
 			}
 		}, 10000);
