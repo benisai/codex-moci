@@ -26,6 +26,7 @@
 
 html,
 body {
+	background-color: var(--space-black);
 	overscroll-behavior: none;
 	overscroll-behavior-x: none;
 	overscroll-behavior-y: none;
@@ -71,6 +72,7 @@ body {
 
 .view {
 	min-height: 100vh;
+	background-color: transparent;
 }
 
 #login-view {
@@ -2314,6 +2316,23 @@ select.form-input {
 }
 
 @media (max-width: 960px) {
+	html,
+	body,
+	.view,
+	#main-view {
+		background-color: var(--space-black);
+	}
+
+	body {
+		background-attachment: scroll;
+	}
+
+	.header {
+		background: rgba(10, 10, 12, 0.96);
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+	}
+
 	#monitoring-page .tabs {
 		flex-wrap: nowrap;
 		overflow-x: auto;
