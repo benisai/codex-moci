@@ -579,7 +579,7 @@ ORDER BY daily.mac;`;
 			const historySql = `
 SELECT mac, bucket_start, rx_bytes, tx_bytes
 FROM device_bandwidth_15m
-WHERE bucket_start >= CAST(strftime('%s','now') AS INTEGER) - 86400
+WHERE bucket_start >= CAST(strftime('%s','now') AS INTEGER) - 43200
 ORDER BY mac, bucket_start;`;
 			const historyOutput = await this.querySql(dbPath, historySql);
 			for (const line of String(historyOutput || '').split('\n')) {
@@ -1140,11 +1140,12 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 	}
 
 	renderDeviceBandwidthChart(row) {
-		const history = Array.isArray(row?.bandwidthHistory) ? row.bandwidthHistory.slice(-96) : [];
+		const chartSlots = 48;
+		const history = Array.isArray(row?.bandwidthHistory) ? row.bandwidthHistory.slice(-chartSlots) : [];
 		if (history.length === 0) {
 			return `<div class="devices-bandwidth-chart-panel">
 				<div class="devices-bandwidth-chart-header">
-					<span>15M BANDWIDTH HISTORY</span>
+					<span>12H BANDWIDTH HISTORY</span>
 					<span>No bucket data yet</span>
 				</div>
 				<div class="devices-bandwidth-empty">Collector needs at least two samples before usage appears.</div>
@@ -1152,7 +1153,6 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 		}
 
 		const maxBytes = Math.max(...history.map(point => Number(point.rxBytes || 0) + Number(point.txBytes || 0)), 1);
-		const chartSlots = 96;
 		const emptySlots = Math.max(0, chartSlots - history.length);
 		const spacers = Array.from({ length: emptySlots }, () => '<div class="devices-bandwidth-bar-spacer" aria-hidden="true"></div>').join('');
 		const bars = history
@@ -1180,10 +1180,10 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 
 		return `<div class="devices-bandwidth-chart-panel">
 			<div class="devices-bandwidth-chart-header">
-				<span>15M BANDWIDTH HISTORY</span>
-				<span>24H Down ${this.core.escapeHtml(this.core.formatBytes(totalDown))} / Up ${this.core.escapeHtml(this.core.formatBytes(totalUp))}</span>
+				<span>12H BANDWIDTH HISTORY</span>
+				<span>12H Down ${this.core.escapeHtml(this.core.formatBytes(totalDown))} / Up ${this.core.escapeHtml(this.core.formatBytes(totalUp))}</span>
 			</div>
-			<div class="devices-bandwidth-chart" aria-label="15 minute device bandwidth history">${spacers}${bars}</div>
+			<div class="devices-bandwidth-chart" aria-label="12 hour device bandwidth history">${spacers}${bars}</div>
 			<div class="devices-bandwidth-legend">
 				<span><i class="devices-bandwidth-legend-download"></i>Download</span>
 				<span><i class="devices-bandwidth-legend-upload"></i>Upload</span>

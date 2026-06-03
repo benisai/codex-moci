@@ -748,7 +748,7 @@ body {
 
 .devices-bandwidth-chart {
 	display: grid;
-	grid-template-columns: repeat(96, minmax(2px, 1fr));
+	grid-template-columns: repeat(48, minmax(2px, 1fr));
 	align-items: end;
 	gap: 2px;
 	height: 96px;
@@ -763,7 +763,7 @@ body {
 	flex-direction: column;
 	justify-content: flex-end;
 	justify-self: center;
-	width: min(100%, 12px);
+	width: min(100%, 18px);
 	min-width: 2px;
 	border-radius: 2px 2px 0 0;
 	overflow: hidden;
@@ -772,7 +772,7 @@ body {
 
 .devices-bandwidth-bar-spacer {
 	justify-self: center;
-	width: min(100%, 12px);
+	width: min(100%, 18px);
 	min-width: 2px;
 	height: 1px;
 }
