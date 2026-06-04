@@ -31,6 +31,7 @@ export default class SystemModule {
 					startup: () => this.loadStartup(),
 					cron: () => this.loadCron(),
 					mounts: () => this.loadMounts(),
+					paternal: () => this.loadPaternal(),
 					led: () => this.loadLED(),
 					upgrade: () => this.loadUpgrade()
 				});
@@ -79,6 +80,19 @@ export default class SystemModule {
 		document
 			.getElementById('restart-firewall-btn')
 			?.addEventListener('click', () => this.core.serviceReload('firewall'));
+		document.getElementById('paternal-refresh-devices-btn')?.addEventListener('click', () => this.loadPaternal());
+		document.getElementById('paternal-select-all')?.addEventListener('change', event => {
+			const checked = Boolean(event?.target?.checked);
+			document.querySelectorAll('#paternal-devices-table .paternal-device-checkbox').forEach(input => {
+				input.checked = checked;
+			});
+		});
+		document
+			.getElementById('paternal-block-selected-btn')
+			?.addEventListener('click', () => this.setPaternalSelectedDevicesBlocked(true));
+		document
+			.getElementById('paternal-unblock-selected-btn')
+			?.addEventListener('click', () => this.setPaternalSelectedDevicesBlocked(false));
 
 		this.ensureModalIsTopLevel('cron-modal');
 		this.core.setupModal({
@@ -154,6 +168,202 @@ export default class SystemModule {
 			fn();
 		});
 		this.cleanups = [];
+	}
+
+	normalizeMac(mac) {
+		const value = String(mac || '').trim().toLowerCase();
+		if (!/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(value)) return '';
+		return value;
+	}
+
+	isValidIpv4(value) {
+		const ip = String(value || '').trim();
+		if (!/^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) return false;
+		return ip.split('.').every(part => Number(part) >= 0 && Number(part) <= 255);
+	}
+
+	buildPaternalRuleName(device) {
+		const hostname = String(device?.hostname || '')
+			.trim()
+			.replace(/\s+/g, '_')
+			.replace(/[^A-Za-z0-9_.-]/g, '')
+			.slice(0, 32);
+		if (hostname && hostname.toLowerCase() !== 'unknown') return `moci_parental_${hostname}`;
+		return `moci_parental_${String(device?.mac || '').replace(/:/g, '')}`;
+	}
+
+	async loadPaternal() {
+		const tbody = document.querySelector('#paternal-devices-table tbody');
+		if (!tbody) return;
+		try {
+			const [devices, blockedByMac] = await Promise.all([this.fetchPaternalDevices(), this.fetchPaternalBlockedRules()]);
+			if (devices.length === 0) {
+				this.core.renderEmptyTable(tbody, 5, 'No devices found');
+				return;
+			}
+			tbody.innerHTML = devices
+				.map(device => {
+					const mac = this.core.escapeHtml(device.mac);
+					const blocked = Boolean(blockedByMac.get(device.mac)?.enabled);
+					return `<tr class="${blocked ? 'devices-row-restricted' : ''}">
+						<td data-label="SELECT"><input type="checkbox" class="paternal-device-checkbox" value="${mac}" /></td>
+						<td data-label="HOSTNAME">${this.core.escapeHtml(device.hostname || 'Unknown')}</td>
+						<td data-label="IP ADDRESS">${this.core.escapeHtml(device.ip || 'N/A')}</td>
+						<td data-label="MAC ADDRESS">${mac}</td>
+						<td data-label="STATUS">${blocked ? this.core.renderBadge('error', 'BLOCKED') : this.core.renderBadge('success', 'ALLOWED')}</td>
+					</tr>`;
+				})
+				.join('');
+			const selectAll = document.getElementById('paternal-select-all');
+			if (selectAll) selectAll.checked = false;
+		} catch (err) {
+			console.error('Failed to load paternal devices:', err);
+			this.core.renderEmptyTable(tbody, 5, 'Failed to load devices');
+		}
+	}
+
+	async fetchPaternalDevices() {
+		const byMac = new Map();
+		try {
+			const [status, result] = await this.core.ubusCall('luci-rpc', 'getDHCPLeases', {});
+			if (status === 0 && Array.isArray(result?.dhcp_leases)) {
+				for (const lease of result.dhcp_leases) {
+					const mac = this.normalizeMac(lease?.macaddr);
+					if (!mac) continue;
+					byMac.set(mac, {
+						mac,
+						hostname: String(lease?.hostname || 'Unknown'),
+						ip: String(lease?.ipaddr || '')
+					});
+				}
+			}
+		} catch {}
+
+		try {
+			const [status, result] = await this.core.uciGet('dhcp');
+			if (status === 0 && result?.values) {
+				for (const cfg of Object.values(result.values)) {
+					if (String(cfg?.['.type'] || '') !== 'host') continue;
+					const mac = this.normalizeMac(cfg?.mac);
+					if (!mac) continue;
+					const existing = byMac.get(mac) || { mac, hostname: 'Unknown', ip: '' };
+					byMac.set(mac, {
+						...existing,
+						hostname: existing.hostname !== 'Unknown' ? existing.hostname : String(cfg?.name || 'Unknown'),
+						ip: existing.ip || String(cfg?.ip || '')
+					});
+				}
+			}
+		} catch {}
+
+		return Array.from(byMac.values()).sort((a, b) =>
+			String(a.hostname || a.mac).localeCompare(String(b.hostname || b.mac))
+		);
+	}
+
+	async fetchPaternalBlockedRules() {
+		const byMac = new Map();
+		try {
+			const [status, result] = await this.core.uciGet('firewall');
+			if (status !== 0 || !result?.values) return byMac;
+			for (const [section, cfg] of Object.entries(result.values)) {
+				if (String(cfg?.['.type'] || '') !== 'rule') continue;
+				const name = String(cfg?.name || '').trim();
+				if (!name.startsWith('moci_parental_')) continue;
+				const mac = this.normalizeMac(cfg?.src_mac || cfg?.src_mac_address || '');
+				if (!mac) continue;
+				byMac.set(mac, {
+					section,
+					enabled: String(cfg?.enabled ?? '1') !== '0'
+				});
+			}
+		} catch {}
+		return byMac;
+	}
+
+	getSelectedPaternalMacs() {
+		return Array.from(document.querySelectorAll('#paternal-devices-table .paternal-device-checkbox:checked'))
+			.map(input => this.normalizeMac(input.value))
+			.filter(Boolean);
+	}
+
+	async setPaternalSelectedDevicesBlocked(blocked) {
+		const selectedMacs = this.getSelectedPaternalMacs();
+		if (selectedMacs.length === 0) {
+			this.core.showToast('Select one or more devices', 'warning');
+			return;
+		}
+
+		try {
+			const devices = await this.fetchPaternalDevices();
+			const byMac = new Map(devices.map(device => [device.mac, device]));
+			const [status, result] = await this.core.uciGet('firewall');
+			if (status !== 0 || !result?.values) throw new Error('Unable to read firewall config');
+
+			for (const mac of selectedMacs) {
+				if (blocked) {
+					const existingSection = Object.entries(result.values).find(([, cfg]) => {
+						const name = String(cfg?.name || '').trim();
+						const ruleMac = this.normalizeMac(cfg?.src_mac || cfg?.src_mac_address || '');
+						return String(cfg?.['.type'] || '') === 'rule' && name.startsWith('moci_parental_') && ruleMac === mac;
+					})?.[0];
+					let section = existingSection;
+					if (!section) {
+						const [, addResult] = await this.core.uciAdd('firewall', 'rule');
+						section = String(addResult?.section || '').trim();
+						if (!section) throw new Error('Failed to create firewall rule');
+					}
+					const device = byMac.get(mac) || { mac, hostname: 'Unknown', ip: '' };
+					const values = {
+						name: this.buildPaternalRuleName(device),
+						src: 'lan',
+						dest: 'wan',
+						src_mac: mac,
+						proto: 'all',
+						target: 'REJECT',
+						family: 'any',
+						enabled: '1'
+					};
+					if (this.isValidIpv4(device.ip)) values.src_ip = device.ip;
+					await this.core.uciSet('firewall', section, values);
+				} else {
+					for (const [section, cfg] of Object.entries(result.values)) {
+						if (String(cfg?.['.type'] || '') !== 'rule') continue;
+						const name = String(cfg?.name || '').trim();
+						if (!name.startsWith('moci_parental_')) continue;
+						const ruleMac = this.normalizeMac(cfg?.src_mac || cfg?.src_mac_address || '');
+						if (ruleMac === mac) await this.core.uciDelete('firewall', section);
+					}
+				}
+			}
+
+			await this.core.uciCommit('firewall');
+			this.core.showToast(blocked ? 'Internet blocked for selected devices' : 'Internet unblocked for selected devices', 'success');
+			this.reloadFirewallInBackground('paternal time-of-use');
+			await this.loadPaternal();
+		} catch (err) {
+			console.error('Failed to update paternal devices:', err);
+			this.core.showToast('Failed to update selected devices', 'error');
+		}
+	}
+
+	async reloadFirewallInBackground(reason = 'firewall update') {
+		try {
+			await this.core.ubusCall(
+				'file',
+				'exec',
+				{
+					command: '/bin/sh',
+					params: [
+						'-c',
+						'(/etc/init.d/firewall reload 2>/dev/null || /etc/init.d/firewall restart 2>/dev/null || true) >/dev/null 2>&1 &'
+					]
+				},
+				{ timeout: 5000 }
+			);
+		} catch (err) {
+			console.warn(`${reason} saved, but firewall reload could not be started:`, err);
+		}
 	}
 
 	async loadGeneral() {

@@ -3336,6 +3336,7 @@ Endpoint = host:51820"
 								<button class="tab-btn" data-tab="startup" data-feature="services">STARTUP</button>
 								<button class="tab-btn" data-tab="cron">SCHEDULED TASKS</button>
 								<button class="tab-btn" data-tab="mounts" data-feature="storage">STORAGE</button>
+								<button class="tab-btn" data-tab="paternal">PATERNAL</button>
 								<button class="tab-btn" data-tab="led" data-feature="leds">LED</button>
 								<button class="tab-btn" data-tab="upgrade" data-feature="firmware">FIRMWARE</button>
 							</div>
@@ -3671,6 +3672,34 @@ Endpoint = host:51820"
 												Loading...
 											</td>
 										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+
+						<div class="tab-content hidden" id="tab-paternal">
+							<div class="tabs" style="margin-bottom: 16px">
+								<button class="tab-btn active" type="button">TIME-OF-USE</button>
+							</div>
+							<div class="stat-card">
+								<div class="section-title">TIME-OF-USE</div>
+								<div class="quick-actions" style="margin-bottom: 14px">
+									<button class="action-btn danger" id="paternal-block-selected-btn">BLOCK INTERNET</button>
+									<button class="action-btn success" id="paternal-unblock-selected-btn">UNBLOCK INTERNET</button>
+									<button class="action-btn" id="paternal-refresh-devices-btn">REFRESH</button>
+								</div>
+								<table class="data-table" id="paternal-devices-table">
+									<thead>
+										<tr>
+											<th><input type="checkbox" id="paternal-select-all" /></th>
+											<th>Hostname</th>
+											<th>IP Address</th>
+											<th>MAC Address</th>
+											<th>Status</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr><td colspan="5">Loading...</td></tr>
 									</tbody>
 								</table>
 							</div>

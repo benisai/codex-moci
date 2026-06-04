@@ -208,8 +208,8 @@ export class OpenWrtCore {
 			services: '1',
 			ssh_keys: '1',
 			storage: '1',
-			leds: '1',
-			firmware: '1'
+			leds: '0',
+			firmware: '0'
 		};
 	}
 
