@@ -1677,19 +1677,33 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 			}
 
 			await this.core.uciCommit('firewall');
-				await this.exec('/bin/sh', [
+		} catch (err) {
+			console.error('Failed to toggle parental control:', err);
+			this.core.showToast('Failed to update parental control rule', 'error');
+			return;
+		}
+
+		try {
+			await this.exec(
+				'/bin/sh',
+				[
 					'-c',
 					'/etc/init.d/firewall reload 2>/dev/null || /etc/init.d/firewall restart 2>/dev/null || true'
-				]);
-
-				this.core.showToast(currentlyBlocked ? 'Internet unblocked for device' : 'Internet blocked for device', 'success');
-				await this.loadDevices();
-				if (fromModal) this.core.closeModal('devices-pin-modal');
-			} catch (err) {
-				console.error('Failed to toggle parental control:', err);
-				this.core.showToast('Failed to update parental control rule', 'error');
-			}
+				],
+				{ timeout: 20000 }
+			);
+		} catch (err) {
+			console.warn('Parental control rule saved, but firewall reload did not report success:', err);
 		}
+
+		this.core.showToast(currentlyBlocked ? 'Internet unblocked for device' : 'Internet blocked for device', 'success');
+		if (fromModal) this.core.closeModal('devices-pin-modal');
+		try {
+			await this.loadDevices();
+		} catch (err) {
+			console.warn('Parental control rule saved, but device list refresh failed:', err);
+		}
+	}
 
 	async applyParentalDnsProfile() {
 		const mac = this.normalizeMac(document.getElementById('devices-pin-mac')?.value || '');
