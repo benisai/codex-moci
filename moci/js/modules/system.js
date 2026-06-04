@@ -239,7 +239,7 @@ export default class SystemModule {
 				.map(rule => {
 					const names = rule.macs.map(mac => deviceByMac.get(mac)?.hostname || mac);
 					const encodedKey = this.core.escapeHtml(this.encodePaternalRuleKey(rule.key));
-					return `<tr${rule.enabled ? '' : ' class="devices-row-restricted"'}>
+					return `<tr>
 						<td data-label="NAME">${this.core.escapeHtml(rule.displayName || rule.name)}</td>
 						<td data-label="WINDOW">${this.core.escapeHtml(rule.start)} - ${this.core.escapeHtml(rule.end)}</td>
 						<td data-label="REPEAT">${this.core.escapeHtml(this.formatPaternalDays(rule.days))}</td>
