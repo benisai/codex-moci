@@ -717,8 +717,16 @@ body {
 	cursor: pointer;
 }
 
+.devices-row-restricted {
+	background: rgba(255, 96, 128, 0.045);
+}
+
 .devices-row-expandable:hover {
 	background: rgba(255, 255, 255, 0.03);
+}
+
+.devices-row-expandable.devices-row-restricted:hover {
+	background: rgba(255, 96, 128, 0.075);
 }
 
 .devices-netify-detail-row td {

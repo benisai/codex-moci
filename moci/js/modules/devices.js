@@ -1002,6 +1002,10 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 					row.liveRxRateBps == null || !this.liveTrafficAvailable ? 'N/A' : this.formatBitRate(row.liveRxRateBps);
 				const isExpandable = row.mac && row.mac !== 'N/A';
 				const isExpanded = isExpandable && this.expandedMac === row.mac;
+				const isRestricted = Boolean(row?.parentalBlocked || row?.quarantined);
+				const rowClass = [isExpandable ? 'devices-row-expandable' : '', isRestricted ? 'devices-row-restricted' : '']
+					.filter(Boolean)
+					.join(' ');
 				const marker = isExpandable ? (isExpanded ? '▾ ' : '▸ ') : '';
 				const pinBtn =
 					row.mac === 'N/A'
@@ -1010,7 +1014,7 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 
 				const ipText = this.renderDeviceIp(row.ip, row.pinned);
 
-				const mainRow = `<tr ${isExpandable ? `class="devices-row-expandable" data-device-mac="${this.core.escapeHtml(row.mac)}"` : ''}>
+				const mainRow = `<tr ${rowClass ? `class="${rowClass}"` : ''}${isExpandable ? ` data-device-mac="${this.core.escapeHtml(row.mac)}"` : ''}>
 					<td data-label="HOSTNAME">${this.core.escapeHtml(`${marker}${row.hostname}`)}</td>
 					<td data-label="IP ADDRESS">${ipText}</td>
 					<td data-label="MAC ADDRESS">${this.core.escapeHtml(row.mac)}</td>
