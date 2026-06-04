@@ -2876,16 +2876,63 @@ done`;
 
 	parseBanIPFeedsFromText(text) {
 		const map = new Map();
-		if (!text) return map;
+		const content = String(text || '').trim();
+		if (!content) return map;
 		try {
-			const obj = JSON.parse(text);
+			const obj = JSON.parse(content);
 			for (const [id, cfg] of Object.entries(obj || {})) {
 				const key = String(id || '').trim();
 				if (!key) continue;
-				const descr = String(cfg?.descr || '').trim();
+				const descr = String(cfg?.descr || cfg?.description || cfg?.name || cfg?.info || '').trim();
 				map.set(key, descr ? `${key} (${descr})` : key);
 			}
 		} catch {}
+		if (map.size > 0) return map;
+
+		let current = '';
+		let descr = '';
+		const flush = () => {
+			const id = String(current || '').trim();
+			if (!id) return;
+			map.set(id, descr ? `${id} (${descr})` : id);
+			current = '';
+			descr = '';
+		};
+		for (const rawLine of content.split('\n')) {
+			const line = rawLine.trim();
+			if (!line || line.startsWith('#')) continue;
+			let match = line.match(/^config\s+(?:feed|source)\s+'?([A-Za-z0-9_.-]+)'?/i);
+			if (match) {
+				flush();
+				current = match[1];
+				continue;
+			}
+			match = line.match(/^json_add_object\s+['"]?([A-Za-z0-9_.-]+)['"]?/i);
+			if (match) {
+				flush();
+				current = match[1];
+				continue;
+			}
+			match = line.match(/^['"]?([A-Za-z0-9_.-]+)['"]?\s*[:=]\s*\{/);
+			if (match) {
+				flush();
+				current = match[1];
+				continue;
+			}
+			match = line.match(/^option\s+(?:descr|description|name|info)\s+['"]?(.+?)['"]?$/i);
+			if (match) {
+				descr = match[1];
+				continue;
+			}
+			match = line.match(/^json_add_string\s+(?:descr|description|name|info)\s+['"]?(.+?)['"]?$/i);
+			if (match) {
+				descr = match[1];
+				continue;
+			}
+			match = line.match(/^['"]?(?:descr|description|name|info)['"]?\s*[:=]\s*['"]?(.+?)['"]?,?$/i);
+			if (match) descr = match[1];
+		}
+		flush();
 		return map;
 	}
 
@@ -2911,7 +2958,12 @@ done`;
 		const selectedSet = new Set((selectedFeeds || []).map(v => String(v || '').trim()).filter(Boolean));
 		const sourceMap = new Map();
 
-		for (const path of ['/etc/banip/banip.custom.feeds', '/etc/banip/banip.feeds']) {
+		for (const path of [
+			'/etc/banip/banip.custom.feeds',
+			'/usr/share/banip/banip.custom.feeds',
+			'/etc/banip/banip.feeds',
+			'/usr/share/banip/banip.feeds'
+		]) {
 			const text = await this.readTextFileFlexible(path);
 			if (!text) continue;
 			const parsed = this.parseBanIPFeedsFromText(text);
@@ -2943,7 +2995,10 @@ done`;
 		const list = document.getElementById('banip-country-list');
 		if (!list) return;
 		const selectedSet = new Set((selectedCountries || []).map(v => String(v || '').trim().toLowerCase()).filter(Boolean));
-		const rows = this.parseBanIPCountriesFromText(await this.readTextFileFlexible('/etc/banip/banip.countries'));
+		const countryText =
+			(await this.readTextFileFlexible('/etc/banip/banip.countries')) ||
+			(await this.readTextFileFlexible('/usr/share/banip/banip.countries'));
+		const rows = this.parseBanIPCountriesFromText(countryText);
 
 		for (const code of selectedSet) {
 			if (!rows.find(r => r.code === code)) {
@@ -3047,12 +3102,9 @@ done`;
 		if (!serviceStatusEl || !bootStatusEl) return;
 
 		try {
-			const [s1, r1] = await this.core.ubusCall('file', 'exec', {
-				command: '/bin/sh',
-				params: ['-c', '/etc/init.d/banip running >/dev/null 2>&1 && echo RUNNING || echo STOPPED']
-			});
-			const running = s1 === 0 && String(r1?.stdout || '').trim() === 'RUNNING';
-			serviceStatusEl.innerHTML = this.core.renderBadge(running ? 'success' : 'error', running ? 'RUNNING' : 'STOPPED');
+			const [status, result] = await this.core.uciGet('banip', 'global');
+			const enabled = status === 0 && String(result?.values?.ban_enabled || '0') === '1';
+			serviceStatusEl.innerHTML = this.core.renderBadge(enabled ? 'success' : 'error', enabled ? 'ENABLED' : 'DISABLED');
 		} catch {
 			serviceStatusEl.innerHTML = this.core.renderBadge('error', 'UNKNOWN');
 		}
