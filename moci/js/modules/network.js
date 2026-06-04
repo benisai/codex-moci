@@ -3076,15 +3076,18 @@ done`;
 				...feeds.map(v => `uci add_list banip.global.ban_feed=${this.shellQuote(v)}`),
 				...countries.map(v => `uci add_list banip.global.ban_country=${this.shellQuote(v)}`),
 				...asnValues.map(v => `uci add_list banip.global.ban_asn=${this.shellQuote(v)}`),
-				'uci commit banip'
+				'uci commit banip',
+				'/etc/init.d/banip restart'
 			].join('; ');
+			if (saveBtn) saveBtn.textContent = 'REFRESHING...';
 			const [status] = await this.core.ubusCall('file', 'exec', {
 				command: '/bin/sh',
 				params: ['-c', script]
 			});
 			if (status !== 0) throw new Error('Unable to save banIP feed selection');
 			this.syncBanIPSelectionSummary();
-			this.core.showToast('BanIP feed selection saved', 'success');
+			this.core.showToast('BanIP feed selection saved and refreshed', 'success');
+			setTimeout(() => this.loadBanIPServiceState(), 600);
 		} catch (err) {
 			console.error('Failed to save banIP feeds:', err);
 			this.core.showToast('Failed to save BanIP feed selection', 'error');
