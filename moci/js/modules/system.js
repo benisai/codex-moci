@@ -86,15 +86,26 @@ export default class SystemModule {
 		document.querySelectorAll('.paternal-day').forEach(input => {
 			input.addEventListener('change', () => this.syncPaternalEverydayCheckbox());
 		});
+		document.querySelectorAll('.paternal-pause-option').forEach(button => {
+			button.addEventListener('click', event => this.pausePaternalRule(event.currentTarget?.dataset?.minutes));
+		});
 
 		this.ensureModalIsTopLevel('cron-modal');
 		this.ensureModalIsTopLevel('paternal-rule-modal');
+		this.ensureModalIsTopLevel('paternal-pause-modal');
 		this.core.setupModal({
 			modalId: 'paternal-rule-modal',
 			closeBtnId: 'close-paternal-rule-modal',
 			cancelBtnId: 'cancel-paternal-rule-btn',
 			saveBtnId: 'save-paternal-rule-btn',
 			saveHandler: () => this.savePaternalRule()
+		});
+		this.core.setupModal({
+			modalId: 'paternal-pause-modal',
+			closeBtnId: 'close-paternal-pause-modal',
+			cancelBtnId: 'cancel-paternal-pause-btn',
+			saveBtnId: 'save-paternal-pause-btn',
+			saveHandler: () => this.pausePaternalRule()
 		});
 		this.core.setupModal({
 			modalId: 'cron-modal',
@@ -145,6 +156,7 @@ export default class SystemModule {
 
 		const paternalCleanup = this.core.delegateActions('paternal-rules-table', {
 			edit: id => this.openPaternalRuleModal(id),
+			pause: id => this.openPaternalPauseModal(id),
 			toggle: id => this.togglePaternalRule(id),
 			delete: id => this.deletePaternalRule(id)
 		});
@@ -239,16 +251,22 @@ export default class SystemModule {
 				.map(rule => {
 					const names = rule.macs.map(mac => deviceByMac.get(mac)?.hostname || mac);
 					const encodedKey = this.core.escapeHtml(this.encodePaternalRuleKey(rule.key));
-					const statusBadge = rule.enabled
-						? this.core.renderBadge('success', 'ENABLED')
-						: '<span class="badge badge-interface-down">DISABLED</span>';
+					const statusBadge = rule.paused
+						? `<span class="badge badge-interface-down" title="${this.core.escapeHtml(this.formatPaternalPauseUntil(rule.pausedUntil))}">PAUSED</span>`
+						: rule.enabled
+							? this.core.renderBadge('success', 'ENABLED')
+							: '<span class="badge badge-interface-down">DISABLED</span>';
+					const pauseButton = rule.enabled && !rule.paused
+						? `<button class="action-btn-sm" data-action="pause" data-id="${encodedKey}" style="font-size:11px;padding:4px 8px;line-height:1.2">PAUSE</button>`
+						: '';
+					const toggleLabel = rule.paused ? 'RESUME' : (rule.enabled ? 'DISABLE' : 'ENABLE');
 					return `<tr>
 						<td data-label="NAME">${this.core.escapeHtml(rule.displayName || rule.name)}</td>
 						<td data-label="WINDOW">${this.core.escapeHtml(rule.start)} - ${this.core.escapeHtml(rule.end)}</td>
 						<td data-label="REPEAT">${this.core.escapeHtml(this.formatPaternalDays(rule.days))}</td>
 						<td data-label="DEVICES">${this.core.escapeHtml(names.length ? names.join(', ') : 'No devices')}</td>
 						<td data-label="STATUS">${statusBadge}</td>
-						<td data-label="ACTIONS"><button class="action-btn-sm" data-action="toggle" data-id="${encodedKey}" style="font-size:11px;padding:4px 8px;line-height:1.2">${rule.enabled ? 'DISABLE' : 'ENABLE'}</button><button class="action-btn-sm" data-action="edit" data-id="${encodedKey}" style="font-size:11px;padding:4px 8px;line-height:1.2">EDIT</button><button class="action-btn-sm danger" data-action="delete" data-id="${encodedKey}" style="font-size:11px;padding:4px 8px;line-height:1.2">DELETE</button></td>
+						<td data-label="ACTIONS">${pauseButton}<button class="action-btn-sm" data-action="toggle" data-id="${encodedKey}" style="font-size:11px;padding:4px 8px;line-height:1.2">${toggleLabel}</button><button class="action-btn-sm" data-action="edit" data-id="${encodedKey}" style="font-size:11px;padding:4px 8px;line-height:1.2">EDIT</button><button class="action-btn-sm danger" data-action="delete" data-id="${encodedKey}" style="font-size:11px;padding:4px 8px;line-height:1.2">DELETE</button></td>
 					</tr>`;
 				})
 				.join('');
@@ -261,6 +279,8 @@ export default class SystemModule {
 	async fetchPaternalRules() {
 		const grouped = new Map();
 		try {
+			const pauseMap = await this.fetchPaternalPauseMap();
+			const nowSeconds = Math.floor(Date.now() / 1000);
 			const [status, result] = await this.core.uciGet('firewall');
 			if (status !== 0 || !result?.values) return [];
 			for (const [section, cfg] of Object.entries(result.values)) {
@@ -273,10 +293,12 @@ export default class SystemModule {
 				const end = this.normalizePaternalTime(cfg?.stop_time || cfg?.end_time || '07:00:00');
 				const days = this.weekdayNamesToPaternalDays(cfg?.weekdays);
 				const enabled = String(cfg?.enabled ?? '1') !== '0';
+				const pausedUntil = Number(pauseMap.get(section) || 0);
+				const paused = pausedUntil > nowSeconds;
 				const displayName = this.displayNameFromPaternalFirewallName(name);
-				const key = [displayName, start, end, days.join(','), enabled ? '1' : '0'].join('|');
+				const key = [displayName, start, end, days.join(','), enabled ? '1' : '0', paused ? String(pausedUntil) : '0'].join('|');
 				if (!grouped.has(key)) {
-					grouped.set(key, { key, displayName, name, start, end, days, enabled, macs: [], sections: [] });
+					grouped.set(key, { key, displayName, name, start, end, days, enabled, paused, pausedUntil, macs: [], sections: [] });
 				}
 				const rule = grouped.get(key);
 				rule.macs.push(mac);
@@ -284,6 +306,22 @@ export default class SystemModule {
 			}
 		} catch {}
 		return Array.from(grouped.values()).sort((a, b) => String(a.displayName).localeCompare(String(b.displayName)));
+	}
+
+	async fetchPaternalPauseMap() {
+		const pauses = new Map();
+		try {
+			const [status, result] = await this.core.uciGet('moci');
+			if (status !== 0 || !result?.values) return pauses;
+			for (const cfg of Object.values(result.values)) {
+				if (String(cfg?.['.type'] || '') !== 'paternal_pause') continue;
+				const section = String(cfg?.target_section || '').trim();
+				const resumeAt = Number(cfg?.resume_at || 0);
+				if (!section || !Number.isFinite(resumeAt) || resumeAt <= 0) continue;
+				pauses.set(section, resumeAt);
+			}
+		} catch {}
+		return pauses;
 	}
 
 	displayNameFromPaternalFirewallName(name) {
@@ -351,6 +389,16 @@ export default class SystemModule {
 		return this.normalizePaternalList(value).flatMap(v => String(v).split(/[\s,]+/)).map(v => reverse[String(v).toLowerCase()]).filter(Boolean);
 	}
 
+	formatPaternalPauseUntil(timestamp) {
+		const value = Number(timestamp || 0);
+		if (!Number.isFinite(value) || value <= 0) return 'Pause active';
+		try {
+			return `Paused until ${new Date(value * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+		} catch {
+			return 'Pause active';
+		}
+	}
+
 	setPaternalEveryday(checked) {
 		document.querySelectorAll('.paternal-day').forEach(input => { input.checked = checked; });
 	}
@@ -399,6 +447,54 @@ export default class SystemModule {
 		}).join('');
 	}
 
+	async openPaternalPauseModal(encodedKey = '') {
+		const key = this.decodePaternalRuleKey(encodedKey);
+		const rule = key ? (await this.fetchPaternalRules()).find(item => item.key === key) : null;
+		if (!rule) {
+			this.core.showToast('Time-of-use rule not found', 'error');
+			return;
+		}
+		if (!rule.enabled || rule.paused) {
+			this.core.showToast('Only active rules can be paused', 'error');
+			return;
+		}
+		document.getElementById('paternal-pause-rule-key').value = encodedKey;
+		document.getElementById('paternal-pause-minutes').value = '';
+		const summary = `${rule.displayName || rule.name} - ${this.formatPaternalDays(rule.days)} - ${rule.start} to ${rule.end}`;
+		const summaryEl = document.getElementById('paternal-pause-rule-summary');
+		if (summaryEl) summaryEl.textContent = summary;
+		this.core.openModal('paternal-pause-modal');
+	}
+
+	async pausePaternalRule(minutesValue = '') {
+		const encodedKey = String(document.getElementById('paternal-pause-rule-key')?.value || '').trim();
+		const key = this.decodePaternalRuleKey(encodedKey);
+		const rawMinutes = String(minutesValue || document.getElementById('paternal-pause-minutes')?.value || '').trim();
+		const minutes = Number.parseInt(rawMinutes, 10);
+		if (!key) return;
+		if (!Number.isFinite(minutes) || minutes < 1 || minutes > 1440) {
+			this.core.showToast('Pause must be between 1 and 1440 minutes', 'error');
+			return;
+		}
+		try {
+			const rule = (await this.fetchPaternalRules()).find(item => item.key === key);
+			if (!rule?.sections?.length) throw new Error('rule not found');
+			const [status] = await this.core.ubusCall(
+				'file',
+				'exec',
+				{ command: '/usr/bin/moci-paternal-pause', params: ['pause', String(minutes), ...rule.sections] },
+				{ timeout: 20000 }
+			);
+			if (status !== 0) throw new Error('pause failed');
+			this.core.closeModal('paternal-pause-modal');
+			this.core.showToast(`Time-of-use rule paused for ${minutes} minute${minutes === 1 ? '' : 's'}`, 'success');
+			await this.loadPaternal();
+		} catch (err) {
+			console.error('Failed to pause paternal rule:', err);
+			this.core.showToast('Failed to pause time-of-use rule', 'error');
+		}
+	}
+
 	async savePaternalRule() {
 		const existingKey = String(document.getElementById('paternal-rule-section')?.value || '').trim();
 		const name = String(document.getElementById('paternal-rule-name')?.value || '').trim() || 'Time-of-use rule';
@@ -413,7 +509,11 @@ export default class SystemModule {
 		try {
 			const existing = existingKey ? (await this.fetchPaternalRules()).find(rule => rule.key === existingKey) : null;
 			const removeSections = existing?.sections || [];
+			const clearPauseCommand = removeSections.length
+				? `if [ -x /usr/bin/moci-paternal-pause ]; then /usr/bin/moci-paternal-pause clear ${removeSections.map(section => this.shellQuote(section)).join(' ')} >/dev/null 2>&1 || true; fi`
+				: '';
 			const script = [
+				clearPauseCommand,
 				...removeSections.map(section => `uci -q delete firewall.${this.shellQuote(section)}`),
 				...macs.flatMap(mac => [
 					'uci add firewall rule',
@@ -430,7 +530,7 @@ export default class SystemModule {
 				]),
 				'uci commit firewall',
 				'/etc/init.d/firewall reload >/dev/null 2>&1 || /etc/init.d/firewall restart >/dev/null 2>&1 || true'
-			].join('; ');
+			].filter(Boolean).join('; ');
 			const [status] = await this.core.ubusCall('file', 'exec', { command: '/bin/sh', params: ['-c', script] }, { timeout: 20000 });
 			if (status !== 0) throw new Error('save failed');
 			this.core.closeModal('paternal-rule-modal');
@@ -448,11 +548,15 @@ export default class SystemModule {
 		try {
 			const rule = (await this.fetchPaternalRules()).find(item => item.key === key);
 			if (!rule) throw new Error('rule not found');
+			const clearPauseCommand = rule.sections.length
+				? `if [ -x /usr/bin/moci-paternal-pause ]; then /usr/bin/moci-paternal-pause clear ${rule.sections.map(section => this.shellQuote(section)).join(' ')} >/dev/null 2>&1 || true; fi`
+				: '';
 			const script = [
+				clearPauseCommand,
 				...rule.sections.map(section => `uci -q delete firewall.${this.shellQuote(section)}`),
 				'uci commit firewall',
 				'/etc/init.d/firewall reload >/dev/null 2>&1 || /etc/init.d/firewall restart >/dev/null 2>&1 || true'
-			].join('; ');
+			].filter(Boolean).join('; ');
 			const [status] = await this.core.ubusCall('file', 'exec', { command: '/bin/sh', params: ['-c', script] }, { timeout: 20000 });
 			if (status !== 0) throw new Error('delete failed');
 			this.core.showToast('Time-of-use firewall rule deleted', 'success');
@@ -470,11 +574,15 @@ export default class SystemModule {
 			const rule = (await this.fetchPaternalRules()).find(item => item.key === key);
 			if (!rule) throw new Error('rule not found');
 			const enabled = rule.enabled ? '0' : '1';
+			const clearPauseCommand = rule.sections.length
+				? `if [ -x /usr/bin/moci-paternal-pause ]; then /usr/bin/moci-paternal-pause clear ${rule.sections.map(section => this.shellQuote(section)).join(' ')} >/dev/null 2>&1 || true; fi`
+				: '';
 			const script = [
 				...rule.sections.map(section => `uci set firewall.${this.shellQuote(section)}.enabled=${this.shellQuote(enabled)}`),
+				clearPauseCommand,
 				'uci commit firewall',
 				'/etc/init.d/firewall reload >/dev/null 2>&1 || /etc/init.d/firewall restart >/dev/null 2>&1 || true'
-			].join('; ');
+			].filter(Boolean).join('; ');
 			const [status] = await this.core.ubusCall('file', 'exec', { command: '/bin/sh', params: ['-c', script] }, { timeout: 20000 });
 			if (status !== 0) throw new Error('toggle failed');
 			this.core.showToast(`Time-of-use rule ${enabled === '1' ? 'enabled' : 'disabled'}`, 'success');

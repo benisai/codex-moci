@@ -3757,6 +3757,35 @@ Endpoint = host:51820"
 							</div>
 						</div>
 
+						<div class="modal hidden" id="paternal-pause-modal">
+							<div class="modal-content" style="max-width: 620px">
+								<div class="modal-header">
+									<h3>PAUSE TIME-OF-USE</h3>
+									<button class="modal-close" id="close-paternal-pause-modal">&times;</button>
+								</div>
+								<div class="modal-body">
+									<input type="hidden" id="paternal-pause-rule-key" />
+									<div class="form-group">
+										<label class="form-label">RULE</label>
+										<div id="paternal-pause-rule-summary" style="font-family:var(--font-mono); font-size:14px; color:var(--starship-steel)">Loading...</div>
+									</div>
+									<div style="display:grid; gap:10px">
+										<button class="action-btn paternal-pause-option" type="button" data-minutes="15">PAUSE FOR 15 MINUTES</button>
+										<button class="action-btn paternal-pause-option" type="button" data-minutes="30">PAUSE FOR 30 MINUTES</button>
+										<button class="action-btn paternal-pause-option" type="button" data-minutes="60">PAUSE FOR 1 HOUR</button>
+									</div>
+									<div class="form-group" style="margin-top:18px">
+										<label class="form-label">CUSTOM MINUTES</label>
+										<input type="number" id="paternal-pause-minutes" class="form-input" min="1" max="1440" placeholder="120" />
+									</div>
+								</div>
+								<div class="modal-footer">
+									<button class="action-btn" id="cancel-paternal-pause-btn">CANCEL</button>
+									<button class="action-btn" id="save-paternal-pause-btn">PAUSE</button>
+								</div>
+							</div>
+						</div>
+
 						<div class="tab-content hidden" id="tab-upgrade" data-feature="firmware">
 							<div class="stat-card">
 								<div class="section-title">FIRMWARE UPGRADE</div>

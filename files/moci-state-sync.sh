@@ -166,6 +166,7 @@ save_runtime_logs() {
 		/tmp/moci-connection-flows-collector.log \
 		/tmp/moci-device-bandwidth-collector.log \
 		/tmp/moci-device-quarantine.log \
+		/tmp/moci-paternal-pause.last.log \
 		/tmp/moci-speedtest-monitor.last.log
 	do
 		[ -f "$f" ] || continue
