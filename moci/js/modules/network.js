@@ -339,12 +339,9 @@ export default class NetworkModule {
 		});
 		document.getElementById('save-banip-feed-btn')?.addEventListener('click', () => this.saveBanIPFeeds());
 		document.getElementById('refresh-banip-feed-btn')?.addEventListener('click', () => this.loadBanIP());
-		document.getElementById('save-banip-settings-btn')?.addEventListener('click', () => this.saveBanIPSettings());
 		document.getElementById('banip-start-btn')?.addEventListener('click', () => this.runBanIPServiceAction('start'));
 		document.getElementById('banip-stop-btn')?.addEventListener('click', () => this.runBanIPServiceAction('stop'));
 		document.getElementById('banip-restart-btn')?.addEventListener('click', () => this.runBanIPServiceAction('restart'));
-		document.getElementById('banip-enable-btn')?.addEventListener('click', () => this.runBanIPServiceAction('enable'));
-		document.getElementById('banip-disable-btn')?.addEventListener('click', () => this.runBanIPServiceAction('disable'));
 		document.getElementById('banip-settings-toggle-btn')?.addEventListener('click', () =>
 			this.toggleBanIPSettingsPanel()
 		);
@@ -2830,9 +2827,8 @@ done`;
 		const feedListEl = document.getElementById('banip-feed-list');
 		const countryListEl = document.getElementById('banip-country-list');
 		const asnInput = document.getElementById('banip-asn-input');
-		const enabledEl = document.getElementById('banip-enabled');
 
-		if (!feedListEl || !countryListEl || !asnInput || !enabledEl) return;
+		if (!feedListEl || !countryListEl || !asnInput) return;
 
 		if (!this.core.isFeatureEnabled('banip')) return;
 
@@ -2874,7 +2870,6 @@ done`;
 		await this.loadBanIPFeedOptions(selectedFeeds);
 		await this.loadBanIPCountryOptions(selectedCountries);
 		asnInput.value = selectedAsn.join(', ');
-		enabledEl.value = String(values?.ban_enabled || '1') === '0' ? '0' : '1';
 		this.syncBanIPSelectionSummary();
 		await this.loadBanIPServiceState();
 	}
@@ -3074,24 +3069,28 @@ done`;
 		}
 	}
 
-	async saveBanIPSettings() {
-		const enabled = String(document.getElementById('banip-enabled')?.value || '1') === '0' ? '0' : '1';
-		try {
-			await this.core.uciSet('banip', 'global', { ban_enabled: enabled });
-			await this.core.uciCommit('banip');
-			this.core.showToast('BanIP settings saved', 'success');
-			await this.loadBanIPServiceState();
-		} catch (err) {
-			console.error('Failed to save BanIP settings:', err);
-			this.core.showToast('Failed to save BanIP settings', 'error');
-		}
-	}
-
 	async runBanIPServiceAction(action) {
+		const serviceScripts = {
+			start: [
+				'uci set banip.global.ban_enabled=1',
+				'uci commit banip',
+				'/etc/init.d/banip enable',
+				'/etc/init.d/banip start'
+			],
+			stop: [
+				'/etc/init.d/banip stop',
+				'/etc/init.d/banip disable',
+				'uci set banip.global.ban_enabled=0',
+				'uci commit banip'
+			],
+			restart: ['/etc/init.d/banip restart']
+		};
+		const script = serviceScripts[action];
+		if (!script) return;
 		try {
 			const [status] = await this.core.ubusCall('file', 'exec', {
-				command: '/etc/init.d/banip',
-				params: [action]
+				command: '/bin/sh',
+				params: ['-c', script.join(' && ')]
 			});
 			if (status !== 0) throw new Error(`banip ${action} failed`);
 			this.core.showToast(`BanIP ${action} complete`, 'success');
