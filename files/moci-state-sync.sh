@@ -166,8 +166,7 @@ save_runtime_logs() {
 		/tmp/moci-connection-flows-collector.log \
 		/tmp/moci-device-bandwidth-collector.log \
 		/tmp/moci-device-quarantine.log \
-		/tmp/moci-speedtest-monitor.last.log \
-		/tmp/moci-paternal-time.last.log
+		/tmp/moci-speedtest-monitor.last.log
 	do
 		[ -f "$f" ] || continue
 		cp -f "$f" "$dst/" 2>/dev/null || true

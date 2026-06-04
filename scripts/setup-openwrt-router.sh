@@ -234,7 +234,6 @@ require_file "$REPO_DIR/files/moci-state-sync.sh"
 require_file "$REPO_DIR/files/moci-device-quarantine.sh"
 require_file "$REPO_DIR/files/moci-device-bandwidth-collector.sh"
 require_file "$REPO_DIR/files/moci-device-traffic-summary.sh"
-require_file "$REPO_DIR/files/moci-paternal-time.sh"
 require_file "$REPO_DIR/files/connection-flows-collector.init"
 require_file "$REPO_DIR/files/device-bandwidth-collector.init"
 require_file "$REPO_DIR/files/ping-monitor.init"
@@ -328,7 +327,6 @@ install_file "$REPO_DIR/files/moci-state-sync.sh" /usr/bin/moci-state-sync 0755
 install_file "$REPO_DIR/files/moci-device-quarantine.sh" /usr/bin/moci-device-quarantine 0755
 install_file "$REPO_DIR/files/moci-device-bandwidth-collector.sh" /usr/bin/moci-device-bandwidth-collector 0755
 install_file "$REPO_DIR/files/moci-device-traffic-summary.sh" /usr/bin/moci-device-traffic-summary 0755
-install_file "$REPO_DIR/files/moci-paternal-time.sh" /usr/bin/moci-paternal-time 0755
 install_file "$REPO_DIR/files/connection-flows-collector.init" /etc/init.d/connection-flows-collector 0755
 install_file "$REPO_DIR/files/device-bandwidth-collector.init" /etc/init.d/moci-device-bandwidth-collector 0755
 install_file "$REPO_DIR/files/ping-monitor.init" /etc/init.d/ping-monitor 0755
@@ -479,19 +477,29 @@ if [ "$ENABLED" = "1" ]; then
 fi
 cp "$TMP_CRON" "$CRON_PATH"
 rm -f "$TMP_CRON"
-/bin/sh -c '/etc/init.d/cron reload 2>/dev/null || /etc/init.d/cron restart 2>/dev/null || /etc/init.d/crond reload 2>/dev/null || /etc/init.d/crond restart 2>/dev/null || killall -HUP crond 2>/dev/null || true'
 
-log "Applying paternal time-of-use cron schedule"
+log "Removing legacy paternal time-of-use cron schedule"
 PATERNAL_MARKER="# MOCI_PATERNAL_TIME"
 TMP_CRON="/tmp/.moci_paternal_cron.$$"
 if [ -f "$CRON_PATH" ]; then
 	grep -v "$PATERNAL_MARKER" "$CRON_PATH" >"$TMP_CRON" 2>/dev/null || : >"$TMP_CRON"
-else
-	: >"$TMP_CRON"
+	cp "$TMP_CRON" "$CRON_PATH"
+	rm -f "$TMP_CRON"
 fi
-echo "*/5 * * * * /usr/bin/moci-paternal-time --apply >/tmp/moci-paternal-time.last.log 2>&1 $PATERNAL_MARKER" >>"$TMP_CRON"
-cp "$TMP_CRON" "$CRON_PATH"
-rm -f "$TMP_CRON"
+rm -f /usr/bin/moci-paternal-time 2>/dev/null || true
+
+while :; do
+	LEGACY_SECTION="$(uci show firewall 2>/dev/null | awk -F'[.=]' '$1 == "firewall" && $3 == "name" && $0 ~ /moci_paternal_time_/ { print $2; exit }')"
+	[ -n "$LEGACY_SECTION" ] || break
+	uci -q delete "firewall.$LEGACY_SECTION" 2>/dev/null || true
+done
+while :; do
+	LEGACY_SECTION="$(uci show moci 2>/dev/null | sed -n 's/^moci\.\([^.=]*\)=paternal_rule$/\1/p' | head -n 1)"
+	[ -n "$LEGACY_SECTION" ] || break
+	uci -q delete "moci.$LEGACY_SECTION" 2>/dev/null || true
+done
+uci commit firewall 2>/dev/null || true
+uci commit moci 2>/dev/null || true
 /bin/sh -c '/etc/init.d/cron reload 2>/dev/null || /etc/init.d/cron restart 2>/dev/null || /etc/init.d/crond reload 2>/dev/null || /etc/init.d/crond restart 2>/dev/null || killall -HUP crond 2>/dev/null || true'
 
 SERVICES="vnstat nlbwmon connection-flows-collector moci-device-bandwidth-collector ping-monitor dns-monitor moci-state-sync moci-device-quarantine"
