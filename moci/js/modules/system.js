@@ -145,6 +145,7 @@ export default class SystemModule {
 
 		const paternalCleanup = this.core.delegateActions('paternal-rules-table', {
 			edit: id => this.openPaternalRuleModal(id),
+			toggle: id => this.togglePaternalRule(id),
 			delete: id => this.deletePaternalRule(id)
 		});
 		if (paternalCleanup) this.cleanups.push(paternalCleanup);
@@ -244,7 +245,7 @@ export default class SystemModule {
 						<td data-label="REPEAT">${this.core.escapeHtml(this.formatPaternalDays(rule.days))}</td>
 						<td data-label="DEVICES">${this.core.escapeHtml(names.length ? names.join(', ') : 'No devices')}</td>
 						<td data-label="STATUS">${this.core.renderBadge(rule.enabled ? 'success' : 'error', rule.enabled ? 'ENABLED' : 'DISABLED')}</td>
-						<td data-label="ACTIONS"><button class="action-btn-sm" data-action="edit" data-id="${encodedKey}" style="font-size:11px;padding:4px 8px;line-height:1.2">EDIT</button><button class="action-btn-sm danger" data-action="delete" data-id="${encodedKey}" style="font-size:11px;padding:4px 8px;line-height:1.2">DELETE</button></td>
+						<td data-label="ACTIONS"><button class="action-btn-sm" data-action="toggle" data-id="${encodedKey}" style="font-size:11px;padding:4px 8px;line-height:1.2">${rule.enabled ? 'DISABLE' : 'ENABLE'}</button><button class="action-btn-sm" data-action="edit" data-id="${encodedKey}" style="font-size:11px;padding:4px 8px;line-height:1.2">EDIT</button><button class="action-btn-sm danger" data-action="delete" data-id="${encodedKey}" style="font-size:11px;padding:4px 8px;line-height:1.2">DELETE</button></td>
 					</tr>`;
 				})
 				.join('');
@@ -456,6 +457,28 @@ export default class SystemModule {
 		} catch (err) {
 			console.error('Failed to delete paternal rule:', err);
 			this.core.showToast('Failed to delete time-of-use rule', 'error');
+		}
+	}
+
+	async togglePaternalRule(encodedKey) {
+		const key = this.decodePaternalRuleKey(encodedKey);
+		if (!key) return;
+		try {
+			const rule = (await this.fetchPaternalRules()).find(item => item.key === key);
+			if (!rule) throw new Error('rule not found');
+			const enabled = rule.enabled ? '0' : '1';
+			const script = [
+				...rule.sections.map(section => `uci set firewall.${this.shellQuote(section)}.enabled=${this.shellQuote(enabled)}`),
+				'uci commit firewall',
+				'/etc/init.d/firewall reload >/dev/null 2>&1 || /etc/init.d/firewall restart >/dev/null 2>&1 || true'
+			].join('; ');
+			const [status] = await this.core.ubusCall('file', 'exec', { command: '/bin/sh', params: ['-c', script] }, { timeout: 20000 });
+			if (status !== 0) throw new Error('toggle failed');
+			this.core.showToast(`Time-of-use rule ${enabled === '1' ? 'enabled' : 'disabled'}`, 'success');
+			await this.loadPaternal();
+		} catch (err) {
+			console.error('Failed to toggle paternal rule:', err);
+			this.core.showToast('Failed to update time-of-use rule', 'error');
 		}
 	}
 
