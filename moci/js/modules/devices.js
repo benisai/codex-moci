@@ -1683,25 +1683,28 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 			return;
 		}
 
+		this.core.showToast(currentlyBlocked ? 'Internet unblocked for device' : 'Internet blocked for device', 'success');
+		if (fromModal) this.core.closeModal('devices-pin-modal');
+		this.reloadFirewallInBackground('parental control');
+		try {
+			await this.loadDevices();
+		} catch (err) {
+			console.warn('Parental control rule saved, but device list refresh failed:', err);
+		}
+	}
+
+	async reloadFirewallInBackground(reason = 'firewall update') {
 		try {
 			await this.exec(
 				'/bin/sh',
 				[
 					'-c',
-					'/etc/init.d/firewall reload 2>/dev/null || /etc/init.d/firewall restart 2>/dev/null || true'
+					'(/etc/init.d/firewall reload 2>/dev/null || /etc/init.d/firewall restart 2>/dev/null || true) >/dev/null 2>&1 &'
 				],
-				{ timeout: 20000 }
+				{ timeout: 5000 }
 			);
 		} catch (err) {
-			console.warn('Parental control rule saved, but firewall reload did not report success:', err);
-		}
-
-		this.core.showToast(currentlyBlocked ? 'Internet unblocked for device' : 'Internet blocked for device', 'success');
-		if (fromModal) this.core.closeModal('devices-pin-modal');
-		try {
-			await this.loadDevices();
-		} catch (err) {
-			console.warn('Parental control rule saved, but device list refresh failed:', err);
+			console.warn(`${reason} saved, but firewall reload could not be started:`, err);
 		}
 	}
 
