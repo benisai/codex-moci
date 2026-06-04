@@ -239,12 +239,15 @@ export default class SystemModule {
 				.map(rule => {
 					const names = rule.macs.map(mac => deviceByMac.get(mac)?.hostname || mac);
 					const encodedKey = this.core.escapeHtml(this.encodePaternalRuleKey(rule.key));
+					const statusBadge = rule.enabled
+						? this.core.renderBadge('success', 'ENABLED')
+						: '<span class="badge badge-interface-down">DISABLED</span>';
 					return `<tr>
 						<td data-label="NAME">${this.core.escapeHtml(rule.displayName || rule.name)}</td>
 						<td data-label="WINDOW">${this.core.escapeHtml(rule.start)} - ${this.core.escapeHtml(rule.end)}</td>
 						<td data-label="REPEAT">${this.core.escapeHtml(this.formatPaternalDays(rule.days))}</td>
 						<td data-label="DEVICES">${this.core.escapeHtml(names.length ? names.join(', ') : 'No devices')}</td>
-						<td data-label="STATUS">${this.core.renderBadge(rule.enabled ? 'success' : 'error', rule.enabled ? 'ENABLED' : 'DISABLED')}</td>
+						<td data-label="STATUS">${statusBadge}</td>
 						<td data-label="ACTIONS"><button class="action-btn-sm" data-action="toggle" data-id="${encodedKey}" style="font-size:11px;padding:4px 8px;line-height:1.2">${rule.enabled ? 'DISABLE' : 'ENABLE'}</button><button class="action-btn-sm" data-action="edit" data-id="${encodedKey}" style="font-size:11px;padding:4px 8px;line-height:1.2">EDIT</button><button class="action-btn-sm danger" data-action="delete" data-id="${encodedKey}" style="font-size:11px;padding:4px 8px;line-height:1.2">DELETE</button></td>
 					</tr>`;
 				})
