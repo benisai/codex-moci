@@ -1636,12 +1636,29 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 		const row = this.rowsByMac.get(normalizedMac);
 		const existingSection = String(row?.parentalSection || '').trim();
 		const currentlyBlocked = Boolean(row?.parentalBlocked);
-		const targetEnabled = currentlyBlocked ? '0' : '1';
 		const ruleName = this.buildParentalRuleName(row, normalizedMac);
 		const sourceIp = this.resolveParentalSourceIp(row);
 
 		try {
-			if (existingSection) {
+			if (currentlyBlocked) {
+				let removed = 0;
+				const [status, result] = await this.core.uciGet('firewall');
+				if (status !== 0 || !result?.values) throw new Error('Unable to read firewall config');
+
+				for (const [section, cfg] of Object.entries(result.values)) {
+					if (String(cfg?.['.type'] || '') !== 'rule') continue;
+					const name = String(cfg?.name || '').trim();
+					if (!name.startsWith(this.parentalRulePrefix)) continue;
+					const ruleMac = this.normalizeMac(cfg?.src_mac || cfg?.src_mac_address || '');
+					if (ruleMac !== normalizedMac) continue;
+					await this.core.uciDelete('firewall', section);
+					removed += 1;
+				}
+
+				if (removed === 0 && existingSection) {
+					await this.core.uciDelete('firewall', existingSection);
+				}
+			} else if (existingSection) {
 				const updateValues = {
 					name: ruleName,
 					src: 'lan',
@@ -1650,7 +1667,7 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 					proto: 'all',
 					target: 'REJECT',
 					family: 'any',
-					enabled: targetEnabled
+					enabled: '1'
 				};
 				if (sourceIp) {
 					updateValues.src_ip = sourceIp;
