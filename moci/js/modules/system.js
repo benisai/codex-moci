@@ -80,21 +80,22 @@ export default class SystemModule {
 		document
 			.getElementById('restart-firewall-btn')
 			?.addEventListener('click', () => this.core.serviceReload('firewall'));
-		document.getElementById('paternal-refresh-devices-btn')?.addEventListener('click', () => this.loadPaternal());
-		document.getElementById('paternal-select-all')?.addEventListener('change', event => {
-			const checked = Boolean(event?.target?.checked);
-			document.querySelectorAll('#paternal-devices-table .paternal-device-checkbox').forEach(input => {
-				input.checked = checked;
-			});
+		document.getElementById('paternal-refresh-rules-btn')?.addEventListener('click', () => this.loadPaternal());
+		document.getElementById('paternal-add-rule-btn')?.addEventListener('click', () => this.openPaternalRuleModal());
+		document.getElementById('paternal-day-everyday')?.addEventListener('change', event => this.setPaternalEveryday(Boolean(event?.target?.checked)));
+		document.querySelectorAll('.paternal-day').forEach(input => {
+			input.addEventListener('change', () => this.syncPaternalEverydayCheckbox());
 		});
-		document
-			.getElementById('paternal-block-selected-btn')
-			?.addEventListener('click', () => this.setPaternalSelectedDevicesBlocked(true));
-		document
-			.getElementById('paternal-unblock-selected-btn')
-			?.addEventListener('click', () => this.setPaternalSelectedDevicesBlocked(false));
 
 		this.ensureModalIsTopLevel('cron-modal');
+		this.ensureModalIsTopLevel('paternal-rule-modal');
+		this.core.setupModal({
+			modalId: 'paternal-rule-modal',
+			closeBtnId: 'close-paternal-rule-modal',
+			cancelBtnId: 'cancel-paternal-rule-btn',
+			saveBtnId: 'save-paternal-rule-btn',
+			saveHandler: () => this.savePaternalRule()
+		});
 		this.core.setupModal({
 			modalId: 'cron-modal',
 			closeBtnId: 'close-cron-modal',
@@ -141,6 +142,12 @@ export default class SystemModule {
 			restart: id => this.restartService(id)
 		});
 		if (servicesCleanup) this.cleanups.push(servicesCleanup);
+
+		const paternalCleanup = this.core.delegateActions('paternal-rules-table', {
+			edit: id => this.openPaternalRuleModal(id),
+			delete: id => this.deletePaternalRule(id)
+		});
+		if (paternalCleanup) this.cleanups.push(paternalCleanup);
 
 		this.setupFirmwareUpload();
 
@@ -193,33 +200,53 @@ export default class SystemModule {
 	}
 
 	async loadPaternal() {
-		const tbody = document.querySelector('#paternal-devices-table tbody');
+		const tbody = document.querySelector('#paternal-rules-table tbody');
 		if (!tbody) return;
 		try {
-			const [devices, blockedByMac] = await Promise.all([this.fetchPaternalDevices(), this.fetchPaternalBlockedRules()]);
-			if (devices.length === 0) {
-				this.core.renderEmptyTable(tbody, 5, 'No devices found');
+			const [rules, devices] = await Promise.all([this.fetchPaternalRules(), this.fetchPaternalDevices()]);
+			const deviceByMac = new Map(devices.map(device => [device.mac, device]));
+			if (rules.length === 0) {
+				this.core.renderEmptyTable(tbody, 6, 'No time-of-use rules');
 				return;
 			}
-			tbody.innerHTML = devices
-				.map(device => {
-					const mac = this.core.escapeHtml(device.mac);
-					const blocked = Boolean(blockedByMac.get(device.mac)?.enabled);
-					return `<tr class="${blocked ? 'devices-row-restricted' : ''}">
-						<td data-label="SELECT"><input type="checkbox" class="paternal-device-checkbox" value="${mac}" /></td>
-						<td data-label="HOSTNAME">${this.core.escapeHtml(device.hostname || 'Unknown')}</td>
-						<td data-label="IP ADDRESS">${this.core.escapeHtml(device.ip || 'N/A')}</td>
-						<td data-label="MAC ADDRESS">${mac}</td>
-						<td data-label="STATUS">${blocked ? this.core.renderBadge('error', 'BLOCKED') : this.core.renderBadge('success', 'ALLOWED')}</td>
+			tbody.innerHTML = rules
+				.map(rule => {
+					const names = rule.macs.map(mac => deviceByMac.get(mac)?.hostname || mac);
+					return `<tr${rule.enabled ? '' : ' class="devices-row-restricted"'}>
+						<td data-label="NAME">${this.core.escapeHtml(rule.name || rule.section)}</td>
+						<td data-label="WINDOW">${this.core.escapeHtml(rule.start)} - ${this.core.escapeHtml(rule.end)}</td>
+						<td data-label="REPEAT">${this.core.escapeHtml(this.formatPaternalDays(rule.days))}</td>
+						<td data-label="DEVICES">${this.core.escapeHtml(names.length ? names.join(', ') : 'No devices')}</td>
+						<td data-label="STATUS">${this.core.renderBadge(rule.enabled ? 'success' : 'error', rule.enabled ? 'ENABLED' : 'DISABLED')}</td>
+						<td data-label="ACTIONS">${this.core.renderActionButtons(rule.section)}</td>
 					</tr>`;
 				})
 				.join('');
-			const selectAll = document.getElementById('paternal-select-all');
-			if (selectAll) selectAll.checked = false;
 		} catch (err) {
-			console.error('Failed to load paternal devices:', err);
-			this.core.renderEmptyTable(tbody, 5, 'Failed to load devices');
+			console.error('Failed to load paternal rules:', err);
+			this.core.renderEmptyTable(tbody, 6, 'Failed to load time-of-use rules');
 		}
+	}
+
+	async fetchPaternalRules() {
+		const rules = [];
+		try {
+			const [status, result] = await this.core.uciGet('moci');
+			if (status !== 0 || !result?.values) return rules;
+			for (const [section, cfg] of Object.entries(result.values)) {
+				if (String(cfg?.['.type'] || '') !== 'paternal_rule') continue;
+				rules.push({
+					section,
+					name: String(cfg?.name || section),
+					start: this.normalizePaternalTime(cfg?.start_time || '21:00'),
+					end: this.normalizePaternalTime(cfg?.end_time || '07:00'),
+					days: this.normalizePaternalList(cfg?.day).filter(day => /^[1-7]$/.test(day)),
+					macs: this.normalizePaternalList(cfg?.mac).map(mac => this.normalizeMac(mac)).filter(Boolean),
+					enabled: String(cfg?.enabled ?? '1') !== '0'
+				});
+			}
+		} catch {}
+		return rules.sort((a, b) => String(a.name || a.section).localeCompare(String(b.name || b.section)));
 	}
 
 	async fetchPaternalDevices() {
@@ -261,89 +288,153 @@ export default class SystemModule {
 		);
 	}
 
-	async fetchPaternalBlockedRules() {
-		const byMac = new Map();
-		try {
-			const [status, result] = await this.core.uciGet('firewall');
-			if (status !== 0 || !result?.values) return byMac;
-			for (const [section, cfg] of Object.entries(result.values)) {
-				if (String(cfg?.['.type'] || '') !== 'rule') continue;
-				const name = String(cfg?.name || '').trim();
-				if (!name.startsWith('moci_parental_')) continue;
-				const mac = this.normalizeMac(cfg?.src_mac || cfg?.src_mac_address || '');
-				if (!mac) continue;
-				byMac.set(mac, {
-					section,
-					enabled: String(cfg?.enabled ?? '1') !== '0'
-				});
-			}
-		} catch {}
-		return byMac;
+	normalizePaternalList(value) {
+		return (Array.isArray(value) ? value : [value])
+			.map(v => String(v || '').trim())
+			.filter(Boolean);
 	}
 
-	getSelectedPaternalMacs() {
-		return Array.from(document.querySelectorAll('#paternal-devices-table .paternal-device-checkbox:checked'))
+	normalizePaternalTime(value) {
+		const raw = String(value || '').trim();
+		return /^\d{2}:\d{2}$/.test(raw) ? raw : '00:00';
+	}
+
+	formatPaternalDays(days) {
+		const names = { 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 7: 'Sun' };
+		const list = this.normalizePaternalList(days).filter(day => names[day]);
+		if (list.length === 7) return 'Everyday';
+		return list.map(day => names[day]).join(', ') || 'No days';
+	}
+
+	setPaternalEveryday(checked) {
+		document.querySelectorAll('.paternal-day').forEach(input => {
+			input.checked = checked;
+		});
+	}
+
+	syncPaternalEverydayCheckbox() {
+		const everyday = document.getElementById('paternal-day-everyday');
+		if (!everyday) return;
+		const days = Array.from(document.querySelectorAll('.paternal-day'));
+		everyday.checked = days.length > 0 && days.every(input => input.checked);
+	}
+
+	getSelectedPaternalDays() {
+		return Array.from(document.querySelectorAll('.paternal-day:checked'))
+			.map(input => String(input.value || '').trim())
+			.filter(day => /^[1-7]$/.test(day));
+	}
+
+	getSelectedPaternalRuleMacs() {
+		return Array.from(document.querySelectorAll('#paternal-rule-device-list .paternal-rule-device:checked'))
 			.map(input => this.normalizeMac(input.value))
 			.filter(Boolean);
 	}
 
-	async setPaternalSelectedDevicesBlocked(blocked) {
-		const selectedMacs = this.getSelectedPaternalMacs();
-		if (selectedMacs.length === 0) {
-			this.core.showToast('Select one or more devices', 'warning');
+	async openPaternalRuleModal(section = '') {
+		const rules = await this.fetchPaternalRules();
+		const rule = section ? rules.find(item => item.section === section) : null;
+		document.getElementById('paternal-rule-section').value = rule?.section || '';
+		document.getElementById('paternal-rule-name').value = rule?.name || '';
+		document.getElementById('paternal-rule-start').value = rule?.start || '21:00';
+		document.getElementById('paternal-rule-end').value = rule?.end || '07:00';
+		document.getElementById('paternal-rule-enabled').checked = rule ? rule.enabled : true;
+		const selectedDays = new Set(rule?.days?.length ? rule.days : ['1', '2', '3', '4', '5', '6', '7']);
+		document.querySelectorAll('.paternal-day').forEach(input => {
+			input.checked = selectedDays.has(String(input.value || ''));
+		});
+		this.syncPaternalEverydayCheckbox();
+		await this.renderPaternalRuleDevicePicker(rule?.macs || []);
+		this.core.openModal('paternal-rule-modal');
+	}
+
+	async renderPaternalRuleDevicePicker(selectedMacs = []) {
+		const list = document.getElementById('paternal-rule-device-list');
+		if (!list) return;
+		const devices = await this.fetchPaternalDevices();
+		const selected = new Set((selectedMacs || []).map(mac => this.normalizeMac(mac)).filter(Boolean));
+		if (devices.length === 0) {
+			list.innerHTML = '<div style="color: var(--steel-muted)">No devices found</div>';
+			return;
+		}
+		list.innerHTML = devices
+			.map(device => {
+				const checked = selected.has(device.mac) ? ' checked' : '';
+				const label = `${device.hostname || 'Unknown'} - ${device.ip || 'N/A'} - ${device.mac}`;
+				return `<label style="display:flex; align-items:center; gap:8px; padding:6px 0; font-family:var(--font-mono); font-size:12px">
+					<input type="checkbox" class="paternal-rule-device" value="${this.core.escapeHtml(device.mac)}"${checked} />
+					<span>${this.core.escapeHtml(label)}</span>
+				</label>`;
+			})
+			.join('');
+	}
+
+	async savePaternalRule() {
+		const section = String(document.getElementById('paternal-rule-section')?.value || '').trim();
+		const name = String(document.getElementById('paternal-rule-name')?.value || '').trim() || 'Time-of-use rule';
+		const start = this.normalizePaternalTime(document.getElementById('paternal-rule-start')?.value || '');
+		const end = this.normalizePaternalTime(document.getElementById('paternal-rule-end')?.value || '');
+		const days = this.getSelectedPaternalDays();
+		const macs = this.getSelectedPaternalRuleMacs();
+		const enabled = document.getElementById('paternal-rule-enabled')?.checked ? '1' : '0';
+		if (days.length === 0) {
+			this.core.showToast('Select at least one repeat day', 'error');
+			return;
+		}
+		if (macs.length === 0) {
+			this.core.showToast('Select at least one device', 'error');
 			return;
 		}
 
 		try {
-			const devices = await this.fetchPaternalDevices();
-			const byMac = new Map(devices.map(device => [device.mac, device]));
-			const [status, result] = await this.core.uciGet('firewall');
-			if (status !== 0 || !result?.values) throw new Error('Unable to read firewall config');
-
-			for (const mac of selectedMacs) {
-				if (blocked) {
-					const existingSection = Object.entries(result.values).find(([, cfg]) => {
-						const name = String(cfg?.name || '').trim();
-						const ruleMac = this.normalizeMac(cfg?.src_mac || cfg?.src_mac_address || '');
-						return String(cfg?.['.type'] || '') === 'rule' && name.startsWith('moci_parental_') && ruleMac === mac;
-					})?.[0];
-					let section = existingSection;
-					if (!section) {
-						const [, addResult] = await this.core.uciAdd('firewall', 'rule');
-						section = String(addResult?.section || '').trim();
-						if (!section) throw new Error('Failed to create firewall rule');
-					}
-					const device = byMac.get(mac) || { mac, hostname: 'Unknown', ip: '' };
-					const values = {
-						name: this.buildPaternalRuleName(device),
-						src: 'lan',
-						dest: 'wan',
-						src_mac: mac,
-						proto: 'all',
-						target: 'REJECT',
-						family: 'any',
-						enabled: '1'
-					};
-					if (this.isValidIpv4(device.ip)) values.src_ip = device.ip;
-					await this.core.uciSet('firewall', section, values);
-				} else {
-					for (const [section, cfg] of Object.entries(result.values)) {
-						if (String(cfg?.['.type'] || '') !== 'rule') continue;
-						const name = String(cfg?.name || '').trim();
-						if (!name.startsWith('moci_parental_')) continue;
-						const ruleMac = this.normalizeMac(cfg?.src_mac || cfg?.src_mac_address || '');
-						if (ruleMac === mac) await this.core.uciDelete('firewall', section);
-					}
-				}
-			}
-
-			await this.core.uciCommit('firewall');
-			this.core.showToast(blocked ? 'Internet blocked for selected devices' : 'Internet unblocked for selected devices', 'success');
-			this.reloadFirewallInBackground('paternal time-of-use');
+			const script = [
+				`section=${this.shellQuote(section)}`,
+				`name=${this.shellQuote(name)}`,
+				`start=${this.shellQuote(start)}`,
+				`end=${this.shellQuote(end)}`,
+				`enabled=${this.shellQuote(enabled)}`,
+				'[ -n "$section" ] || section="$(uci add moci paternal_rule)"',
+				'[ -n "$section" ] || exit 1',
+				'uci set "moci.$section.name=$name"',
+				'uci set "moci.$section.start_time=$start"',
+				'uci set "moci.$section.end_time=$end"',
+				'uci set "moci.$section.enabled=$enabled"',
+				'uci -q del "moci.$section.day"',
+				'uci -q del "moci.$section.mac"',
+				...days.map(day => `uci add_list moci.$section.day=${this.shellQuote(day)}`),
+				...macs.map(mac => `uci add_list moci.$section.mac=${this.shellQuote(mac)}`),
+				'uci commit moci',
+				'/usr/bin/moci-paternal-time --apply >/dev/null 2>&1 || true'
+			].join('; ');
+			const [status] = await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', script]
+			});
+			if (status !== 0) throw new Error('save failed');
+			this.core.closeModal('paternal-rule-modal');
+			this.core.showToast('Time-of-use rule saved', 'success');
 			await this.loadPaternal();
 		} catch (err) {
-			console.error('Failed to update paternal devices:', err);
-			this.core.showToast('Failed to update selected devices', 'error');
+			console.error('Failed to save paternal rule:', err);
+			this.core.showToast('Failed to save time-of-use rule', 'error');
+		}
+	}
+
+	async deletePaternalRule(section) {
+		const safeSection = String(section || '').trim();
+		if (!safeSection || !confirm('Delete this time-of-use rule?')) return;
+		try {
+			await this.core.uciDelete('moci', safeSection);
+			await this.core.uciCommit('moci');
+			await this.core.ubusCall('file', 'exec', {
+				command: '/bin/sh',
+				params: ['-c', '/usr/bin/moci-paternal-time --apply >/dev/null 2>&1 || true']
+			});
+			this.core.showToast('Time-of-use rule deleted', 'success');
+			await this.loadPaternal();
+		} catch (err) {
+			console.error('Failed to delete paternal rule:', err);
+			this.core.showToast('Failed to delete time-of-use rule', 'error');
 		}
 	}
 

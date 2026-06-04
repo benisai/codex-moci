@@ -3684,24 +3684,79 @@ Endpoint = host:51820"
 							<div class="stat-card">
 								<div class="section-title">TIME-OF-USE</div>
 								<div class="quick-actions" style="margin-bottom: 14px">
-									<button class="action-btn danger" id="paternal-block-selected-btn">BLOCK INTERNET</button>
-									<button class="action-btn success" id="paternal-unblock-selected-btn">UNBLOCK INTERNET</button>
-									<button class="action-btn" id="paternal-refresh-devices-btn">REFRESH</button>
+									<button class="action-btn" id="paternal-add-rule-btn">ADD RULE</button>
+									<button class="action-btn" id="paternal-refresh-rules-btn">REFRESH</button>
 								</div>
-								<table class="data-table" id="paternal-devices-table">
+								<table class="data-table" id="paternal-rules-table">
 									<thead>
 										<tr>
-											<th><input type="checkbox" id="paternal-select-all" /></th>
-											<th>Hostname</th>
-											<th>IP Address</th>
-											<th>MAC Address</th>
+											<th>Name</th>
+											<th>Window</th>
+											<th>Repeat</th>
+											<th>Devices</th>
 											<th>Status</th>
+											<th>Actions</th>
 										</tr>
 									</thead>
 									<tbody>
-										<tr><td colspan="5">Loading...</td></tr>
+										<tr><td colspan="6">Loading...</td></tr>
 									</tbody>
 								</table>
+							</div>
+						</div>
+
+						<div class="modal hidden" id="paternal-rule-modal">
+							<div class="modal-content">
+								<div class="modal-header">
+									<h3>TIME-OF-USE RULE</h3>
+									<button class="modal-close" id="close-paternal-rule-modal">&times;</button>
+								</div>
+								<div class="modal-body">
+									<input type="hidden" id="paternal-rule-section" />
+									<div class="form-group">
+										<label class="form-label">RULE NAME</label>
+										<input type="text" id="paternal-rule-name" class="form-input" placeholder="School night block" />
+									</div>
+									<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px">
+										<div class="form-group">
+											<label class="form-label">START TIME</label>
+											<input type="time" id="paternal-rule-start" class="form-input" value="21:00" />
+										</div>
+										<div class="form-group">
+											<label class="form-label">END TIME</label>
+											<input type="time" id="paternal-rule-end" class="form-input" value="07:00" />
+										</div>
+									</div>
+									<div class="form-group">
+										<label class="form-label">REPEAT</label>
+										<div style="display:flex; flex-wrap:wrap; gap:10px; font-family:var(--font-mono); font-size:12px">
+											<label><input type="checkbox" id="paternal-day-everyday" /> EVERYDAY</label>
+											<label><input type="checkbox" class="paternal-day" value="1" /> MON</label>
+											<label><input type="checkbox" class="paternal-day" value="2" /> TUE</label>
+											<label><input type="checkbox" class="paternal-day" value="3" /> WED</label>
+											<label><input type="checkbox" class="paternal-day" value="4" /> THU</label>
+											<label><input type="checkbox" class="paternal-day" value="5" /> FRI</label>
+											<label><input type="checkbox" class="paternal-day" value="6" /> SAT</label>
+											<label><input type="checkbox" class="paternal-day" value="7" /> SUN</label>
+										</div>
+									</div>
+									<div class="form-group">
+										<label class="form-label">DEVICES</label>
+										<div id="paternal-rule-device-list" style="max-height: 260px; overflow:auto; border: 1px solid var(--glass-border); border-radius: 6px; padding: 10px; background: rgba(0,0,0,0.18)">
+											<div style="color: var(--steel-muted)">Loading devices...</div>
+										</div>
+									</div>
+									<div class="form-group">
+										<label style="display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:12px">
+											<input type="checkbox" id="paternal-rule-enabled" checked />
+											ENABLED
+										</label>
+									</div>
+								</div>
+								<div class="modal-actions">
+									<button class="action-btn" id="cancel-paternal-rule-btn">CANCEL</button>
+									<button class="action-btn" id="save-paternal-rule-btn">SAVE RULE</button>
+								</div>
 							</div>
 						</div>
 
