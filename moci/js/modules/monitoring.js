@@ -8,6 +8,7 @@ export default class MonitoringModule {
 		this.target = '1.1.1.1';
 		this.intervalSec = 60;
 		this.thresholdMs = 100;
+		this.warningPercent = 95;
 		this.outputFile = '/tmp/moci-ping-monitor.txt';
 		this.samples = [];
 		this.pingSection = 'ping_monitor';
@@ -61,10 +62,12 @@ export default class MonitoringModule {
 	setupHandlers() {
 		const targetInput = document.getElementById('monitoring-target');
 		const thresholdInput = document.getElementById('monitoring-threshold');
+		const warningPercentInput = document.getElementById('monitoring-warning-percent');
 		const speedtestTimeInput = document.getElementById('monitoring-speedtest-time');
 		const dnsTargetInput = document.getElementById('monitoring-dns-target');
 		if (targetInput) targetInput.value = this.target;
 		if (thresholdInput) thresholdInput.value = String(this.thresholdMs);
+		if (warningPercentInput) warningPercentInput.value = String(this.warningPercent);
 		if (dnsTargetInput) dnsTargetInput.value = this.dnsTarget;
 		if (speedtestTimeInput) speedtestTimeInput.value = this.formatTimeValue(this.speedtestHour, this.speedtestMinute);
 
@@ -222,6 +225,7 @@ export default class MonitoringModule {
 				this.target = c.target || this.target;
 				this.intervalSec = 60;
 				this.thresholdMs = Number(c.threshold) || this.thresholdMs;
+				this.warningPercent = this.clampInt(c.warning_percent, this.warningPercent, 1, 100);
 				this.outputFile = c.output_file || this.outputFile;
 			}
 		} catch {}
@@ -253,10 +257,12 @@ export default class MonitoringModule {
 
 		const targetInput = document.getElementById('monitoring-target');
 		const thresholdInput = document.getElementById('monitoring-threshold');
+		const warningPercentInput = document.getElementById('monitoring-warning-percent');
 		const speedtestTimeInput = document.getElementById('monitoring-speedtest-time');
 		const dnsTargetInput = document.getElementById('monitoring-dns-target');
 		if (targetInput) targetInput.value = this.target;
 		if (thresholdInput) thresholdInput.value = String(this.thresholdMs);
+		if (warningPercentInput) warningPercentInput.value = String(this.warningPercent);
 		if (dnsTargetInput) dnsTargetInput.value = this.dnsTarget;
 		if (speedtestTimeInput) speedtestTimeInput.value = this.formatTimeValue(this.speedtestHour, this.speedtestMinute);
 		this.updateSpeedtestToggleButtons();
@@ -293,10 +299,12 @@ export default class MonitoringModule {
 	async applySettings() {
 		const targetInput = document.getElementById('monitoring-target');
 		const thresholdInput = document.getElementById('monitoring-threshold');
+		const warningPercentInput = document.getElementById('monitoring-warning-percent');
 
 		const target = (targetInput?.value || '').trim() || '1.1.1.1';
 		const interval = 60;
 		const threshold = Number(thresholdInput?.value || this.thresholdMs || 100);
+		const warningPercent = Number(warningPercentInput?.value || this.warningPercent || 95);
 
 		if (!/^[a-zA-Z0-9.\-:]+$/.test(target)) {
 			this.core.showToast('Invalid target host/IP', 'error');
@@ -306,19 +314,25 @@ export default class MonitoringModule {
 			this.core.showToast('Threshold must be between 1 and 10000 ms', 'error');
 			return;
 		}
+		if (!Number.isFinite(warningPercent) || warningPercent < 1 || warningPercent > 100) {
+			this.core.showToast('Warning percent must be between 1 and 100', 'error');
+			return;
+		}
 
 		try {
 			const section = await this.resolvePingSection(true);
 			await this.core.uciSet('moci', section, {
 				target,
 				interval: String(interval),
-				threshold: String(Math.round(threshold))
+				threshold: String(Math.round(threshold)),
+				warning_percent: String(Math.round(warningPercent))
 			});
 			await this.core.uciCommit('moci');
 			this.pingSection = section;
 			this.target = target;
 			this.intervalSec = 60;
 			this.thresholdMs = Math.round(threshold);
+			this.warningPercent = Math.round(warningPercent);
 			let restartFailed = false;
 			try {
 				await this.exec('/etc/init.d/ping-monitor', ['restart']);
@@ -647,7 +661,7 @@ export default class MonitoringModule {
 		const value = parseFloat(latency);
 		if (Number.isNaN(value)) return 'error';
 		if (value >= this.thresholdMs) return 'critical';
-		if (value >= Math.max(1, this.thresholdMs * 0.95)) return 'warn';
+		if (value >= Math.max(1, this.thresholdMs * (this.warningPercent / 100))) return 'warn';
 		if (value >= 75) return 'good';
 		return 'ok';
 	}
