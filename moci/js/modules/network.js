@@ -1846,7 +1846,8 @@ done`;
 			const rules = Object.entries(config)
 				.filter(([, v]) => v['.type'] === 'rule')
 				.map(([k, v]) => ({ section: k, ...v }));
-			rules.sort((a, b) => {
+			const visibleRules = rules.filter(r => !String(r.name || '').toLowerCase().startsWith('moci_time_'));
+			visibleRules.sort((a, b) => {
 				const aName = String(a.name || a.section || '').toLowerCase();
 				const bName = String(b.name || b.section || '').toLowerCase();
 				const aIsMoci = aName.startsWith('moci');
@@ -1878,11 +1879,11 @@ done`;
 
 			const rulesTbody = document.querySelector('#fw-rules-table tbody');
 			if (rulesTbody) {
-				if (rules.length === 0) {
+				if (visibleRules.length === 0) {
 					this.core.renderEmptyTable(rulesTbody, 8, 'No firewall rules');
 				} else {
-					const firstNonMociIndex = rules.findIndex(r => !String(r.name || r.section || '').toLowerCase().startsWith('moci'));
-					rulesTbody.innerHTML = rules
+					const firstNonMociIndex = visibleRules.findIndex(r => !String(r.name || r.section || '').toLowerCase().startsWith('moci'));
+					rulesTbody.innerHTML = visibleRules
 						.map((r, idx) => {
 							const target = String(r.target || '').toUpperCase();
 							const isBlockedAction = target === 'REJECT' || target === 'DROP';

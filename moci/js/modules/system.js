@@ -51,7 +51,6 @@ export default class SystemModule {
 		document.getElementById('change-password-btn')?.addEventListener('click', () => this.changePassword());
 		document.getElementById('backup-btn')?.addEventListener('click', () => this.createBackup());
 		document.getElementById('reset-btn')?.addEventListener('click', () => this.factoryReset());
-		document.getElementById('reboot-btn')?.addEventListener('click', () => this.rebootSystem());
 		document.getElementById('moci-state-backup-apply-btn')?.addEventListener('click', () => this.saveMociStateBackupSettings());
 			document.getElementById('moci-state-backup-save-btn')?.addEventListener('click', () => this.runMociStateBackupAction('save'));
 			document.getElementById('moci-state-backup-restore-btn')?.addEventListener('click', () => this.runMociStateBackupAction('restore'));
@@ -74,12 +73,6 @@ export default class SystemModule {
 			this.packagesPage += 1;
 			this.renderPackagesTable();
 		});
-		document
-			.getElementById('restart-network-btn')
-			?.addEventListener('click', () => this.core.serviceReload('network'));
-		document
-			.getElementById('restart-firewall-btn')
-			?.addEventListener('click', () => this.core.serviceReload('firewall'));
 		document.getElementById('paternal-refresh-rules-btn')?.addEventListener('click', () => this.loadPaternal());
 		document.getElementById('paternal-add-rule-btn')?.addEventListener('click', () => this.openPaternalRuleModal());
 		document.getElementById('paternal-day-everyday')?.addEventListener('change', event => this.setPaternalEveryday(Boolean(event?.target?.checked)));
