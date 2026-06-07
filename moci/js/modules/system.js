@@ -76,10 +76,9 @@ export default class SystemModule {
 			this.renderPackagesTable();
 		});
 		document.getElementById('paternal-refresh-rules-btn')?.addEventListener('click', () => this.loadPaternal());
+		document.getElementById('paternal-add-block-btn')?.addEventListener('click', () => this.openPaternalBlockModal());
 		document.getElementById('paternal-block-refresh-btn')?.addEventListener('click', () => this.loadPaternalBlockPanel());
 		document.getElementById('paternal-block-device-select')?.addEventListener('change', () => this.syncPaternalBlockPanel());
-		document.getElementById('paternal-block-btn')?.addEventListener('click', () => this.setPaternalInternetBlock(true));
-		document.getElementById('paternal-unblock-btn')?.addEventListener('click', () => this.setPaternalInternetBlock(false));
 		document.getElementById('paternal-add-rule-btn')?.addEventListener('click', () => this.openPaternalRuleModal());
 		document.getElementById('paternal-day-everyday')?.addEventListener('change', event => this.setPaternalEveryday(Boolean(event?.target?.checked)));
 		document.querySelectorAll('.paternal-day').forEach(input => {
@@ -90,8 +89,16 @@ export default class SystemModule {
 		});
 
 		this.ensureModalIsTopLevel('cron-modal');
+		this.ensureModalIsTopLevel('paternal-block-modal');
 		this.ensureModalIsTopLevel('paternal-rule-modal');
 		this.ensureModalIsTopLevel('paternal-pause-modal');
+		this.core.setupModal({
+			modalId: 'paternal-block-modal',
+			closeBtnId: 'close-paternal-block-modal',
+			cancelBtnId: 'cancel-paternal-block-btn',
+			saveBtnId: 'save-paternal-block-btn',
+			saveHandler: () => this.savePaternalBlock()
+		});
 		this.core.setupModal({
 			modalId: 'paternal-rule-modal',
 			closeBtnId: 'close-paternal-rule-modal',
@@ -152,6 +159,11 @@ export default class SystemModule {
 			restart: id => this.restartService(id)
 		});
 		if (servicesCleanup) this.cleanups.push(servicesCleanup);
+
+		const paternalBlockCleanup = this.core.delegateActions('paternal-block-table', {
+			remove: id => this.removePaternalInternetBlock(id)
+		});
+		if (paternalBlockCleanup) this.cleanups.push(paternalBlockCleanup);
 
 		const paternalCleanup = this.core.delegateActions('paternal-rules-table', {
 			edit: id => this.openPaternalRuleModal(id),
@@ -266,39 +278,45 @@ export default class SystemModule {
 	}
 
 	async loadPaternalBlockPanel() {
-		const select = document.getElementById('paternal-block-device-select');
-		if (!select) return;
+		const tbody = document.querySelector('#paternal-block-table tbody');
+		if (!tbody) return;
 		try {
-			const previous = this.normalizeMac(select.value || '');
 			const [devices, blockedByMac] = await Promise.all([this.fetchPaternalDevices(), this.fetchParentalBlockRulesByMac()]);
 			this.paternalBlockDevices = devices;
 			this.paternalBlockByMac = blockedByMac;
-			if (devices.length === 0) {
-				select.innerHTML = '<option value="">No devices found</option>';
-				this.syncPaternalBlockPanel();
+			const deviceByMac = new Map(devices.map(device => [device.mac, device]));
+			const blockedRows = Array.from(blockedByMac.entries())
+				.filter(([, rule]) => rule?.enabled)
+				.map(([mac, rule]) => ({ mac, rule, device: deviceByMac.get(mac) || { mac } }))
+				.sort((a, b) => String(a.device.hostname || a.mac).localeCompare(String(b.device.hostname || b.mac)));
+			if (blockedRows.length === 0) {
+				this.core.renderEmptyTable(tbody, 5, 'No blocked devices');
 				return;
 			}
-			select.innerHTML = devices.map(device => {
-				const blocked = blockedByMac.get(device.mac)?.enabled;
-				const label = `${device.hostname || 'Unknown'} - ${device.ip || 'N/A'} - ${device.mac}${blocked ? ' - BLOCKED' : ''}`;
-				return `<option value="${this.core.escapeHtml(device.mac)}">${this.core.escapeHtml(label)}</option>`;
+			tbody.innerHTML = blockedRows.map(row => {
+				const hostname = row.device.hostname || 'Unknown';
+				const ip = row.device.ip || 'N/A';
+				const escapedMac = this.core.escapeHtml(row.mac);
+				return `
+					<tr>
+						<td data-label="DEVICE">${this.core.escapeHtml(hostname)}</td>
+						<td data-label="IP ADDRESS">${this.core.escapeHtml(ip)}</td>
+						<td data-label="MAC ADDRESS">${escapedMac}</td>
+						<td data-label="STATUS">${this.core.renderBadge('error', 'BLOCKED')}</td>
+						<td data-label="ACTIONS"><button class="action-btn-sm success" data-action="remove" data-id="${escapedMac}" style="font-size:11px;padding:4px 8px;line-height:1.2">REMOVE BLOCK</button></td>
+					</tr>
+				`;
 			}).join('');
-			if (previous && devices.some(device => device.mac === previous)) {
-				select.value = previous;
-			}
-			this.syncPaternalBlockPanel();
 		} catch (err) {
 			console.error('Failed to load paternal block panel:', err);
-			select.innerHTML = '<option value="">Failed to load devices</option>';
-			this.syncPaternalBlockPanel();
+			this.core.renderEmptyTable(tbody, 5, 'Failed to load blocked devices');
 		}
 	}
 
 	syncPaternalBlockPanel() {
 		const select = document.getElementById('paternal-block-device-select');
 		const statusEl = document.getElementById('paternal-block-status');
-		const blockBtn = document.getElementById('paternal-block-btn');
-		const unblockBtn = document.getElementById('paternal-unblock-btn');
+		const saveBtn = document.getElementById('save-paternal-block-btn');
 		const mac = this.normalizeMac(select?.value || '');
 		const blocked = Boolean(mac && this.paternalBlockByMac?.get(mac)?.enabled);
 		if (statusEl) {
@@ -306,16 +324,57 @@ export default class SystemModule {
 				? this.core.renderBadge(blocked ? 'error' : 'success', blocked ? 'BLOCKED' : 'ALLOWED')
 				: this.core.renderBadge('info', 'NO DEVICE');
 		}
-		if (blockBtn) blockBtn.disabled = !mac || blocked;
-		if (unblockBtn) unblockBtn.disabled = !mac || !blocked;
+		if (saveBtn) saveBtn.disabled = !mac || blocked;
 	}
 
-	async setPaternalInternetBlock(block) {
+	async openPaternalBlockModal() {
+		const select = document.getElementById('paternal-block-device-select');
+		if (!select) return;
+		select.innerHTML = '<option value="">Loading devices...</option>';
+		this.syncPaternalBlockPanel();
+		try {
+			const [devices, blockedByMac] = await Promise.all([this.fetchPaternalDevices(), this.fetchParentalBlockRulesByMac()]);
+			this.paternalBlockDevices = devices;
+			this.paternalBlockByMac = blockedByMac;
+			const available = devices.filter(device => !blockedByMac.get(device.mac)?.enabled);
+			if (available.length === 0) {
+				select.innerHTML = '<option value="">No unblocked devices found</option>';
+			} else {
+				select.innerHTML = available.map(device => {
+					const label = `${device.hostname || 'Unknown'} - ${device.ip || 'N/A'} - ${device.mac}`;
+					return `<option value="${this.core.escapeHtml(device.mac)}">${this.core.escapeHtml(label)}</option>`;
+				}).join('');
+			}
+			this.syncPaternalBlockPanel();
+			this.core.openModal('paternal-block-modal');
+		} catch (err) {
+			console.error('Failed to open paternal block modal:', err);
+			select.innerHTML = '<option value="">Failed to load devices</option>';
+			this.syncPaternalBlockPanel();
+			this.core.openModal('paternal-block-modal');
+		}
+	}
+
+	async savePaternalBlock() {
 		const select = document.getElementById('paternal-block-device-select');
 		const mac = this.normalizeMac(select?.value || '');
 		if (!mac) {
 			this.core.showToast('Select a device first', 'error');
 			return;
+		}
+		const saved = await this.setPaternalInternetBlock(true, mac);
+		if (saved) this.core.closeModal('paternal-block-modal');
+	}
+
+	async removePaternalInternetBlock(mac) {
+		await this.setPaternalInternetBlock(false, mac);
+	}
+
+	async setPaternalInternetBlock(block, selectedMac = '') {
+		const mac = this.normalizeMac(selectedMac || '');
+		if (!mac) {
+			this.core.showToast('Select a device first', 'error');
+			return false;
 		}
 		const device = (this.paternalBlockDevices || []).find(item => item.mac === mac) || { mac };
 		const existing = this.paternalBlockByMac?.get(mac);
@@ -340,9 +399,11 @@ export default class SystemModule {
 			if (status !== 0) throw new Error('firewall update failed');
 			this.core.showToast(block ? 'Internet blocked for device' : 'Internet unblocked for device', 'success');
 			await this.loadPaternalBlockPanel();
+			return true;
 		} catch (err) {
 			console.error('Failed to update paternal internet block:', err);
 			this.core.showToast('Failed to update internet block', 'error');
+			return false;
 		}
 	}
 
