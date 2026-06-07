@@ -646,7 +646,8 @@ export default class MonitoringModule {
 	getStatusFromLatency(latency) {
 		const value = parseFloat(latency);
 		if (Number.isNaN(value)) return 'error';
-		if (value > this.thresholdMs) return 'critical';
+		if (value >= this.thresholdMs) return 'critical';
+		if (value >= Math.max(1, this.thresholdMs * 0.85)) return 'warn';
 		if (value >= 75) return 'good';
 		return 'ok';
 	}
