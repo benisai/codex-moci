@@ -1020,7 +1020,7 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 					<td data-label="MAC ADDRESS">${this.core.escapeHtml(row.mac)}</td>
 					<td data-label="UPLOAD">${this.core.escapeHtml(upload)}</td>
 					<td data-label="DOWNLOAD">${this.core.escapeHtml(download)}</td>
-					<td data-label="ONLINE">${this.renderDeviceStatusBadge(row)}</td>
+					<td data-label="STATUS">${this.renderDeviceStatusBadge(row)}</td>
 					<td data-label="ACTIONS">${pinBtn}</td>
 				</tr>`;
 
