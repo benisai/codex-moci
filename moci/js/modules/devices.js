@@ -1148,6 +1148,7 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 		return `<div style="padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 6px;">
 			<div style="display:flex; flex-wrap:wrap; gap:14px; margin-bottom:10px; font-size:11px; font-family:var(--font-mono); color:var(--steel-light)">
 				<span>PARENTAL STATUS: ${this.core.escapeHtml(parentalStatus)}</span>
+				<span style="color: var(--steel-muted)">|</span>
 				${hasDnsHijack13 ? '<span>DNS PROFILE: 1.1.1.3 ACTIVE</span>' : '<span>DNS PROFILE: OFF</span>'}
 			</div>
 			<div style="border-top: 2px dashed var(--glass-border); margin: 0 0 12px;"></div>
