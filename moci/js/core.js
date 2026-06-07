@@ -416,8 +416,6 @@ SQLITE_BIN="$(command -v sqlite3 || command -v sqlite3-cli || true)"
 		bind('reboot-btn', async () => {
 			if (!confirm('Reboot the router now?')) return;
 			try {
-				this.showToast('Saving MoCI state before reboot...', 'info');
-				await this.saveMociStateNow();
 				await this.ubusCall('system', 'reboot', {});
 				this.showToast('System is rebooting...', 'success');
 			} catch (err) {
@@ -659,18 +657,6 @@ SQLITE_BIN="$(command -v sqlite3 || command -v sqlite3-cli || true)"
 			command: `/etc/init.d/${service}`,
 			params: ['reload']
 		});
-	}
-
-	saveMociStateNow() {
-		return this.ubusCall(
-			'file',
-			'exec',
-			{
-				command: '/usr/bin/moci-state-sync',
-				params: ['save']
-			},
-			{ timeout: 20000 }
-		);
 	}
 
 	openModal(modalId) {

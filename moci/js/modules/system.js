@@ -1127,8 +1127,6 @@ export default class SystemModule {
 	async rebootSystem() {
 		if (!confirm('Reboot the system?')) return;
 		try {
-			this.core.showToast('Saving MoCI state before reboot...', 'info');
-			await this.core.saveMociStateNow();
 			await this.core.ubusCall('system', 'reboot', {});
 			this.core.showToast('System is rebooting...', 'success');
 			setTimeout(() => this.core.logout(), 2000);
