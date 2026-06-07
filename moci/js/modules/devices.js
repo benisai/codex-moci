@@ -22,6 +22,7 @@ export default class DevicesModule {
 		this.netifyFeatureEnabled = true;
 		this.parentalByMac = new Map();
 		this.parentalRulePrefix = 'moci_parental_';
+		this.paternalRulePrefix = 'moci_time_';
 		this.dnsHijackByMac = new Map();
 		this.dnsHijackRulePrefix = 'moci_dns_hijack_';
 		this.quarantineByMac = new Map();
@@ -125,7 +126,7 @@ export default class DevicesModule {
 
 		try {
 			const leases = await this.fetchLeases();
-			const [pingReachableIps, conntrackIps, usage, bandwidthUsage, staticByMac, netifyEnabled, parentalByMac, dnsHijackByMac, quarantineByMac, arpByMac] = await Promise.all([
+			const [pingReachableIps, conntrackIps, usage, bandwidthUsage, staticByMac, netifyEnabled, parentalByMac, paternalByMac, dnsHijackByMac, quarantineByMac, arpByMac] = await Promise.all([
 				this.fetchPingReachableIps(leases),
 				this.fetchConntrackIps(),
 				this.fetchNlbwmonUsage(),
@@ -133,6 +134,7 @@ export default class DevicesModule {
 				this.fetchStaticLeasesByMac(),
 				this.fetchNetifyFeatureFlag(),
 				this.fetchParentalRulesByMac(),
+				this.fetchPaternalRulesByMac(),
 				this.fetchDnsHijackRulesByMac(),
 				this.fetchQuarantineRulesByMac(),
 				this.fetchLanArpEntries()
@@ -154,6 +156,7 @@ export default class DevicesModule {
 				bandwidthUsage.byMac,
 				staticByMac,
 				parentalByMac,
+				paternalByMac,
 				this.dnsHijackByMac,
 				quarantineByMac,
 				arpByMac
@@ -233,6 +236,28 @@ export default class DevicesModule {
 			}
 		} catch {}
 		return map;
+	}
+
+	async fetchPaternalRulesByMac() {
+		const byMac = new Map();
+		try {
+			const [status, result] = await this.core.uciGet('firewall');
+			if (status !== 0 || !result?.values) return byMac;
+
+			for (const [section, cfg] of Object.entries(result.values)) {
+				if (String(cfg?.['.type'] || '') !== 'rule') continue;
+				const ruleName = String(cfg?.name || '');
+				if (!ruleName.startsWith(this.paternalRulePrefix)) continue;
+				const mac = this.normalizeMac(cfg?.src_mac || cfg?.src_mac_address || '');
+				if (!mac) continue;
+				const enabled = String(cfg?.enabled ?? '1') !== '0';
+				const current = byMac.get(mac) || { sections: [], enabled: false };
+				current.sections.push(section);
+				current.enabled = current.enabled || enabled;
+				byMac.set(mac, current);
+			}
+		} catch {}
+		return byMac;
 	}
 
 	async fetchDnsHijackRulesByMac() {
@@ -725,6 +750,7 @@ ORDER BY mac, bucket_start;`;
 		bandwidthByMac,
 		staticByMac,
 		parentalByMac,
+		paternalByMac,
 		dnsHijackByMac,
 		quarantineByMac,
 		arpByMac
@@ -741,6 +767,7 @@ ORDER BY mac, bucket_start;`;
 			const bandwidth = mac ? bandwidthByMac.get(mac) : null;
 			const pin = mac ? staticByMac.get(mac) : null;
 			const parental = mac ? parentalByMac.get(mac) : null;
+			const paternal = mac ? paternalByMac.get(mac) : null;
 			const dnsHijack = mac ? dnsHijackByMac.get(mac) : null;
 			const quarantine = mac ? quarantineByMac.get(mac) : null;
 			merged.push({
@@ -762,6 +789,7 @@ ORDER BY mac, bucket_start;`;
 				staticSection: pin?.section || '',
 				parentalSection: parental?.section || '',
 				parentalBlocked: Boolean(parental?.enabled),
+				paternalEnabled: Boolean(paternal?.enabled),
 				dnsHijackSection: dnsHijack?.section || '',
 				dnsHijackDest: dnsHijack?.destDns || '',
 				dnsHijackEnabled: Boolean(dnsHijack?.enabled),
@@ -779,6 +807,7 @@ ORDER BY mac, bucket_start;`;
 			const usage = totalsByClient.get(mac) || totalsByClient.get(pin?.ip || '') || null;
 			const bandwidth = bandwidthByMac.get(mac) || null;
 			const parental = parentalByMac.get(mac) || null;
+			const paternal = paternalByMac.get(mac) || null;
 			const dnsHijack = dnsHijackByMac.get(mac) || null;
 			const quarantine = quarantineByMac.get(mac) || null;
 			merged.push({
@@ -802,6 +831,7 @@ ORDER BY mac, bucket_start;`;
 				staticSection: pin?.section || '',
 				parentalSection: parental?.section || '',
 				parentalBlocked: Boolean(parental?.enabled),
+				paternalEnabled: Boolean(paternal?.enabled),
 				dnsHijackSection: dnsHijack?.section || '',
 				dnsHijackDest: dnsHijack?.destDns || '',
 				dnsHijackEnabled: Boolean(dnsHijack?.enabled),
@@ -826,6 +856,7 @@ ORDER BY mac, bucket_start;`;
 			const bandwidth = bandwidthByMac.get(mac) || null;
 			const pin = staticByMac.get(mac) || null;
 			const parental = parentalByMac.get(mac) || null;
+			const paternal = paternalByMac.get(mac) || null;
 			const dnsHijack = dnsHijackByMac.get(mac) || null;
 			const quarantine = quarantineByMac.get(mac) || null;
 
@@ -851,6 +882,7 @@ ORDER BY mac, bucket_start;`;
 				staticSection: pin?.section || '',
 				parentalSection: parental?.section || '',
 				parentalBlocked: Boolean(parental?.enabled),
+				paternalEnabled: Boolean(paternal?.enabled),
 				dnsHijackSection: dnsHijack?.section || '',
 				dnsHijackDest: dnsHijack?.destDns || '',
 				dnsHijackEnabled: Boolean(dnsHijack?.enabled),
@@ -1107,10 +1139,15 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 		const row = this.rowsByMac.get(mac);
 		const hasDnsHijack13 = String(row?.dnsHijackDest || '').trim() === '1.1.1.3' && Boolean(row?.dnsHijackEnabled);
 		const quarantined = Boolean(row?.quarantined);
+		const parentalStatus = row?.parentalBlocked
+			? 'INTERNET BLOCKED'
+			: row?.paternalEnabled
+				? 'TIME-OF-USE ENABLED'
+				: 'INTERNET ALLOWED';
 		const escapedMac = this.core.escapeHtml(mac);
 		return `<div style="padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 6px;">
-			<div style="display:flex; flex-wrap:wrap; gap:14px; margin-bottom:10px; font-size:11px; font-family:var(--font-mono); color:var(--steel-light)">
-				<span>PARENTAL STATUS: ${this.core.escapeHtml(row?.parentalBlocked ? 'INTERNET BLOCKED' : 'INTERNET ALLOWED')}</span>
+			<div style="display:flex; flex-wrap:wrap; gap:14px; margin-bottom:10px; padding-bottom:10px; border-bottom: 1px dashed var(--glass-border); font-size:11px; font-family:var(--font-mono); color:var(--steel-light)">
+				<span>PARENTAL STATUS: ${this.core.escapeHtml(parentalStatus)}</span>
 				${hasDnsHijack13 ? '<span>DNS PROFILE: 1.1.1.3 ACTIVE</span>' : '<span>DNS PROFILE: OFF</span>'}
 			</div>
 			<div class="action-buttons" style="display:flex; flex-wrap:wrap; gap:8px;">
