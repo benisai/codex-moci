@@ -160,7 +160,10 @@ run_ping_once() {
 	append_sample "$now" "$PING_TARGET" "$status" "$latency" "$message"
 
 	if [ "$status" = "OK" ]; then
-		if awk -v latency="$latency" -v threshold="$PING_THRESHOLD" 'BEGIN { exit !(latency > threshold) }'; then
+		local latency_int
+		latency_int="$(printf '%s' "$latency" | cut -d '.' -f1)"
+		latency_int="$(sanitize_int "$latency_int" "0")"
+		if [ "$latency_int" -ge "$PING_THRESHOLD" ]; then
 			write_notification "Ping threshold exceeded: target=$PING_TARGET latency=${latency}ms threshold=${PING_THRESHOLD}ms"
 		fi
 	else
