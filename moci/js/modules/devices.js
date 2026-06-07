@@ -1146,10 +1146,11 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 				: 'INTERNET ALLOWED';
 		const escapedMac = this.core.escapeHtml(mac);
 		return `<div style="padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 6px;">
-			<div style="display:flex; flex-wrap:wrap; gap:14px; margin-bottom:10px; padding-bottom:10px; border-bottom: 1px dashed var(--glass-border); font-size:11px; font-family:var(--font-mono); color:var(--steel-light)">
+			<div style="display:flex; flex-wrap:wrap; gap:14px; margin-bottom:10px; font-size:11px; font-family:var(--font-mono); color:var(--steel-light)">
 				<span>PARENTAL STATUS: ${this.core.escapeHtml(parentalStatus)}</span>
 				${hasDnsHijack13 ? '<span>DNS PROFILE: 1.1.1.3 ACTIVE</span>' : '<span>DNS PROFILE: OFF</span>'}
 			</div>
+			<div style="border-top: 2px dashed var(--glass-border); margin: 0 0 12px;"></div>
 			<div class="action-buttons" style="display:flex; flex-wrap:wrap; gap:8px;">
 				<button class="action-btn-sm ${row?.parentalBlocked ? 'success' : 'danger'}" data-action="parental_toggle" data-id="${escapedMac}">
 					${row?.parentalBlocked ? 'UNBLOCK INTERNET' : 'BLOCK INTERNET'}
