@@ -605,6 +605,23 @@ pgrep -fa moci-netify-collector || true
 		el.scrollTop = el.scrollHeight;
 	}
 
+	extractJsonString(line, key) {
+		const pattern = new RegExp(`"${key}"\\s*:\\s*"([^"]*)"`);
+		const match = String(line || '').match(pattern);
+		return match?.[1] || '';
+	}
+
+	resolveFlowSni(flow, rawLine = '') {
+		return (
+			flow?.ssl?.client_sni ||
+			flow?.client_sni ||
+			flow?.tls?.client_sni ||
+			flow?.tls_client_sni ||
+			this.extractJsonString(rawLine, 'client_sni') ||
+			''
+		);
+	}
+
 	parseFlowJsonl(content) {
 		return (content || '')
 			.split('\n')
@@ -623,17 +640,18 @@ pgrep -fa moci-netify-collector || true
 				const tsRaw = flow.last_seen_at || flow.first_seen_at || Date.now();
 				const tsMs = Number(tsRaw) > 1e12 ? Number(tsRaw) : Number(tsRaw) * 1000;
 				const ts = Number.isFinite(tsMs) && tsMs > 0 ? tsMs : Date.now();
+				const sni = this.resolveFlowSni(flow, line);
 
 				const app =
 					flow.detected_application_name ||
 					flow.detected_app_name ||
-					flow.ssl?.client_sni ||
+					sni ||
 					flow.host_server_name ||
 					flow.dns_host_name ||
 					flow.other_ip ||
 					'Unknown';
 				const fqdn =
-					flow.ssl?.client_sni ||
+					sni ||
 					flow.host_server_name ||
 					flow.fqdn ||
 					flow.dns_host_name ||

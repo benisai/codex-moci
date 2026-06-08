@@ -1243,7 +1243,10 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 			for (const line of lines) {
 				try {
 					const parsed = JSON.parse(line);
-					if (parsed?.type === 'flow' && parsed?.flow) flows.push(parsed.flow);
+					if (parsed?.type === 'flow' && parsed?.flow) {
+						const rawSni = String(line || '').match(/"client_sni"\s*:\s*"([^"]*)"/)?.[1] || '';
+						flows.push({ flow: parsed.flow, rawSni });
+					}
 				} catch {}
 			}
 
@@ -1251,8 +1254,18 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 			let bytes = 0;
 			let lastSeen = 0;
 			const recent = [];
-			for (const flow of flows) {
-				const fqdn = flow.ssl?.client_sni || flow.host_server_name || flow.fqdn || flow.dns_host_name || '';
+			for (const item of flows) {
+				const flow = item.flow;
+				const fqdn =
+					flow.ssl?.client_sni ||
+					flow.client_sni ||
+					flow.tls?.client_sni ||
+					flow.tls_client_sni ||
+					item.rawSni ||
+					flow.host_server_name ||
+					flow.fqdn ||
+					flow.dns_host_name ||
+					'';
 				const app = flow.detected_application_name || flow.detected_app_name || fqdn || 'Unknown';
 				apps.set(app, (apps.get(app) || 0) + 1);
 				bytes += Number(flow.total_bytes || 0) || Number(flow.other_bytes || 0) || Number(flow.local_bytes || 0) || 0;
