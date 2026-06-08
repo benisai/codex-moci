@@ -1252,7 +1252,8 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 			let lastSeen = 0;
 			const recent = [];
 			for (const flow of flows) {
-				const app = flow.detected_application_name || flow.detected_app_name || flow.host_server_name || flow.dns_host_name || 'Unknown';
+				const fqdn = flow.ssl?.client_sni || flow.host_server_name || flow.fqdn || flow.dns_host_name || '';
+				const app = flow.detected_application_name || flow.detected_app_name || fqdn || 'Unknown';
 				apps.set(app, (apps.get(app) || 0) + 1);
 				bytes += Number(flow.total_bytes || 0) || Number(flow.other_bytes || 0) || Number(flow.local_bytes || 0) || 0;
 				const tsRaw = Number(flow.last_seen_at || flow.first_seen_at || 0);
@@ -1261,7 +1262,7 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 				if (recent.length < 6) {
 					recent.push({
 						time: this.formatTimestamp(ts || Date.now()),
-						fqdn: flow.host_server_name || flow.dns_host_name || flow.ssl?.client_sni || '',
+						fqdn,
 						app,
 						proto: flow.detected_protocol_name || 'N/A',
 						destIp: flow.other_ip || '-'

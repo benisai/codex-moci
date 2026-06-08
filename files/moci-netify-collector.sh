@@ -193,6 +193,34 @@ extract_protocol_name() {
 	printf "%s\n" "$1" | sed -n 's/.*"detected_protocol_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
 }
 
+extract_client_sni() {
+	printf "%s\n" "$1" | sed -n 's/.*"client_sni"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
+}
+
+escape_sed_replacement() {
+	printf "%s" "$1" | sed 's/[\/&]/\\&/g'
+}
+
+prefer_client_sni() {
+	local line sni replacement
+	line="$1"
+	sni="$(extract_client_sni "$line")"
+	[ -n "$sni" ] || {
+		printf "%s" "$line"
+		return
+	}
+	replacement="$(escape_sed_replacement "$sni")"
+	if printf "%s\n" "$line" | grep -q '"host_server_name"[[:space:]]*:'; then
+		printf "%s" "$line" | sed "s/\"host_server_name\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"host_server_name\":\"$replacement\"/"
+		return
+	fi
+	if printf "%s\n" "$line" | grep -q '"fqdn"[[:space:]]*:'; then
+		printf "%s" "$line" | sed "s/\"fqdn\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"fqdn\":\"$replacement\"/"
+		return
+	fi
+	printf "%s" "$line"
+}
+
 should_skip_protocol() {
 	local line proto token normalized_proto normalized_token old_ifs
 	line="$1"
@@ -222,8 +250,9 @@ should_skip_protocol() {
 }
 
 insert_flow() {
-	local escaped
-	escaped="$(sql_escape "$1")"
+	local escaped normalized
+	normalized="$(prefer_client_sni "$1")"
+	escaped="$(sql_escape "$normalized")"
 	sql_exec "INSERT INTO flow_raw(timeinsert, json) VALUES (strftime('%s','now'), '$escaped');"
 }
 

@@ -627,16 +627,16 @@ pgrep -fa moci-netify-collector || true
 				const app =
 					flow.detected_application_name ||
 					flow.detected_app_name ||
+					flow.ssl?.client_sni ||
 					flow.host_server_name ||
 					flow.dns_host_name ||
-					flow.ssl?.client_sni ||
 					flow.other_ip ||
 					'Unknown';
 				const fqdn =
+					flow.ssl?.client_sni ||
 					flow.host_server_name ||
 					flow.fqdn ||
 					flow.dns_host_name ||
-					flow.ssl?.client_sni ||
 					'';
 
 				const proto = flow.detected_protocol_name || 'N/A';
