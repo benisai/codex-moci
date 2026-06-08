@@ -3321,6 +3321,32 @@ Endpoint = host:51820"
 										<button class="action-btn" id="netify-full-reset-btn">FULL RESET</button>
 										<button class="action-btn" id="netify-refresh-btn">REFRESH</button>
 									</div>
+									<div style="margin-top: 18px; border-top: 1px solid var(--glass-border); padding-top: 14px">
+										<div class="stat-label" style="margin-bottom: 10px">EXCLUDED PROTOCOLS</div>
+										<div
+											id="netify-excluded-protocols"
+											style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, max-content)); gap: 10px 18px; align-items: center"
+										>
+											<label style="display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:12px">
+												<input type="checkbox" class="netify-exclude-protocol" value="MDNS" /> MDNS
+											</label>
+											<label style="display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:12px">
+												<input type="checkbox" class="netify-exclude-protocol" value="DNS" /> DNS
+											</label>
+											<label style="display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:12px">
+												<input type="checkbox" class="netify-exclude-protocol" value="QUIC" /> QUIC
+											</label>
+											<label style="display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:12px">
+												<input type="checkbox" class="netify-exclude-protocol" value="DHCPv6" /> DHCPv6
+											</label>
+											<label style="display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:12px">
+												<input type="checkbox" class="netify-exclude-protocol" value="ICMP" /> ICMP
+											</label>
+										</div>
+										<div class="quick-actions" style="margin-top: 12px">
+											<button class="action-btn-sm" id="netify-save-exclusions-btn" type="button">SAVE EXCLUSIONS</button>
+										</div>
+									</div>
 									<div style="margin-top: 12px">
 										<div class="stat-label">WEBUI DEBUG LOG</div>
 										<pre

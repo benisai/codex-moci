@@ -20,6 +20,8 @@ export default class NetifyModule {
 		this.topAppsRows = [];
 		this.debugLog = [];
 		this.debugMax = 120;
+		this.defaultExcludedProtocols = ['MDNS', 'DNS', 'QUIC', 'DHCPv6', 'ICMP'];
+		this.excludedProtocols = [...this.defaultExcludedProtocols];
 		this.lastFlowCount = -1;
 		this.sqlChunkSize = 200;
 		this.sqlChunkCalls = 100;
@@ -58,6 +60,7 @@ export default class NetifyModule {
 		document.getElementById('netify-restart-btn')?.addEventListener('click', () => this.runServiceAction('restart'));
 		document.getElementById('netify-init-db-btn')?.addEventListener('click', () => this.initCollectorOutput());
 		document.getElementById('netify-full-reset-btn')?.addEventListener('click', () => this.fullResetCollector());
+		document.getElementById('netify-save-exclusions-btn')?.addEventListener('click', () => this.saveExcludedProtocols());
 		document.getElementById('netify-debug-clear-btn')?.addEventListener('click', () => this.clearDebugLog());
 		document.getElementById('netify-collector-toggle-btn')?.addEventListener('click', () => this.toggleCollectorPanel());
 		document.getElementById('netify-top-apps-toggle-btn')?.addEventListener('click', () => this.toggleTopAppsPanel());
@@ -275,12 +278,70 @@ export default class NetifyModule {
 					this.outputPath = configuredOutput;
 				}
 				this.maxLines = Number(c.retention_rows || c.max_lines) || this.maxLines;
+				this.excludedProtocols = this.parseExcludedProtocols(c.exclude_protocols);
 			}
 		} catch {}
 
 		const pathEl = document.getElementById('netify-db-path');
 		if (pathEl) pathEl.textContent = this.outputPath;
-		this.logDebug(`Config loaded; db=${this.outputPath} retention=${this.maxLines}`);
+		this.renderExcludedProtocols();
+		this.logDebug(`Config loaded; db=${this.outputPath} retention=${this.maxLines} excluded=${this.excludedProtocols.join(',') || 'none'}`);
+	}
+
+	parseExcludedProtocols(value) {
+		const raw = String(value || '').trim();
+		if (!raw) return [];
+		const allowed = new Map(this.defaultExcludedProtocols.map(protocol => [protocol.toLowerCase(), protocol]));
+		return raw
+			.split(',')
+			.map(item => item.trim())
+			.filter(Boolean)
+			.map(item => allowed.get(item.toLowerCase()) || item)
+			.filter((item, index, items) => items.indexOf(item) === index);
+	}
+
+	getSelectedExcludedProtocols() {
+		return Array.from(document.querySelectorAll('.netify-exclude-protocol:checked'))
+			.map(input => String(input.value || '').trim())
+			.filter(Boolean);
+	}
+
+	renderExcludedProtocols() {
+		const selected = new Set((this.excludedProtocols || []).map(protocol => String(protocol).toLowerCase()));
+		document.querySelectorAll('.netify-exclude-protocol').forEach(input => {
+			input.checked = selected.has(String(input.value || '').toLowerCase());
+		});
+	}
+
+	async saveExcludedProtocols() {
+		const btn = document.getElementById('netify-save-exclusions-btn');
+		const oldLabel = btn?.textContent || 'SAVE EXCLUSIONS';
+		if (btn) {
+			btn.disabled = true;
+			btn.textContent = 'SAVING...';
+		}
+		try {
+			const protocols = this.getSelectedExcludedProtocols();
+			await this.core.uciSet('moci', 'collector', {
+				exclude_protocols: protocols.join(',')
+			});
+			await this.core.uciCommit('moci');
+			this.excludedProtocols = protocols;
+			this.renderExcludedProtocols();
+			await this.exec('/etc/init.d/netify-collector', ['restart']);
+			this.core.showToast('Netify exclusions saved', 'success');
+			this.logDebug(`Excluded protocols saved: ${protocols.join(',') || 'none'}`);
+			setTimeout(() => this.refresh(false), 600);
+		} catch (err) {
+			console.error('Failed to save Netify exclusions:', err);
+			this.logDebug(`Save exclusions failed: ${err?.message || 'unknown error'}`);
+			this.core.showToast('Failed to save Netify exclusions', 'error');
+		} finally {
+			if (btn) {
+				btn.disabled = false;
+				btn.textContent = oldLabel;
+			}
+		}
 	}
 
 	async runServiceAction(action) {
