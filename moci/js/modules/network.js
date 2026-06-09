@@ -1040,6 +1040,110 @@ done`;
 		return `<button class="action-btn-sm" data-action="edit" data-id="${eid}" style="font-size:11px;padding:4px 8px;line-height:1.2">EDIT</button><button class="action-btn-sm warning" data-action="restart" data-id="${eid}" style="font-size:11px;padding:4px 8px;line-height:1.2">RESTART</button><button class="action-btn-sm danger" data-action="delete" data-id="${eid}" style="font-size:11px;padding:4px 8px;line-height:1.2">DELETE</button>`;
 	}
 
+	isDhcpPoolEditableInterface(name) {
+		const n = String(name || '').trim().toLowerCase();
+		return Boolean(n && !['wan', 'wan6', 'loopback', 'lo'].includes(n));
+	}
+
+	parseIpv4Address(value) {
+		const raw = String(value || '').trim();
+		const [ip, prefix] = raw.split('/');
+		if (!this.isValidIpv4(ip)) return null;
+		return {
+			ip,
+			prefix: prefix !== undefined && /^\d+$/.test(prefix) ? Math.min(32, Math.max(0, Number(prefix))) : null
+		};
+	}
+
+	isValidIpv4(ip) {
+		const parts = String(ip || '').trim().split('.');
+		return parts.length === 4 && parts.every(part => /^\d{1,3}$/.test(part) && Number(part) >= 0 && Number(part) <= 255);
+	}
+
+	ipToInt(ip) {
+		if (!this.isValidIpv4(ip)) return null;
+		return String(ip)
+			.split('.')
+			.reduce((acc, part) => ((acc << 8) >>> 0) + Number(part), 0) >>> 0;
+	}
+
+	intToIp(value) {
+		const n = Number(value) >>> 0;
+		return [24, 16, 8, 0].map(shift => (n >>> shift) & 255).join('.');
+	}
+
+	netmaskToPrefix(netmask) {
+		const mask = this.ipToInt(netmask);
+		if (mask === null) return null;
+		let prefix = 0;
+		let sawZero = false;
+		for (let bit = 31; bit >= 0; bit--) {
+			const set = Boolean(mask & (1 << bit));
+			if (set && sawZero) return null;
+			if (set) prefix += 1;
+			else sawZero = true;
+		}
+		return prefix;
+	}
+
+	prefixToMask(prefix) {
+		const p = Math.min(32, Math.max(0, Number(prefix)));
+		return p === 0 ? 0 : (0xffffffff << (32 - p)) >>> 0;
+	}
+
+	getInterfaceSubnet(ipaddr, netmask) {
+		const parsed = this.parseIpv4Address(ipaddr);
+		if (!parsed) return null;
+		const prefix = parsed.prefix !== null ? parsed.prefix : this.netmaskToPrefix(netmask || '');
+		if (prefix === null) return null;
+		const ipInt = this.ipToInt(parsed.ip);
+		const mask = this.prefixToMask(prefix);
+		const network = (ipInt & mask) >>> 0;
+		const broadcast = (network | (~mask >>> 0)) >>> 0;
+		return { network, broadcast, prefix };
+	}
+
+	dhcpStartToIp(start, subnet) {
+		const raw = String(start || '').trim();
+		if (!raw || !subnet) return '';
+		if (this.isValidIpv4(raw)) return raw;
+		const offset = Number(raw);
+		if (!Number.isFinite(offset)) return '';
+		return this.intToIp((subnet.network + offset) >>> 0);
+	}
+
+	dhcpEndToIp(start, limit, subnet) {
+		const rawLimit = Number(String(limit || '').trim());
+		if (!Number.isFinite(rawLimit) || rawLimit < 1 || !subnet) return '';
+		const startIp = this.dhcpStartToIp(start, subnet);
+		const startInt = this.ipToInt(startIp);
+		if (startInt === null) return '';
+		return this.intToIp((startInt + Math.round(rawLimit) - 1) >>> 0);
+	}
+
+	dhcpPoolValuesFromIps(startIp, endIp, subnet) {
+		if (!subnet) throw new Error('Missing interface subnet for DHCP pool');
+		if (!this.isValidIpv4(startIp) || !this.isValidIpv4(endIp)) throw new Error('Invalid DHCP pool IP');
+		const startInt = this.ipToInt(startIp);
+		const endInt = this.ipToInt(endIp);
+		if (startInt < subnet.network || startInt > subnet.broadcast || endInt < subnet.network || endInt > subnet.broadcast) {
+			throw new Error('DHCP pool must be inside interface subnet');
+		}
+		if (endInt < startInt) throw new Error('DHCP end IP must be after start IP');
+		return {
+			start: String(startInt - subnet.network),
+			limit: String(endInt - startInt + 1)
+		};
+	}
+
+	setInterfaceDhcpPoolVisibility(name) {
+		const section = document.getElementById('interface-dhcp-pool-config');
+		if (!section) return false;
+		const visible = this.isDhcpPoolEditableInterface(name);
+		section.style.display = visible ? 'block' : 'none';
+		return visible;
+	}
+
 	async readProcNetDevMap() {
 		const map = new Map();
 		try {
@@ -1099,12 +1203,24 @@ done`;
 			const [status, result] = await this.core.uciGet('network', id);
 			if (status !== 0 || !result?.values) throw new Error('Not found');
 			const c = result.values;
+			const poolVisible = this.setInterfaceDhcpPoolVisibility(id);
+			const ipaddr = Array.isArray(c.ipaddr) ? c.ipaddr[0] || '' : c.ipaddr || '';
+			const netmask = Array.isArray(c.netmask) ? c.netmask[0] || '' : c.netmask || '';
 			document.getElementById('edit-iface-name').value = id;
 			document.getElementById('edit-iface-proto').value = c.proto || 'dhcp';
-			document.getElementById('edit-iface-ipaddr').value = c.ipaddr || '';
-			document.getElementById('edit-iface-netmask').value = c.netmask || '';
+			document.getElementById('edit-iface-ipaddr').value = ipaddr;
+			document.getElementById('edit-iface-netmask').value = netmask;
 			document.getElementById('edit-iface-gateway').value = c.gateway || '';
 			document.getElementById('edit-iface-dns').value = Array.isArray(c.dns) ? c.dns.join(' ') : c.dns || '';
+			document.getElementById('edit-iface-dhcp-start-ip').value = '';
+			document.getElementById('edit-iface-dhcp-end-ip').value = '';
+			if (poolVisible) {
+				const [dhcpStatus, dhcpResult] = await this.core.uciGet('dhcp', id);
+				const dhcp = dhcpStatus === 0 ? dhcpResult?.values || {} : {};
+				const subnet = this.getInterfaceSubnet(ipaddr, netmask);
+				document.getElementById('edit-iface-dhcp-start-ip').value = this.dhcpStartToIp(dhcp.start || '', subnet);
+				document.getElementById('edit-iface-dhcp-end-ip').value = this.dhcpEndToIp(dhcp.start || '', dhcp.limit || '', subnet);
+			}
 			this.core.openModal('interface-modal');
 		} catch {
 			this.core.showToast('Failed to load interface config', 'error');
@@ -1128,11 +1244,31 @@ done`;
 		try {
 			await this.core.uciSet('network', name, values);
 			await this.core.uciCommit('network');
+			if (this.isDhcpPoolEditableInterface(name)) {
+				const startIp = String(document.getElementById('edit-iface-dhcp-start-ip')?.value || '').trim();
+				const endIp = String(document.getElementById('edit-iface-dhcp-end-ip')?.value || '').trim();
+				if (startIp || endIp) {
+					const subnet = this.getInterfaceSubnet(values.ipaddr || document.getElementById('edit-iface-ipaddr')?.value || '', values.netmask || document.getElementById('edit-iface-netmask')?.value || '');
+					const pool = this.dhcpPoolValuesFromIps(startIp, endIp, subnet);
+					let dhcpSection = name;
+					const [dhcpStatus] = await this.core.uciGet('dhcp', dhcpSection);
+					if (dhcpStatus !== 0) {
+						const [, addResult] = await this.core.uciAdd('dhcp', 'dhcp', name);
+						dhcpSection = addResult?.section || name;
+					}
+					await this.core.uciSet('dhcp', dhcpSection, {
+						interface: name,
+						start: pool.start,
+						limit: pool.limit
+					});
+					await this.core.uciCommit('dhcp');
+				}
+			}
 			this.core.closeModal('interface-modal');
 			this.core.showToast('Interface updated', 'success');
 			this.loadInterfaces();
-		} catch {
-			this.core.showToast('Failed to save interface', 'error');
+		} catch (err) {
+			this.core.showToast(err?.message || 'Failed to save interface', 'error');
 		}
 	}
 
