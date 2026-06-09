@@ -1202,7 +1202,7 @@ pgrep -fa moci-netify-collector || true
 		if (!this.isValidIp(destIp)) throw new Error('Destination IP missing/invalid');
 
 		const values = {
-			name: `moci_netify_block_${Date.now()}`,
+			name: this.buildFirewallBlockRuleName(flow),
 			src: 'lan',
 			dest: 'wan',
 			proto: 'all',
@@ -1228,6 +1228,24 @@ pgrep -fa moci-netify-collector || true
 		} catch (err) {
 			console.warn('Firewall restart failed after rule commit:', err);
 		}
+	}
+
+	buildFirewallBlockRuleName(flow) {
+		const id = Math.random()
+			.toString(36)
+			.replace(/[^a-z0-9]/g, '')
+			.slice(2, 9)
+			.padEnd(7, '0');
+		const domain = this.extractRootDomain(this.sanitizeDomain(flow?.fqdn || ''));
+		const fallback = this.isValidIp(flow?.destIp)
+			? `ip-${String(flow.destIp).replace(/[^a-zA-Z0-9.]+/g, '-')}`
+			: 'flow';
+		const hint = (domain || fallback)
+			.toLowerCase()
+			.replace(/[^a-z0-9.-]+/g, '-')
+			.replace(/^-+|-+$/g, '')
+			.slice(0, 45) || 'flow';
+		return `moci_block_${hint}_${id}`;
 	}
 
 	sanitizeDomain(value) {
