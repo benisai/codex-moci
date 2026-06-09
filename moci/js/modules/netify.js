@@ -97,6 +97,7 @@ export default class NetifyModule {
 			this.renderRecentFlows();
 		});
 		document.getElementById('netify-action-type')?.addEventListener('change', () => this.syncActionTypeUi());
+		document.getElementById('netify-action-scope')?.addEventListener('change', () => this.syncFlowActionScopeUi());
 		document.getElementById('netify-top-apps-prev-btn')?.addEventListener('click', () => {
 			this.topAppsPage = Math.max(0, this.topAppsPage - 1);
 			this.renderTopApps();
@@ -1067,7 +1068,10 @@ pgrep -fa moci-netify-collector || true
 		}
 
 		const srcIpInput = document.getElementById('netify-action-source-ip');
-		if (srcIpInput) srcIpInput.value = flow.localIp || '';
+		if (srcIpInput) {
+			srcIpInput.dataset.sourceIp = flow.localIp || '';
+			srcIpInput.value = flow.localIp || '';
+		}
 		const dstIpInput = document.getElementById('netify-action-dest-ip');
 		if (dstIpInput) dstIpInput.value = flow.destIp || '';
 
@@ -1092,6 +1096,21 @@ pgrep -fa moci-netify-collector || true
 		const isDomain = type === 'domain';
 		domainGroup.classList.toggle('hidden', !isDomain);
 		ipGroup.classList.toggle('hidden', isDomain);
+		this.syncFlowActionScopeUi();
+	}
+
+	syncFlowActionScopeUi() {
+		const type = document.getElementById('netify-action-type')?.value || 'domain';
+		const scope = document.getElementById('netify-action-scope')?.value || 'all_sources';
+		const sourceInput = document.getElementById('netify-action-source-ip');
+		if (!sourceInput) return;
+		sourceInput.readOnly = true;
+		if (type !== 'ip') return;
+		if (scope === 'all_sources') {
+			sourceInput.value = 'any';
+			return;
+		}
+		sourceInput.value = sourceInput.dataset.sourceIp || '';
 	}
 
 	async saveFlowAction() {
