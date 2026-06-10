@@ -876,13 +876,12 @@ export default class NetworkModule {
 		});
 	}
 
-	openAddInterfaceModal() {
+	async openAddInterfaceModal() {
 		const set = (id, value) => {
 			const el = document.getElementById(id);
 			if (el) el.value = value;
 		};
 		set('add-iface-name', '');
-		set('add-iface-base-device', '');
 		set('add-iface-vlan-id', '');
 		set('add-iface-ipaddr', '');
 		set('add-iface-netmask', '255.255.255.0');
@@ -891,6 +890,36 @@ export default class NetworkModule {
 		const wanForward = document.getElementById('add-iface-wan-forward');
 		if (wanForward) wanForward.checked = true;
 		this.core.openModal('add-interface-modal');
+		await this.populateAddInterfaceBaseDevices();
+	}
+
+	async populateAddInterfaceBaseDevices() {
+		const select = document.getElementById('add-iface-base-device');
+		if (!select) return;
+		select.innerHTML = '<option value="">Loading devices...</option>';
+		try {
+			const [[, dump], roleMap] = await Promise.all([
+				this.core.ubusCall('network.interface', 'dump', {}),
+				this.readBoardPortRoleMap()
+			]);
+			let candidates = this.collectPortCandidates(dump?.interface || [], roleMap);
+			if (candidates.length === 0) {
+				candidates = await this.readSysfsPortCandidates();
+			}
+			candidates = Array.from(new Set(candidates))
+				.filter(name => this.isLikelyWiredPortName(name))
+				.sort((a, b) => a.localeCompare(b));
+			if (candidates.length === 0) {
+				select.innerHTML = '<option value="">No base devices found</option>';
+				return;
+			}
+			select.innerHTML = candidates
+				.map(name => `<option value="${this.core.escapeHtml(name)}">${this.core.escapeHtml(name)}</option>`)
+				.join('');
+		} catch (err) {
+			console.error('Failed to load base devices:', err);
+			select.innerHTML = '<option value="">Failed to load devices</option>';
+		}
 	}
 
 	validateNewInterfaceName(name) {
