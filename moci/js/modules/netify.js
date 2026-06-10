@@ -1234,9 +1234,9 @@ pgrep -fa moci-netify-collector || true
 		const id = Math.random()
 			.toString(36)
 			.replace(/[^a-z0-9]/g, '')
-			.slice(2, 9)
-			.padEnd(7, '0');
-		const domain = this.extractRootDomain(this.sanitizeDomain(flow?.fqdn || ''));
+			.slice(2, 6)
+			.padEnd(4, '0');
+		const domain = this.sanitizeDomain(flow?.fqdn || '');
 		const fallback = this.isValidIp(flow?.destIp)
 			? `ip-${String(flow.destIp).replace(/[^a-zA-Z0-9.]+/g, '-')}`
 			: 'flow';
@@ -1244,8 +1244,8 @@ pgrep -fa moci-netify-collector || true
 			.toLowerCase()
 			.replace(/[^a-z0-9.-]+/g, '-')
 			.replace(/^-+|-+$/g, '')
-			.slice(0, 45) || 'flow';
-		return `moci_block_${hint}_${id}`;
+			.slice(0, 55) || 'flow';
+		return `moci_${hint}_${id}`;
 	}
 
 	sanitizeDomain(value) {
