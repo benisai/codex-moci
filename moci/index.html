@@ -497,6 +497,9 @@
 
 						<div class="tab-content" id="tab-interfaces">
 							<div class="stat-card">
+								<div style="display: flex; justify-content: flex-end; margin-bottom: 14px">
+									<button class="action-btn" id="add-interface-btn">ADD INTERFACE</button>
+								</div>
 								<table class="data-table" id="interfaces-table">
 									<thead>
 										<tr>
@@ -516,6 +519,62 @@
 										</tr>
 									</tbody>
 								</table>
+							</div>
+						</div>
+
+						<div class="modal hidden" id="add-interface-modal">
+							<div class="modal-backdrop"></div>
+							<div class="modal-content">
+								<div class="modal-header">
+									<h3 class="modal-title">ADD INTERFACE</h3>
+									<button class="modal-close" id="close-add-interface-modal">&times;</button>
+								</div>
+								<div class="modal-body">
+									<div class="form-group">
+										<label class="form-label">INTERFACE NAME</label>
+										<input type="text" id="add-iface-name" class="form-input" placeholder="iot" />
+									</div>
+									<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px">
+										<div class="form-group">
+											<label class="form-label">BASE DEVICE</label>
+											<input type="text" id="add-iface-base-device" class="form-input" placeholder="eth0 or lan1" />
+										</div>
+										<div class="form-group">
+											<label class="form-label">VLAN ID</label>
+											<input type="number" id="add-iface-vlan-id" class="form-input" min="1" max="4094" placeholder="10" />
+										</div>
+									</div>
+									<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px">
+										<div class="form-group">
+											<label class="form-label">IPV4 ADDRESS</label>
+											<input type="text" id="add-iface-ipaddr" class="form-input" placeholder="192.168.10.1" />
+										</div>
+										<div class="form-group">
+											<label class="form-label">NETMASK</label>
+											<input type="text" id="add-iface-netmask" class="form-input" value="255.255.255.0" />
+										</div>
+									</div>
+									<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px">
+										<div class="form-group">
+											<label class="form-label">DHCP START IP</label>
+											<input type="text" id="add-iface-dhcp-start-ip" class="form-input" placeholder="192.168.10.100" />
+										</div>
+										<div class="form-group">
+											<label class="form-label">DHCP END IP</label>
+											<input type="text" id="add-iface-dhcp-end-ip" class="form-input" placeholder="192.168.10.249" />
+										</div>
+									</div>
+									<div class="form-group">
+										<label style="display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:12px">
+											<input type="checkbox" id="add-iface-wan-forward" checked />
+											ALLOW INTERNET ACCESS VIA WAN
+										</label>
+									</div>
+								</div>
+								<div class="modal-footer">
+									<button class="action-btn" id="cancel-add-interface-btn">CANCEL</button>
+									<button class="action-btn" id="save-add-interface-btn">CREATE INTERFACE</button>
+								</div>
 							</div>
 						</div>
 

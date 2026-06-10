@@ -70,6 +70,14 @@ export default class NetworkModule {
 
 	setupModals() {
 		this.core.setupModal({
+			modalId: 'add-interface-modal',
+			closeBtnId: 'close-add-interface-modal',
+			cancelBtnId: 'cancel-add-interface-btn',
+			saveBtnId: 'save-add-interface-btn',
+			saveHandler: () => this.createInterface()
+		});
+
+		this.core.setupModal({
 			modalId: 'interface-modal',
 			closeBtnId: 'close-interface-modal',
 			cancelBtnId: 'cancel-interface-btn',
@@ -230,6 +238,7 @@ export default class NetworkModule {
 		};
 
 		addBtn('add-forward-btn', 'forward-modal');
+		document.getElementById('add-interface-btn')?.addEventListener('click', () => this.openAddInterfaceModal());
 		addBtn('add-fw-rule-btn', 'fw-rule-modal');
 		addBtn('add-static-lease-btn', 'static-lease-modal');
 		addBtn('add-dns-entry-btn', 'dns-entry-modal');
@@ -865,6 +874,137 @@ export default class NetworkModule {
 				})
 				.join('');
 		});
+	}
+
+	openAddInterfaceModal() {
+		const set = (id, value) => {
+			const el = document.getElementById(id);
+			if (el) el.value = value;
+		};
+		set('add-iface-name', '');
+		set('add-iface-base-device', '');
+		set('add-iface-vlan-id', '');
+		set('add-iface-ipaddr', '');
+		set('add-iface-netmask', '255.255.255.0');
+		set('add-iface-dhcp-start-ip', '');
+		set('add-iface-dhcp-end-ip', '');
+		const wanForward = document.getElementById('add-iface-wan-forward');
+		if (wanForward) wanForward.checked = true;
+		this.core.openModal('add-interface-modal');
+	}
+
+	validateNewInterfaceName(name) {
+		const value = String(name || '').trim();
+		if (!/^[A-Za-z][A-Za-z0-9_]{0,14}$/.test(value)) {
+			throw new Error('Interface name must start with a letter and use only letters, numbers, and underscores');
+		}
+		if (['wan', 'wan6', 'loopback', 'lo'].includes(value.toLowerCase())) {
+			throw new Error('Choose a non-WAN interface name');
+		}
+		return value;
+	}
+
+	validateBaseDeviceName(name) {
+		const value = String(name || '').trim();
+		if (!/^[A-Za-z0-9_.:-]+$/.test(value)) {
+			throw new Error('Base device must be a device name like eth0 or lan1');
+		}
+		return value;
+	}
+
+	async createInterface() {
+		const btn = document.getElementById('save-add-interface-btn');
+		const oldLabel = btn?.textContent || 'CREATE INTERFACE';
+		if (btn) {
+			btn.disabled = true;
+			btn.textContent = 'CREATING...';
+		}
+		try {
+			const iface = this.validateNewInterfaceName(document.getElementById('add-iface-name')?.value || '');
+			const baseDevice = this.validateBaseDeviceName(document.getElementById('add-iface-base-device')?.value || '');
+			const vlanId = Number(document.getElementById('add-iface-vlan-id')?.value || 0);
+			const ipaddr = String(document.getElementById('add-iface-ipaddr')?.value || '').trim();
+			const netmask = String(document.getElementById('add-iface-netmask')?.value || '').trim() || '255.255.255.0';
+			const startIp = String(document.getElementById('add-iface-dhcp-start-ip')?.value || '').trim();
+			const endIp = String(document.getElementById('add-iface-dhcp-end-ip')?.value || '').trim();
+			const allowWan = Boolean(document.getElementById('add-iface-wan-forward')?.checked);
+			if (!Number.isInteger(vlanId) || vlanId < 1 || vlanId > 4094) throw new Error('VLAN ID must be between 1 and 4094');
+			if (!this.isValidIpv4(ipaddr)) throw new Error('IPv4 address is required');
+			if (!this.isValidIpv4(netmask)) throw new Error('Netmask is invalid');
+			const [existingStatus] = await this.core.uciGet('network', iface);
+			if (existingStatus === 0) throw new Error(`Interface ${iface} already exists`);
+
+			const vlanDevice = `${baseDevice}.${vlanId}`;
+			const zoneName = `${iface}_zone`;
+			const subnet = this.getInterfaceSubnet(ipaddr, netmask);
+			const pool = startIp || endIp ? this.dhcpPoolValuesFromIps(startIp, endIp, subnet) : null;
+			const commands = [
+				'uci add network device',
+				`uci set network.@device[-1].name=${this.shellQuote(vlanDevice)}`,
+				"uci set network.@device[-1].type='8021q'",
+				`uci set network.@device[-1].ifname=${this.shellQuote(baseDevice)}`,
+				`uci set network.@device[-1].vid=${this.shellQuote(String(vlanId))}`,
+				`uci set network.${iface}=interface`,
+				`uci set network.${iface}.device=${this.shellQuote(vlanDevice)}`,
+				"uci set network." + iface + ".proto='static'",
+				`uci set network.${iface}.ipaddr=${this.shellQuote(ipaddr)}`,
+				`uci set network.${iface}.netmask=${this.shellQuote(netmask)}`
+			];
+			if (pool) {
+				commands.push(
+					`uci set dhcp.${iface}=dhcp`,
+					`uci set dhcp.${iface}.interface=${this.shellQuote(iface)}`,
+					`uci set dhcp.${iface}.start=${this.shellQuote(pool.start)}`,
+					`uci set dhcp.${iface}.limit=${this.shellQuote(pool.limit)}`,
+					"uci set dhcp." + iface + ".leasetime='12h'"
+				);
+			}
+			commands.push(
+				'uci add firewall zone',
+				`uci set firewall.@zone[-1].name=${this.shellQuote(zoneName)}`,
+				`uci set firewall.@zone[-1].network=${this.shellQuote(iface)}`,
+				"uci set firewall.@zone[-1].input='ACCEPT'",
+				"uci set firewall.@zone[-1].output='ACCEPT'",
+				"uci set firewall.@zone[-1].forward='REJECT'"
+			);
+			if (allowWan) {
+				commands.push(
+					'uci add firewall forwarding',
+					`uci set firewall.@forwarding[-1].src=${this.shellQuote(zoneName)}`,
+					"uci set firewall.@forwarding[-1].dest='wan'"
+				);
+			}
+			commands.push(
+				'uci commit network',
+				pool ? 'uci commit dhcp' : '',
+				'uci commit firewall',
+				'/etc/init.d/network restart >/dev/null 2>&1 || true',
+				pool ? '/etc/init.d/dnsmasq restart >/dev/null 2>&1 || true' : '',
+				'/etc/init.d/firewall restart >/dev/null 2>&1 || true'
+			);
+
+			const [status, result] = await this.core.ubusCall(
+				'file',
+				'exec',
+				{
+					command: '/bin/sh',
+					params: ['-c', commands.filter(Boolean).join('; ')]
+				},
+				{ timeout: 30000 }
+			);
+			if (status !== 0) throw new Error(String(result?.stderr || 'Failed to create interface').trim());
+			this.core.closeModal('add-interface-modal');
+			this.core.showToast(`Interface ${iface} created`, 'success');
+			setTimeout(() => this.loadInterfaces(), 1200);
+		} catch (err) {
+			console.error('Failed to create interface:', err);
+			this.core.showToast(err?.message || 'Failed to create interface', 'error');
+		} finally {
+			if (btn) {
+				btn.disabled = false;
+				btn.textContent = oldLabel;
+			}
+		}
 	}
 
 	async loadPortStatus(interfaceDump = []) {
