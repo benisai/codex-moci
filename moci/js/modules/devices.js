@@ -1256,7 +1256,7 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 			const recent = [];
 			for (const item of flows) {
 				const flow = item.flow;
-				const fqdn =
+				let fqdn =
 					flow.ssl?.client_sni ||
 					flow.client_sni ||
 					flow.tls?.client_sni ||
@@ -1266,6 +1266,7 @@ mkdir -p "$(dirname ${this.core.shellQuote(dbPath)})"
 					flow.fqdn ||
 					flow.dns_host_name ||
 					'';
+				if (!fqdn && flow.other_ip) fqdn = flow.other_ip;
 				const app = flow.detected_application_name || flow.detected_app_name || fqdn || 'Unknown';
 				apps.set(app, (apps.get(app) || 0) + 1);
 				bytes += Number(flow.total_bytes || 0) || Number(flow.other_bytes || 0) || Number(flow.local_bytes || 0) || 0;

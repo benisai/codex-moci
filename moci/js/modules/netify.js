@@ -712,7 +712,7 @@ pgrep -fa moci-netify-collector || true
 					flow.dns_host_name ||
 					flow.other_ip ||
 					'Unknown';
-				const fqdn =
+				let fqdn =
 					sni ||
 					flow.host_server_name ||
 					flow.fqdn ||
@@ -723,6 +723,9 @@ pgrep -fa moci-netify-collector || true
 				const device = this.normalizeMac(flow.local_mac) || 'unknown';
 				const localIp = flow.local_ip || '-';
 				const destIp = flow.other_ip || '-';
+				if (!fqdn && destIp && destIp !== '-') {
+					fqdn = destIp;
+				}
 				const destPort = flow.other_port || 0;
 				const bytes =
 					Number(flow.total_bytes || 0) ||
