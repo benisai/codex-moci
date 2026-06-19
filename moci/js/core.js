@@ -279,7 +279,7 @@ export class OpenWrtCore {
 			monitoring: ['monitoring'],
 			flows: ['flows', 'netify'],
 			notifications: ['network'],
-			system: ['system', 'backup', 'packages', 'services', 'ssh_keys', 'storage', 'leds', 'firmware'],
+			system: ['system', 'network', 'backup', 'packages', 'services', 'ssh_keys', 'storage', 'leds', 'firmware'],
 			netify: ['netify'],
 			vpn: ['wireguard'],
 			services: ['qos', 'ddns']

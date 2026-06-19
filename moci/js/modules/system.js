@@ -16,8 +16,6 @@ export default class SystemModule {
 		this.processesPaused = false;
 		this.processesSort = 'cpu';
 		this.featurePackageAvailability = null;
-		this.paternalBlockDevices = [];
-		this.paternalBlockByMac = new Map();
 
 		this.core.registerRoute('/system', (path, subPaths) => {
 			const pageElement = document.getElementById('system-page');
@@ -33,7 +31,6 @@ export default class SystemModule {
 					startup: () => this.loadStartup(),
 					cron: () => this.loadCron(),
 					mounts: () => this.loadMounts(),
-					paternal: () => this.loadPaternal(),
 					led: () => this.loadLED(),
 					upgrade: () => this.loadUpgrade()
 				});
@@ -75,44 +72,7 @@ export default class SystemModule {
 			this.packagesPage += 1;
 			this.renderPackagesTable();
 		});
-		document.getElementById('paternal-refresh-rules-btn')?.addEventListener('click', () => this.loadPaternal());
-		document.getElementById('paternal-add-block-btn')?.addEventListener('click', () => this.openPaternalBlockModal());
-		document.getElementById('paternal-block-refresh-btn')?.addEventListener('click', () => this.loadPaternalBlockPanel());
-		document.getElementById('paternal-block-device-select')?.addEventListener('change', () => this.syncPaternalBlockPanel());
-		document.getElementById('paternal-add-rule-btn')?.addEventListener('click', () => this.openPaternalRuleModal());
-		document.getElementById('paternal-day-everyday')?.addEventListener('change', event => this.setPaternalEveryday(Boolean(event?.target?.checked)));
-		document.querySelectorAll('.paternal-day').forEach(input => {
-			input.addEventListener('change', () => this.syncPaternalEverydayCheckbox());
-		});
-		document.querySelectorAll('.paternal-pause-option').forEach(button => {
-			button.addEventListener('click', event => this.pausePaternalRule(event.currentTarget?.dataset?.minutes));
-		});
-
 		this.ensureModalIsTopLevel('cron-modal');
-		this.ensureModalIsTopLevel('paternal-block-modal');
-		this.ensureModalIsTopLevel('paternal-rule-modal');
-		this.ensureModalIsTopLevel('paternal-pause-modal');
-		this.core.setupModal({
-			modalId: 'paternal-block-modal',
-			closeBtnId: 'close-paternal-block-modal',
-			cancelBtnId: 'cancel-paternal-block-btn',
-			saveBtnId: 'save-paternal-block-btn',
-			saveHandler: () => this.savePaternalBlock()
-		});
-		this.core.setupModal({
-			modalId: 'paternal-rule-modal',
-			closeBtnId: 'close-paternal-rule-modal',
-			cancelBtnId: 'cancel-paternal-rule-btn',
-			saveBtnId: 'save-paternal-rule-btn',
-			saveHandler: () => this.savePaternalRule()
-		});
-		this.core.setupModal({
-			modalId: 'paternal-pause-modal',
-			closeBtnId: 'close-paternal-pause-modal',
-			cancelBtnId: 'cancel-paternal-pause-btn',
-			saveBtnId: 'save-paternal-pause-btn',
-			saveHandler: () => this.pausePaternalRule()
-		});
 		this.core.setupModal({
 			modalId: 'cron-modal',
 			closeBtnId: 'close-cron-modal',
@@ -159,19 +119,6 @@ export default class SystemModule {
 			restart: id => this.restartService(id)
 		});
 		if (servicesCleanup) this.cleanups.push(servicesCleanup);
-
-		const paternalBlockCleanup = this.core.delegateActions('paternal-block-table', {
-			remove: id => this.removePaternalInternetBlock(id)
-		});
-		if (paternalBlockCleanup) this.cleanups.push(paternalBlockCleanup);
-
-		const paternalCleanup = this.core.delegateActions('paternal-rules-table', {
-			edit: id => this.openPaternalRuleModal(id),
-			pause: id => this.openPaternalPauseModal(id),
-			toggle: id => this.togglePaternalRule(id),
-			delete: id => this.deletePaternalRule(id)
-		});
-		if (paternalCleanup) this.cleanups.push(paternalCleanup);
 
 		this.setupFirmwareUpload();
 

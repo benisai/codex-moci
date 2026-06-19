@@ -23,6 +23,7 @@ export default class NetworkModule {
 		this.wirelessWwanScanRows = [];
 		this.wirelessWwanLastScanDevice = '';
 		this.adblockClassicDnsRows = [];
+		this.paternalController = null;
 
 		this.core.registerRoute('/network', async (path, subPaths) => {
 			const pageElement = document.getElementById('network-page');
@@ -45,7 +46,8 @@ export default class NetworkModule {
 					vpn: () => this.loadVPN(),
 					connections: () => this.loadConnections(),
 					diagnostics: () => this.loadDiagnostics(),
-					quarantine: () => this.loadQuarantine()
+					quarantine: () => this.loadQuarantine(),
+					paternal: () => this.runPaternal('loadPaternal')
 				});
 				this.subTabs.attachListeners();
 				this.setupModals();
@@ -226,6 +228,8 @@ export default class NetworkModule {
 			saveBtnId: 'save-pbr-include-btn',
 			saveHandler: () => this.savePbrInclude()
 		});
+
+		this.setupPaternalControls();
 
 		const addBtn = (id, modalId) => {
 			document.getElementById(id)?.addEventListener('click', () => {
@@ -450,6 +454,83 @@ export default class NetworkModule {
 			release: id => this.releaseQuarantinedDevice(id)
 		});
 		if (quarantineCleanup) this.cleanups.push(quarantineCleanup);
+
+		const paternalBlockCleanup = this.core.delegateActions('paternal-block-table', {
+			remove: id => this.runPaternal('removePaternalInternetBlock', id)
+		});
+		if (paternalBlockCleanup) this.cleanups.push(paternalBlockCleanup);
+
+		const paternalCleanup = this.core.delegateActions('paternal-rules-table', {
+			edit: id => this.runPaternal('openPaternalRuleModal', id),
+			pause: id => this.runPaternal('openPaternalPauseModal', id),
+			toggle: id => this.runPaternal('togglePaternalRule', id),
+			delete: id => this.runPaternal('deletePaternalRule', id)
+		});
+		if (paternalCleanup) this.cleanups.push(paternalCleanup);
+	}
+
+	setupPaternalControls() {
+		this.ensureModalIsTopLevel('paternal-block-modal');
+		this.ensureModalIsTopLevel('paternal-rule-modal');
+		this.ensureModalIsTopLevel('paternal-pause-modal');
+
+		document.getElementById('paternal-refresh-rules-btn')?.addEventListener('click', () => this.runPaternal('loadPaternal'));
+		document.getElementById('paternal-add-block-btn')?.addEventListener('click', () => this.runPaternal('openPaternalBlockModal'));
+		document.getElementById('paternal-block-refresh-btn')?.addEventListener('click', () => this.runPaternal('loadPaternalBlockPanel'));
+		document.getElementById('paternal-block-device-select')?.addEventListener('change', () => this.runPaternal('syncPaternalBlockPanel'));
+		document.getElementById('paternal-add-rule-btn')?.addEventListener('click', () => this.runPaternal('openPaternalRuleModal'));
+		document.getElementById('paternal-day-everyday')?.addEventListener('change', event => this.runPaternal('setPaternalEveryday', Boolean(event?.target?.checked)));
+		document.querySelectorAll('.paternal-day').forEach(input => {
+			input.addEventListener('change', () => this.runPaternal('syncPaternalEverydayCheckbox'));
+		});
+		document.querySelectorAll('.paternal-pause-option').forEach(button => {
+			button.addEventListener('click', event => this.runPaternal('pausePaternalRule', event.currentTarget?.dataset?.minutes));
+		});
+
+		this.core.setupModal({
+			modalId: 'paternal-block-modal',
+			closeBtnId: 'close-paternal-block-modal',
+			cancelBtnId: 'cancel-paternal-block-btn',
+			saveBtnId: 'save-paternal-block-btn',
+			saveHandler: () => this.runPaternal('savePaternalBlock')
+		});
+		this.core.setupModal({
+			modalId: 'paternal-rule-modal',
+			closeBtnId: 'close-paternal-rule-modal',
+			cancelBtnId: 'cancel-paternal-rule-btn',
+			saveBtnId: 'save-paternal-rule-btn',
+			saveHandler: () => this.runPaternal('savePaternalRule')
+		});
+		this.core.setupModal({
+			modalId: 'paternal-pause-modal',
+			closeBtnId: 'close-paternal-pause-modal',
+			cancelBtnId: 'cancel-paternal-pause-btn',
+			saveBtnId: 'save-paternal-pause-btn',
+			saveHandler: () => this.runPaternal('pausePaternalRule')
+		});
+	}
+
+	ensureModalIsTopLevel(modalId) {
+		const modal = document.getElementById(modalId);
+		if (modal && modal.parentElement !== document.body) {
+			document.body.appendChild(modal);
+		}
+	}
+
+	async getPaternalController() {
+		if (!this.paternalController) {
+			this.paternalController = await this.core.loadModule('system');
+		}
+		return this.paternalController;
+	}
+
+	async runPaternal(method, ...args) {
+		const controller = await this.getPaternalController();
+		if (!controller || typeof controller[method] !== 'function') {
+			this.core.showToast('Paternal controls are unavailable', 'error');
+			return null;
+		}
+		return controller[method](...args);
 	}
 
 	setupDiagnostics() {
