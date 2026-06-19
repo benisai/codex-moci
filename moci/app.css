@@ -342,9 +342,11 @@ body {
 	}
 
 	.header {
-		padding: 0 12px;
+		min-height: 64px;
+		height: auto;
+		padding: 10px 12px;
 		gap: 10px;
-		overflow: hidden;
+		overflow: visible;
 	}
 
 	.logo {
@@ -357,11 +359,9 @@ body {
 		min-width: 0;
 		margin-left: 8px;
 		gap: 16px;
-		overflow-x: auto;
-		overflow-y: hidden;
-		white-space: nowrap;
-		-webkit-overflow-scrolling: touch;
-		scrollbar-width: none;
+		flex-wrap: wrap;
+		overflow: visible;
+		white-space: normal;
 	}
 
 	.nav::-webkit-scrollbar {
